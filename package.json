@@ -1,0 +1,17 @@
+{
+  "name": "alex-whatsapp-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "@hapi/boom": "^10.0.1",
+    "axios": "^1.7.2",
+    "fastify": "^4.28.1",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
