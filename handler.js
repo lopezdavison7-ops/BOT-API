@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { crearRespondedor } from './lib/responder.js';
+import { registrarUso } from './lib/estadisticas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PREFIJO = '.';
@@ -46,6 +47,7 @@ export function crearManejador(sock, mapaComandos, listaComandos) {
 
         try {
             await cmd.ejecutar({ sock, msg, responder, argumento, listaComandos, prefijo: PREFIJO });
+            registrarUso(cmd.nombre);
         } catch (e) {
             console.error(`[COMANDO ${nombreComando}]`, e.message);
             await responder.texto('⚠️ Ocurrió un error procesando tu solicitud. Intenta de nuevo.');
