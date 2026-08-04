@@ -72,6 +72,98 @@ Arquitectura **100% modular**: cada comando vive en su propio archivo dentro de 
 
 ---
 
+## 📱 Instalación en Termux (Android)
+
+1. Instala [Termux](https://f-droid.org/en/packages/com.termux/) desde F-Droid (la versión de Play Store está desactualizada)
+2. Actualiza paquetes e instala Node.js y git:
+   ```bash
+   pkg update && pkg upgrade -y
+   pkg install nodejs-lts git -y
+   ```
+3. Clona el repositorio:
+   ```bash
+   git clone <URL-de-tu-repo>
+   cd <nombre-del-repo>
+   ```
+4. Instala dependencias:
+   ```bash
+   npm install
+   ```
+5. Crea las variables de entorno (reemplaza con tus datos):
+   ```bash
+   export BOT_PHONE_NUMBER=50499999999
+   export ALEX_API_URL=https://alex-api-scraper2-1.onrender.com
+   export ALEX_API_KEY=tu_api_key
+   ```
+6. Inicia el bot:
+   ```bash
+   npm start
+   ```
+7. Ingresa el código de emparejamiento en WhatsApp
+
+💡 **Tip:** para que el bot no se detenga al bloquear el celular, instala `termux-wake-lock`:
+```bash
+termux-wake-lock
+```
+Y para mantener Termux corriendo en segundo plano sin que Android lo mate, desactiva la optimización de batería para Termux desde Ajustes del sistema.
+
+💡 **Para que siga corriendo aunque cierres Termux**, usa `tmux` o `screen`:
+```bash
+pkg install tmux -y
+tmux new -s bot
+npm start
+# Ctrl+B luego D para salir sin cerrar el proceso
+# tmux attach -t bot   ← para volver a entrar
+```
+
+---
+
+## 🖥️ Instalación en VPS (Ubuntu/Debian)
+
+1. Conéctate por SSH a tu VPS:
+   ```bash
+   ssh usuario@tu-ip-del-vps
+   ```
+2. Instala Node.js (v18 o superior) y git:
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install -y nodejs git
+   ```
+3. Clona el repositorio:
+   ```bash
+   git clone <URL-de-tu-repo>
+   cd <nombre-del-repo>
+   ```
+4. Instala dependencias:
+   ```bash
+   npm install
+   ```
+5. Crea un archivo `.env` o exporta las variables:
+   ```bash
+   export BOT_PHONE_NUMBER=50499999999
+   export ALEX_API_URL=https://alex-api-scraper2-1.onrender.com
+   export ALEX_API_KEY=tu_api_key
+   ```
+6. Instala **PM2** para que el bot corra 24/7 y se reinicie solo si se cae:
+   ```bash
+   sudo npm install -g pm2
+   pm2 start index.js --name alex-bot
+   pm2 save
+   pm2 startup
+   ```
+7. Revisa el código de emparejamiento:
+   ```bash
+   pm2 logs alex-bot
+   ```
+8. Comandos útiles de PM2:
+   ```bash
+   pm2 restart alex-bot   # reiniciar
+   pm2 stop alex-bot      # detener
+   pm2 logs alex-bot      # ver logs en vivo
+   ```
+
+---
+
 ## ☁️ Deploy en Render
 
 1. Sube este repo a GitHub
