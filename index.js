@@ -1,15 +1,16 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+ 
+
+   import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
 import pino from 'pino';
 import { cargarComandos, crearManejador } from './handler.js';
 
-const BOT_PHONE_NUMBER = process.env.BOT_PHONE_NUMBER; // ej: 50499999999 (con código de país, sin el +)
+const BOT_PHONE_NUMBER = process.env.BOT_PHONE_NUMBER;
 
-if (!BOT_PHONE_NUMBER) console.error('FALTA la variable BOT_PHONE_NUMBER en Environment.');
-if (!process.env.ALEX_API_KEY) console.error('FALTA la variable ALEX_API_KEY en Environment.');
+if (!BOT_PHONE_NUMBER) throw new Error('FALTA la variable BOT_PHONE_NUMBER en Environment.');
+if (!process.env.ALEX_API_KEY) throw new Error('FALTA la variable ALEX_API_KEY en Environment.');
 
-// --- Servidor pequeño solo para mantener vivo el servicio (UptimeRobot le pega aquí) ---
 const fastify = Fastify({ logger: false });
 fastify.get('/', () => ({ status: 'Bot de WhatsApp activo' }));
 fastify.listen({ port: process.env.PORT || 3000, host: '0.0.0.0' })
