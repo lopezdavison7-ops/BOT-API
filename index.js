@@ -1,5 +1,4 @@
-import baileysPkg from '@whiskeysockets/baileys';
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileysPkg;
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
 import pino from 'pino';
