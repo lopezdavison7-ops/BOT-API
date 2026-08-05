@@ -1,4 +1,4 @@
-import * as baileysNS from '@whiskeysockets/baileys';
+import * as baileysNS from 'baileys';
 const baileysDefault = baileysNS.default ?? baileysNS;
 const makeWASocket = typeof baileysDefault === 'function' ? baileysDefault : baileysDefault.makeWASocket;
 const useMultiFileAuthState = baileysNS.useMultiFileAuthState ?? baileysDefault.useMultiFileAuthState;
