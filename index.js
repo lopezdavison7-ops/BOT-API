@@ -4,6 +4,7 @@ const makeWASocket = typeof baileysDefault === 'function' ? baileysDefault : bai
 const useMultiFileAuthState = baileysNS.useMultiFileAuthState ?? baileysDefault.useMultiFileAuthState;
 const DisconnectReason = baileysNS.DisconnectReason ?? baileysDefault.DisconnectReason;
 const fetchLatestBaileysVersion = baileysNS.fetchLatestBaileysVersion ?? baileysDefault.fetchLatestBaileysVersion;
+const Browsers = baileysNS.Browsers ?? baileysDefault.Browsers;
 
 if (typeof makeWASocket !== 'function') {
     console.error('No se pudo cargar makeWASocket de la librería Baileys. Revisa la versión instalada.');
@@ -34,21 +35,25 @@ async function iniciarBot() {
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        mobile: false,
+        browser: Browsers ? Browsers.ubuntu('Chrome') : ['Chrome (Linux)', 'Chrome', '121.0.0.0']
     });
 
     if (!sock.authState.creds.registered && BOT_PHONE_NUMBER) {
         setTimeout(async () => {
             try {
                 const codigo = await sock.requestPairingCode(BOT_PHONE_NUMBER);
+                const codigoFormateado = codigo?.match(/.{1,4}/g)?.join('-') || codigo;
                 console.log('=================================');
-                console.log('TU CÓDIGO DE EMPAREJAMIENTO ES:', codigo);
+                console.log('TU CÓDIGO DE EMPAREJAMIENTO ES:', codigoFormateado);
                 console.log('Ábrelo en WhatsApp > Dispositivos vinculados > Vincular con número de teléfono');
+                console.log('Tienes SOLO unos segundos para ingresarlo antes de que expire.');
                 console.log('=================================');
             } catch (e) {
                 console.error('Error generando el código de emparejamiento:', e.message);
             }
-        }, 3000);
+        }, 15000);
     }
 
     sock.ev.on('creds.update', saveCreds);
