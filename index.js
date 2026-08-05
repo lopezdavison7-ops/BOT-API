@@ -19,7 +19,7 @@ import { cargarComandos, crearManejador } from './handler.js';
 const BOT_PHONE_NUMBER = process.env.BOT_PHONE_NUMBER; // ej: 50499999999 (con código de país, sin el +)
 const USAR_QR = process.env.BOT_USAR_QR === 'true'; // si es true, usa QR en vez de código de emparejamiento
 
-let ultimoQR = null;
+let intentosReconexion = 0;
 
 if (!BOT_PHONE_NUMBER) console.error('FALTA la variable BOT_PHONE_NUMBER en Environment.');
 if (!process.env.ALEX_API_KEY) console.error('FALTA la variable ALEX_API_KEY en Environment.');
@@ -91,18 +91,27 @@ async function iniciarBot() {
 
             if (debeReconectar) {
                 if (!seRegistroAlgunaVez) {
-                    // El emparejamiento nunca se completó: borramos credenciales viejas
-                    // para que el próximo intento use llaves de identidad 100% nuevas.
                     try {
                         fs.rmSync('./auth_info', { recursive: true, force: true });
                         console.log('auth_info limpiado — próximo código será completamente nuevo.');
                     } catch (e) {
                         console.error('No se pudo limpiar auth_info:', e.message);
                     }
+                    intentosReconexion++;
+                    if (intentosReconexion > 3) {
+                        console.log('=================================');
+                        console.log('⚠️  WhatsApp está bloqueando temporalmente los intentos de vinculación.');
+                        console.log('Esto NO es un error del bot — es un límite de seguridad de WhatsApp.');
+                        console.log('Solución: espera unas horas sin reintentar y vuelve a desplegar.');
+                        console.log('=================================');
+                        return; // dejamos de reintentar para no empeorar el bloqueo
+                    }
                 }
-                iniciarBot();
+                const espera = Math.min(5000 * intentosReconexion, 30000);
+                setTimeout(iniciarBot, espera);
             }
         } else if (connection === 'open') {
+            intentosReconexion = 0;
             console.log('✅ Bot de WhatsApp conectado correctamente.');
         }
     });
@@ -111,4 +120,3 @@ async function iniciarBot() {
 }
 
 iniciarBot();
-
