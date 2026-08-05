@@ -12,6 +12,7 @@ if (typeof makeWASocket !== 'function') {
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
 import pino from 'pino';
+import fs from 'fs';
 import { cargarComandos, crearManejador } from './handler.js';
 
 const BOT_PHONE_NUMBER = process.env.BOT_PHONE_NUMBER; // ej: 50499999999 (con código de país, sin el +)
@@ -62,8 +63,22 @@ async function iniciarBot() {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             const debeReconectar = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Conexión cerrada. Reconectando:', debeReconectar);
-            if (debeReconectar) iniciarBot();
+            const seRegistroAlgunaVez = sock.authState.creds.registered;
+            console.log('Conexión cerrada. Reconectando:', debeReconectar, '| Ya estaba emparejado:', seRegistroAlgunaVez);
+
+            if (debeReconectar) {
+                if (!seRegistroAlgunaVez) {
+                    // El emparejamiento nunca se completó: borramos credenciales viejas
+                    // para que el próximo intento use llaves de identidad 100% nuevas.
+                    try {
+                        fs.rmSync('./auth_info', { recursive: true, force: true });
+                        console.log('auth_info limpiado — próximo código será completamente nuevo.');
+                    } catch (e) {
+                        console.error('No se pudo limpiar auth_info:', e.message);
+                    }
+                }
+                iniciarBot();
+            }
         } else if (connection === 'open') {
             console.log('✅ Bot de WhatsApp conectado correctamente.');
         }
