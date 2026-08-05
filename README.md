@@ -176,6 +176,28 @@ npm start
 
 ---
 
+## ⚠️ Solución de problemas
+
+**"No se pudo vincular el dispositivo" / "Vuelve a intentarlo más tarde"**
+
+Esto **no es un error del bot** — es un límite de seguridad que pone WhatsApp cuando detecta varios intentos de vinculación seguidos en poco tiempo (con código o con QR, da igual el método).
+
+Qué hacer:
+1. Deja de intentar vincular por unas horas (ideal: de un día para otro)
+2. No sigas haciendo Manual Deploy repetidamente mientras tanto — cada intento cuenta
+3. Cuando reintentes, hazlo **una sola vez**, con buena señal, y entra al código/QR apenas aparezca
+4. El bot ya trae protección automática: si detecta que lleva varios intentos fallidos seguidos, deja de reintentar solo para no empeorar el bloqueo (revisa los Logs, ahí te avisa)
+
+**El código de emparejamiento nunca funciona / dice número incorrecto aunque esté bien**
+
+Confirma que `BOT_PHONE_NUMBER` tenga el número completo con código de país, sin `+`, sin espacios, sin ceros extra (ej: `50499999999`).
+
+**Prefiero usar QR en vez de código**
+
+Pon la variable de entorno `BOT_USAR_QR` = `true`, despliega, y entra a `https://tu-servicio.onrender.com/qr` desde el navegador para escanear el código con la cámara de WhatsApp.
+
+---
+
 ## 📁 Estructura del proyecto
 
 ```
