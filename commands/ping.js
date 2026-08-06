@@ -1,5 +1,6 @@
 export default {
     nombre: 'ping',
+    categoría: 'ultilidades',
     alias: [],
     descripcion: 'Muestra la velocidad de respuesta del bot',
     ejecutar: async ({ responder, msg }) => {
