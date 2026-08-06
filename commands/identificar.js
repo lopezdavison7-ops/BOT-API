@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'identificar',
+    categoria: 'ultilidades',
     alias: ['id'],
     descripcion: '¿Qué plataforma y tipo de contenido es un link? Uso: .identificar <link>',
     ejecutar: async ({ responder, argumento }) => {
