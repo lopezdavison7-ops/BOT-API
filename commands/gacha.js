@@ -22,6 +22,7 @@ function tirarRareza() {
 
 export default {
     nombre: 'gacha',
+    categoria: 'Diversión',
     alias: ['tirada', 'roll'],
     descripcion: 'Haz una tirada gacha y gana una imagen con rareza random',
     ejecutar: async ({ responder }) => {
