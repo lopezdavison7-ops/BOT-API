@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'tiktok',
+    categoría: 'multimedia',
     alias: [],
     descripcion: 'Descarga video de TikTok. Uso: .tiktok <link>',
     ejecutar: async ({ responder, argumento }) => {
