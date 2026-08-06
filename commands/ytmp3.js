@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'ytmp3',
+    categoria: 'multimedia',
     alias: ['musica'],
     descripcion: 'Descarga audio de YouTube. Uso: .ytmp3 <link o texto>',
     ejecutar: async ({ responder, argumento }) => {
