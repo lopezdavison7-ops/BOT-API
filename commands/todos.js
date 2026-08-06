@@ -2,6 +2,7 @@ import { esGrupo, verificarPermisosAdmin, obtenerMetadata } from '../lib/grupos.
 
 export default {
     nombre: 'todos',
+    categoría: 'grupos',
     alias: ['everyone', 'tagall'],
     descripcion: 'Menciona a todos los miembros del grupo (sin que suene su celular a cada uno). Uso: .todos [mensaje opcional]',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
