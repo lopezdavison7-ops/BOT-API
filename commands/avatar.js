@@ -1,5 +1,6 @@
 export default {
     nombre: 'avatar',
+    categoria: 'Multimedia',
     alias: ['foto', 'pfp'],
     descripcion: 'Foto de perfil de un número. Uso: .avatar 549XXXXXXXX',
     ejecutar: async ({ sock, responder, argumento }) => {
