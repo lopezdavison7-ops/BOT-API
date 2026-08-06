@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'traducir',
+    categoria: 'ultilidades',
     alias: ['tr'],
     descripcion: 'Traduce texto. Uso: .traducir <texto>|<idioma>',
     ejecutar: async ({ responder, argumento }) => {
