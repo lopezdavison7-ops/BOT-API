@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'clima',
+    categoria: 'Utilidades',
     alias: ['tiempo'],
     descripcion: 'Clima actual de una ciudad. Uso: .clima <ciudad>',
     ejecutar: async ({ responder, argumento }) => {
