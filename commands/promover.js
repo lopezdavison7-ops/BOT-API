@@ -2,7 +2,7 @@ import { esGrupo, verificarPermisosAdmin, obtenerObjetivo } from '../lib/grupos.
 
 export default {
     nombre: 'promover',
-    categoría: 'grupos',
+    categoria: 'grupos',
     alias: ['promote', 'admin'],
     descripcion: 'Hace administrador a alguien del grupo. Uso: .promover @usuario',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
