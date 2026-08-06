@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'animefrase',
+    categoria: 'Diversión',
     alias: ['frase'],
     descripcion: 'Frase random de anime',
     ejecutar: async ({ responder }) => {
