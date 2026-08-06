@@ -2,6 +2,7 @@ import { esGrupo, verificarPermisosAdmin, obtenerObjetivo } from '../lib/grupos.
 
 export default {
     nombre: 'kick',
+    categoria: 'grupos',
     alias: ['expulsar', 'ban'],
     descripcion: 'Expulsa a alguien del grupo. Menciónalo, responde su mensaje, o pon su número. Uso: .kick @usuario',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
