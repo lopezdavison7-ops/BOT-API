@@ -2,6 +2,7 @@ import { esGrupo, verificarPermisosAdmin, obtenerObjetivo } from '../lib/grupos.
 
 export default {
     nombre: 'degradar',
+    categoria: 'Grupos',
     alias: ['demote'],
     descripcion: 'Quita la administración a alguien del grupo. Uso: .degradar @usuario',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
