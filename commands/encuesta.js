@@ -1,5 +1,6 @@
 export default {
     nombre: 'encuesta',
+    categoria: 'Diversión',
     alias: ['poll'],
     descripcion: 'Crea una encuesta real de WhatsApp. Uso: .encuesta pregunta|opcion1|opcion2',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
