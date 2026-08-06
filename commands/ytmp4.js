@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'ytmp4',
+    categoria: 'multimedia',
     alias: ['yt', 'video'],
     descripcion: 'Descarga video de YouTube. Uso: .ytmp4 <link o texto>',
     ejecutar: async ({ responder, argumento }) => {
