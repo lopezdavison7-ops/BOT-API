@@ -1,6 +1,6 @@
 export default {
     nombre: 'recordatorio',
-    categoría: 'ultilidades',
+    categoria: 'ultilidades',
     alias: ['recordar'],
     descripcion: 'Te manda un recordatorio en X minutos. Uso: .recordatorio minutos|mensaje',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
