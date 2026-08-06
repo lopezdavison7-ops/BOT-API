@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "baileys": "^7.0.0-rc.9",
+    "baileys": "7.0.0-rc14",
     "@hapi/boom": "^10.0.1",
     "axios": "^1.7.2",
     "fastify": "^4.28.1",
