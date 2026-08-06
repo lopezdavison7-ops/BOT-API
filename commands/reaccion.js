@@ -2,7 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'reaccion',
-    categoría: 'Diversion',
+    categoria: 'Diversion',
     alias: [],
     descripcion: 'GIF de reacción anime. Uso: .reaccion <tipo> (hug, pat, wave...)',
     ejecutar: async ({ responder, argumento }) => {
