@@ -2,6 +2,7 @@ import { esGrupo, verificarPermisosAdmin } from '../lib/grupos.js';
 
 export default {
     nombre: 'grupo',
+    categoria: 'grupos',
     alias: ['group'],
     descripcion: 'Abre o cierra el grupo (cerrado = solo admins escriben). Uso: .grupo abrir | .grupo cerrar',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
