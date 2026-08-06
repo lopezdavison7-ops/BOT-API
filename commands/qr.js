@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'qr',
+    categoría: 'ultilidades',
     alias: [],
     descripcion: 'Genera un código QR. Uso: .qr <texto o link>',
     ejecutar: async ({ responder, argumento }) => {
