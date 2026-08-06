@@ -2,6 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'animememe',
+    categoria: 'Diversión',
     alias: ['meme'],
     descripcion: 'Meme random de anime',
     ejecutar: async ({ responder }) => {
