@@ -31,6 +31,10 @@ export function crearManejador(sock, mapaComandos, listaComandos) {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
+        // Ignora mensajes viejos (ej. que llegaron de golpe al reconectar el bot)
+        const marcaTiempo = (msg.messageTimestamp?.low ?? msg.messageTimestamp ?? 0) * 1000;
+        if (marcaTiempo && Date.now() - marcaTiempo > 10000) return;
+
         const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
         if (!texto.startsWith(PREFIJO)) return;
 
