@@ -9,7 +9,7 @@ function decidirGanador(jugador, bot) {
 
 export default {
     nombre: 'ppt',
-    categoría: 'Diversion',
+    categoria: 'Diversion',
     alias: ['piedrapapeltijera'],
     descripcion: 'Piedra, papel o tijera contra el bot. Uso: .ppt piedra/papel/tijera',
     ejecutar: async ({ responder, argumento }) => {
