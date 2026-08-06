@@ -9,7 +9,7 @@ function formatearTiempo(segundos) {
 
 export default {
     nombre: 'stats',
-    categoría: 'ultilidades',
+    categoria: 'ultilidades',
     alias: ['estadisticas'],
     descripcion: 'Estadísticas de uso del bot desde el último reinicio',
     ejecutar: async ({ responder }) => {
