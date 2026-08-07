@@ -1,42 +1,13 @@
 // ============================================================
 // ALEX WHATSAPP BOT
 // index.js
-// Conexión mediante código de emparejamiento o QR
+// Conexión por código de emparejamiento o QR
 // ============================================================
 
 import * as baileysNS from 'baileys';
-
-const baileysDefault = baileysNS.default ?? baileysNS;
-
-const makeWASocket =
-    typeof baileysDefault === 'function'
-        ? baileysDefault
-        : baileysDefault.makeWASocket;
-
-const useMultiFileAuthState =
-    baileysNS.useMultiFileAuthState ??
-    baileysDefault.useMultiFileAuthState;
-
-const DisconnectReason =
-    baileysNS.DisconnectReason ??
-    baileysDefault.DisconnectReason;
-
-const fetchLatestBaileysVersion =
-    baileysNS.fetchLatestBaileysVersion ??
-    baileysDefault.fetchLatestBaileysVersion;
-
-const Browsers =
-    baileysNS.Browsers ??
-    baileysDefault.Browsers;
-
-const makeCacheableSignalKeyStore =
-    baileysNS.makeCacheableSignalKeyStore ??
-    baileysDefault.makeCacheableSignalKeyStore;
-
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
 import pino from 'pino';
-import fs from 'fs';
 import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
@@ -47,217 +18,160 @@ import {
 } from './handler.js';
 
 // ============================================================
+// BAILEYS
+// ============================================================
+
+const baileys = baileysNS.default ?? baileysNS;
+
+const makeWASocket =
+    typeof baileys === 'function'
+        ? baileys
+        : baileys.makeWASocket;
+
+const useMultiFileAuthState =
+    baileysNS.useMultiFileAuthState ??
+    baileys.useMultiFileAuthState;
+
+const DisconnectReason =
+    baileysNS.DisconnectReason ??
+    baileys.DisconnectReason;
+
+const fetchLatestBaileysVersion =
+    baileysNS.fetchLatestBaileysVersion ??
+    baileys.fetchLatestBaileysVersion;
+
+const Browsers =
+    baileysNS.Browsers ??
+    baileys.Browsers;
+
+const makeCacheableSignalKeyStore =
+    baileysNS.makeCacheableSignalKeyStore ??
+    baileys.makeCacheableSignalKeyStore;
+
+// ============================================================
 // CONFIGURACIÓN
 // ============================================================
 
 const PORT = Number(process.env.PORT) || 3000;
-
 const AUTH_FOLDER = './auth_info';
 
-const MAX_ESPERA_RECONEXION = 60000;
-
-// ============================================================
-// VARIABLES
-// ============================================================
-
-let ultimoQR = null;
-
-let intentosReconexion = 0;
-
-let botIniciando = false;
-
 let metodoConexion = null;
-
-let numeroSeleccionado = null;
-
-let esperandoConfiguracion = false;
+let numeroTelefono = null;
+let ultimoQR = null;
+let intentos = 0;
+let iniciando = false;
 
 // ============================================================
-// FASTIFY
+// SERVIDOR WEB
 // ============================================================
 
-const fastify = Fastify({
+const app = Fastify({
     logger: false
 });
 
-// ============================================================
-// RUTA PRINCIPAL
-// ============================================================
+app.get('/', async () => ({
+    status: 'online',
+    bot: 'Alex WhatsApp Bot'
+}));
 
-fastify.get('/', async () => {
-
-    return {
-        status: 'online',
-        bot: 'Alex WhatsApp Bot',
-        conexion:
-            ultimoQR
-                ? 'esperando_qr'
-                : 'activo'
-    };
-});
-
-// ============================================================
-// RUTA QR
-// ============================================================
-
-fastify.get('/qr', async (req, reply) => {
+app.get('/qr', async (req, reply) => {
 
     if (!ultimoQR) {
 
-        reply
+        return reply
             .type('text/html')
             .send(`
-                <!DOCTYPE html>
-                <html lang="es">
-
-                <head>
-                    <meta charset="UTF-8">
-
-                    <meta
-                        name="viewport"
-                        content="width=device-width,
-                        initial-scale=1.0"
-                    >
-
-                    <title>Alex Bot</title>
-                </head>
-
+                <html>
                 <body style="
-                    margin:0;
-                    padding:40px;
                     background:#111;
-                    color:#fff;
-                    font-family:Arial,sans-serif;
+                    color:white;
+                    font-family:Arial;
                     text-align:center;
+                    padding:40px;
                 ">
-
-                    <h2>🤖 Alex WhatsApp Bot</h2>
-
-                    <p>
-                        Actualmente no hay un QR disponible.
-                    </p>
-
-                    <p>
-                        Si acabas de seleccionar QR,
-                        espera unos segundos y actualiza.
-                    </p>
-
+                    <h2>🤖 Alex Bot</h2>
+                    <p>No hay un QR disponible.</p>
+                    <p>Actualiza la página en unos segundos.</p>
                 </body>
-
                 </html>
             `);
-
-        return;
     }
 
     try {
 
-        const imagenQR =
+        const imagen =
             await QRCode.toDataURL(ultimoQR);
 
-        reply
+        return reply
             .type('text/html')
             .send(`
-                <!DOCTYPE html>
-
-                <html lang="es">
-
+                <html>
                 <head>
-
                     <meta charset="UTF-8">
-
                     <meta
                         name="viewport"
                         content="width=device-width,
                         initial-scale=1.0"
                     >
-
-                    <title>Alex Bot - QR</title>
-
+                    <title>Alex Bot QR</title>
                 </head>
 
                 <body style="
-                    margin:0;
-                    min-height:100vh;
-                    display:flex;
-                    justify-content:center;
-                    align-items:center;
                     background:#111;
                     color:white;
-                    font-family:Arial,sans-serif;
+                    font-family:Arial;
                     text-align:center;
+                    padding:30px;
                 ">
 
-                    <div>
+                    <h1>🤖 Alex Bot</h1>
 
-                        <h1>
-                            🤖 Alex Bot
-                        </h1>
+                    <h2>📱 Escanea el QR</h2>
 
-                        <h2>
-                            📱 Escanea este QR
-                        </h2>
+                    <p>
+                        WhatsApp → Dispositivos vinculados
+                    </p>
 
-                        <p>
-                            WhatsApp → Dispositivos vinculados
-                        </p>
+                    <img
+                        src="${imagen}"
+                        style="
+                            width:300px;
+                            max-width:90%;
+                            background:white;
+                            padding:10px;
+                            border-radius:15px;
+                        "
+                    >
 
-                        <p>
-                            → Vincular un dispositivo
-                        </p>
-
-                        <img
-                            src="${imagenQR}"
-                            alt="Código QR"
-                            style="
-                                width:300px;
-                                max-width:90vw;
-                                background:#fff;
-                                padding:12px;
-                                border-radius:15px;
-                            "
-                        >
-
-                        <p>
-                            <small>
-                                Si expira, actualiza la página.
-                            </small>
-                        </p>
-
-                    </div>
+                    <p>
+                        Si expira, actualiza esta página.
+                    </p>
 
                 </body>
-
                 </html>
             `);
 
     } catch (error) {
 
         console.error(
-            '❌ Error generando QR:',
+            'Error creando QR:',
             error.message
         );
 
-        reply
+        return reply
             .type('text/html')
-            .send(
-                '<h2>Error generando el QR.</h2>'
-            );
+            .send('<h2>Error generando QR.</h2>');
     }
 });
 
-// ============================================================
-// SERVIDOR
-// ============================================================
-
-fastify.listen({
+app.listen({
     port: PORT,
     host: '0.0.0.0'
 })
 .then(() => {
 
     console.log(
-        `🌐 Servidor iniciado en puerto ${PORT}`
+        `🌐 Servidor activo en puerto ${PORT}`
     );
 
 })
@@ -265,10 +179,8 @@ fastify.listen({
 
     console.error(
         '❌ Error iniciando servidor:',
-        error
+        error.message
     );
-
-    process.exit(1);
 });
 
 // ============================================================
@@ -282,38 +194,37 @@ const msgRetryCounterCache =
     });
 
 // ============================================================
-// FUNCIONES
+// UTILIDADES
 // ============================================================
 
-function esperar(ms) {
-
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    });
-}
+const esperar = ms =>
+    new Promise(resolve =>
+        setTimeout(resolve, ms)
+    );
 
 // ============================================================
-// PREGUNTAR MÉTODO DE CONEXIÓN
+// PREGUNTAR OPCIÓN
 // ============================================================
 
-function preguntarMetodoConexion() {
+function preguntarOpcion() {
 
     return new Promise(resolve => {
 
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
+        const rl =
+            readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
 
         console.log('');
         console.log(
-            '=========================================='
+            '======================================'
         );
         console.log(
             '        🤖 ALEX WHATSAPP BOT'
         );
         console.log(
-            '=========================================='
+            '======================================'
         );
         console.log('');
         console.log(
@@ -321,10 +232,10 @@ function preguntarMetodoConexion() {
         );
         console.log('');
         console.log(
-            '1️⃣  Código de emparejamiento'
+            '1️⃣ Código de emparejamiento'
         );
         console.log(
-            '2️⃣  Código QR'
+            '2️⃣ Código QR'
         );
         console.log('');
 
@@ -347,14 +258,8 @@ function preguntarMetodoConexion() {
                         '❌ Opción inválida.'
                     );
 
-                    console.log(
-                        'Debes escribir 1 o 2.'
-                    );
-
-                    console.log('');
-
                     resolve(
-                        preguntarMetodoConexion()
+                        preguntarOpcion()
                     );
 
                     return;
@@ -374,24 +279,22 @@ function preguntarNumero() {
 
     return new Promise(resolve => {
 
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
+        const rl =
+            readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
 
         console.log('');
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log(
             '📱 NÚMERO DE WHATSAPP'
         );
-
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log('');
 
         console.log(
@@ -411,7 +314,11 @@ function preguntarNumero() {
         console.log('');
 
         console.log(
-            '⚠️ No utilices +, espacios ni guiones.'
+            '⚠️ Solo números.'
+        );
+
+        console.log(
+            '⚠️ Sin +, espacios ni guiones.'
         );
 
         console.log('');
@@ -434,123 +341,50 @@ function preguntarNumero() {
 }
 
 // ============================================================
-// VALIDAR NÚMERO
-// ============================================================
-
-function numeroValido(numero) {
-
-    if (!numero) {
-        return false;
-    }
-
-    if (!/^\d+$/.test(numero)) {
-        return false;
-    }
-
-    if (numero.length < 8) {
-        return false;
-    }
-
-    if (numero.length > 15) {
-        return false;
-    }
-
-    return true;
-}
-
-// ============================================================
-// CONFIGURAR MÉTODO
+// CONFIGURAR CONEXIÓN
 // ============================================================
 
 async function configurarConexion() {
 
-    if (esperandoConfiguracion) {
-        return;
-    }
+    metodoConexion =
+        await preguntarOpcion();
 
-    esperandoConfiguracion = true;
+    if (metodoConexion === '1') {
 
-    try {
+        numeroTelefono =
+            await preguntarNumero();
 
-        metodoConexion =
-            await preguntarMetodoConexion();
-
-        // ----------------------------------------------------
-        // OPCIÓN 1
-        // ----------------------------------------------------
-
-        if (metodoConexion === '1') {
+        if (
+            !numeroTelefono ||
+            numeroTelefono.length < 8 ||
+            numeroTelefono.length > 15
+        ) {
 
             console.log('');
-
-            numeroSeleccionado =
-                await preguntarNumero();
-
-            if (
-                !numeroValido(
-                    numeroSeleccionado
-                )
-            ) {
-
-                console.log('');
-                console.log(
-                    '❌ Número inválido.'
-                );
-
-                console.log(
-                    'Ejemplo: 50588888888'
-                );
-
-                console.log('');
-
-                esperandoConfiguracion = false;
-
-                return configurarConexion();
-            }
-
-            console.log('');
-
             console.log(
-                '✅ Número recibido correctamente.'
+                '❌ Número inválido.'
             );
 
-            console.log(
-                `📱 Número: ${numeroSeleccionado}`
-            );
-
-            console.log('');
-
-            console.log(
-                '⏳ Preparando conexión...'
-            );
+            return configurarConexion();
         }
 
-        // ----------------------------------------------------
-        // OPCIÓN 2
-        // ----------------------------------------------------
+        console.log('');
+        console.log(
+            '✅ Número aceptado.'
+        );
 
-        if (metodoConexion === '2') {
+        console.log(
+            '⏳ Preparando código...'
+        );
 
-            console.log('');
+    } else {
 
-            console.log(
-                '📱 Has seleccionado QR.'
-            );
+        numeroTelefono = null;
 
-            console.log('');
-
-            console.log(
-                '⏳ Preparando código QR...'
-            );
-
-            console.log('');
-
-            numeroSeleccionado = null;
-        }
-
-    } finally {
-
-        esperandoConfiguracion = false;
+        console.log('');
+        console.log(
+            '📱 Preparando conexión mediante QR...'
+        );
     }
 }
 
@@ -564,24 +398,17 @@ async function generarCodigo(sock) {
         return;
     }
 
-    if (!numeroSeleccionado) {
-        return;
-    }
-
-    if (sock.authState.creds.registered) {
+    if (!numeroTelefono) {
         return;
     }
 
     try {
 
-        console.log('');
-        console.log(
-            '⏳ Esperando conexión de WhatsApp...'
-        );
-
         await esperar(3000);
 
-        if (sock.authState.creds.registered) {
+        if (
+            sock.authState.creds.registered
+        ) {
             return;
         }
 
@@ -592,13 +419,13 @@ async function generarCodigo(sock) {
 
         const codigo =
             await sock.requestPairingCode(
-                numeroSeleccionado
+                numeroTelefono
             );
 
         if (!codigo) {
 
             throw new Error(
-                'No se recibió ningún código.'
+                'Baileys no devolvió el código.'
             );
         }
 
@@ -606,89 +433,61 @@ async function generarCodigo(sock) {
             String(codigo)
                 .replace(/[^a-zA-Z0-9]/g, '');
 
-        /*
-         * Baileys devuelve el código que WhatsApp
-         * debe recibir. Aquí solamente añadimos
-         * un guion visual cada 4 caracteres.
-         */
-        const codigoFormateado =
+        const codigoMostrar =
             codigoLimpio
                 .match(/.{1,4}/g)
                 ?.join('-') ||
             codigoLimpio;
 
         console.log('');
-
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log(
             '       🔐 CÓDIGO DE EMPAREJAMIENTO'
         );
-
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log('');
-
         console.log(
-            `          ${codigoFormateado}`
+            `             ${codigoMostrar}`
         );
-
         console.log('');
-
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log(
-            '📱 AHORA EN WHATSAPP'
+            '📱 En WhatsApp:'
         );
-
         console.log('');
-
         console.log(
-            '1. Ajustes'
+            'Dispositivos vinculados'
         );
-
         console.log(
-            '2. Dispositivos vinculados'
+            '→ Vincular un dispositivo'
         );
-
         console.log(
-            '3. Vincular un dispositivo'
+            '→ Vincular con número de teléfono'
         );
-
-        console.log(
-            '4. Vincular con número de teléfono'
-        );
-
         console.log('');
-
         console.log(
-            '⚠️ Introduce el código mostrado arriba.'
+            'Introduce el código mostrado arriba.'
         );
-
         console.log(
-            '=========================================='
+            '======================================'
         );
-
         console.log('');
 
     } catch (error) {
 
         console.error('');
-
         console.error(
-            '❌ No se pudo generar el código.'
+            '❌ Error generando código:'
         );
-
         console.error(
             error?.message || error
         );
-
         console.error('');
     }
 }
@@ -699,17 +498,17 @@ async function generarCodigo(sock) {
 
 async function iniciarBot() {
 
-    if (botIniciando) {
+    if (iniciando) {
         return;
     }
 
-    botIniciando = true;
+    iniciando = true;
 
     try {
 
         console.log('');
         console.log(
-            '🚀 Iniciando Alex WhatsApp Bot...'
+            '🚀 Iniciando Alex Bot...'
         );
 
         // ----------------------------------------------------
@@ -725,34 +524,29 @@ async function iniciarBot() {
             );
 
         // ----------------------------------------------------
-        // SI YA ESTÁ VINCULADO
-        // ----------------------------------------------------
-
-        if (state.creds.registered) {
-
-            console.log('');
-            console.log(
-                '✅ Ya existe una sesión vinculada.'
-            );
-
-            console.log(
-                '🔄 Iniciando sesión automáticamente...'
-            );
-
-            metodoConexion = 'sesion';
-        }
-
-        // ----------------------------------------------------
-        // SI NO ESTÁ VINCULADO
+        // SI NO EXISTE SESIÓN
         // ----------------------------------------------------
 
         if (!state.creds.registered) {
 
             await configurarConexion();
+
+        } else {
+
+            metodoConexion = 'sesion';
+
+            console.log('');
+            console.log(
+                '✅ Sesión existente encontrada.'
+            );
+
+            console.log(
+                '🔄 Conectando automáticamente...'
+            );
         }
 
         // ----------------------------------------------------
-        // VERSIÓN BAILEYS
+        // VERSIÓN
         // ----------------------------------------------------
 
         let version;
@@ -765,14 +559,10 @@ async function iniciarBot() {
             version =
                 resultado.version;
 
-            console.log(
-                `📦 WhatsApp version: ${version.join('.')}`
-            );
-
-        } catch (error) {
+        } catch {
 
             console.warn(
-                '⚠️ No se pudo obtener la versión de WhatsApp.'
+                '⚠️ No se pudo obtener la versión.'
             );
         }
 
@@ -787,24 +577,20 @@ async function iniciarBot() {
             await cargarComandos();
 
         console.log(
-            '🧩 Comandos cargados:',
+            '🧩 Comandos:',
             listaComandos
                 .map(c => c.nombre)
                 .join(', ')
         );
 
         // ----------------------------------------------------
-        // LOGGER
+        // SOCKET
         // ----------------------------------------------------
 
         const logger =
             pino({
                 level: 'silent'
             });
-
-        // ----------------------------------------------------
-        // CONFIGURACIÓN SOCKET
-        // ----------------------------------------------------
 
         const opciones = {
 
@@ -855,19 +641,14 @@ async function iniciarBot() {
         };
 
         if (version) {
-            opciones.version =
-                version;
+            opciones.version = version;
         }
-
-        // ----------------------------------------------------
-        // CREAR SOCKET
-        // ----------------------------------------------------
 
         const sock =
             makeWASocket(opciones);
 
         // ----------------------------------------------------
-        // GUARDAR CREDENCIALES
+        // GUARDAR SESIÓN
         // ----------------------------------------------------
 
         sock.ev.on(
@@ -876,7 +657,7 @@ async function iniciarBot() {
         );
 
         // ----------------------------------------------------
-        // EVENTOS DE CONEXIÓN
+        // CONEXIÓN
         // ----------------------------------------------------
 
         sock.ev.on(
@@ -886,4 +667,165 @@ async function iniciarBot() {
                 const {
                     connection,
                     lastDisconnect,
-                  
+                    qr
+                } = update;
+
+                // --------------------------------------------
+                // QR
+                // --------------------------------------------
+
+                if (
+                    qr &&
+                    metodoConexion === '2'
+                ) {
+
+                    ultimoQR = qr;
+
+                    console.log('');
+                    console.log(
+                        '======================================'
+                    );
+                    console.log(
+                        '📱 QR GENERADO'
+                    );
+                    console.log(
+                        '======================================'
+                    );
+                    console.log('');
+                    console.log(
+                        'Abre en tu navegador:'
+                    );
+                    console.log(
+                        `/qr`
+                    );
+                    console.log('');
+                    console.log(
+                        'Escanea el QR con WhatsApp.'
+                    );
+                    console.log('');
+                }
+
+                // --------------------------------------------
+                // CONECTADO
+                // --------------------------------------------
+
+                if (
+                    connection === 'open'
+                ) {
+
+                    intentos = 0;
+
+                    ultimoQR = null;
+
+                    console.log('');
+                    console.log(
+                        '======================================'
+                    );
+                    console.log(
+                        '       ✅ WHATSAPP CONECTADO'
+                    );
+                    console.log(
+                        '======================================'
+                    );
+                    console.log('');
+                    console.log(
+                        '🤖 Alex Bot está funcionando.'
+                    );
+                    console.log('');
+                    console.log(
+                        'Prueba:'
+                    );
+                    console.log(
+                        '.ping'
+                    );
+                    console.log(
+                        '.menu'
+                    );
+                    console.log('');
+                }
+
+                // --------------------------------------------
+                // DESCONECTADO
+                // --------------------------------------------
+
+                if (
+                    connection === 'close'
+                ) {
+
+                    const codigoError =
+                        new Boom(
+                            lastDisconnect?.error
+                        )
+                        ?.output
+                        ?.statusCode || 0;
+
+                    const registrado =
+                        sock
+                            .authState
+                            .creds
+                            .registered;
+
+                    const reconectar =
+                        codigoError !==
+                        DisconnectReason.loggedOut;
+
+                    console.log('');
+                    console.log(
+                        '❌ Conexión cerrada.'
+                    );
+
+                    console.log(
+                        `Código: ${codigoError}`
+                    );
+
+                    console.log(
+                        `Sesión registrada: ${registrado}`
+                    );
+
+                    // ----------------------------------------
+                    // LOGOUT
+                    // ----------------------------------------
+
+                    if (!reconectar) {
+
+                        console.log(
+                            '🔒 Sesión cerrada por logout.'
+                        );
+
+                        console.log(
+                            'No se reconectará automáticamente.'
+                        );
+
+                        iniciando = false;
+
+                        return;
+                    }
+
+                    // ----------------------------------------
+                    // RECONEXIÓN
+                    // ----------------------------------------
+
+                    intentos++;
+
+                    const espera =
+                        Math.min(
+                            5000 * intentos,
+                            60000
+                        );
+
+                    console.log(
+                        `🔄 Reconectando en ${espera / 1000}s...`
+                    );
+
+                    setTimeout(
+                        () => {
+
+                            iniciando = false;
+
+                            iniciarBot();
+
+                        },
+                        espera
+                    );
+                }
+  
