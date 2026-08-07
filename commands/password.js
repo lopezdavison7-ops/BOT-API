@@ -2,7 +2,7 @@ import { llamarApi } from '../lib/api.js';
 
 export default {
     nombre: 'password',
-    categoria: 'ultilidades' 
+    categoria: 'ultilidades',
     alias: ['clave'],
     descripcion: 'Genera una contraseña segura. Uso: .password <longitud>',
     ejecutar: async ({ responder, argumento }) => {
