@@ -4,22 +4,96 @@ export default {
     nombre: 'kick',
     categoria: 'grupos',
     alias: ['expulsar', 'ban'],
-    descripcion: 'Expulsa a alguien del grupo. Menciónalo, responde su mensaje, o pon su número. Uso: .kick @usuario',
+    descripcion: 'Expulsa a un usuario mencionado o cuyo mensaje hayas respondido. Uso: .kick @usuario',
+
     ejecutar: async ({ sock, msg, responder, argumento }) => {
         const chatId = msg.key.remoteJid;
-        if (!esGrupo(chatId)) return responder.texto('Este comando solo funciona dentro de un grupo.');
 
-        const permiso = await verificarPermisosAdmin(sock, msg, chatId);
-        if (!permiso.ok) return responder.texto(permiso.motivo);
+        // ============================================================
+        // VERIFICAR QUE SEA UN GRUPO
+        // ============================================================
 
-        const objetivo = obtenerObjetivo(msg, argumento);
-        if (!objetivo) return responder.texto('Menciona a alguien, responde su mensaje, o pon su número. Ej: .kick 50499999999');
+        if (!esGrupo(chatId)) {
+            return responder.texto(
+                '❌ Este comando solo funciona dentro de un grupo.'
+            );
+        }
+
+        // ============================================================
+        // VERIFICAR PERMISOS DEL USUARIO
+        // ============================================================
+
+        const permiso = await verificarPermisosAdmin(
+            sock,
+            msg,
+            chatId
+        );
+
+        if (!permiso.ok) {
+            return responder.texto(permiso.motivo);
+        }
+
+        // ============================================================
+        // OBTENER OBJETIVO
+        // SOLO:
+        // 1. Usuario mencionado
+        // 2. Usuario cuyo mensaje fue respondido
+        //
+        // NO se acepta número escrito manualmente.
+        // ============================================================
+
+        const objetivo = obtenerObjetivo(msg, '');
+
+        if (!objetivo) {
+            return responder.texto(
+                '⚠️ Debes mencionar al usuario o responder a su mensaje.\n\n' +
+                'Ejemplos:\n' +
+                '• .kick @usuario\n' +
+                '• Responde al mensaje del usuario y escribe .kick'
+            );
+        }
+
+        // ============================================================
+        // EVITAR EXPULSAR AL PROPIO BOT
+        // ============================================================
+
+        const miJid = sock.user?.id;
+
+        if (
+            miJid &&
+            objetivo.split(':')[0] === miJid.split(':')[0]
+        ) {
+            return responder.texto(
+                '🤖 No puedo expulsarme a mí mismo.'
+            );
+        }
+
+        // ============================================================
+        // EXPULSAR
+        // ============================================================
 
         try {
-            await sock.groupParticipantsUpdate(chatId, [objetivo], 'remove');
-            await responder.texto(`✅ Usuario expulsado.`);
-        } catch (e) {
-            await responder.texto('⚠️ No se pudo expulsar (puede que ya no esté en el grupo o sea admin).');
+            await sock.groupParticipantsUpdate(
+                chatId,
+                [objetivo],
+                'remove'
+            );
+
+            await responder.texto(
+                '✅ Usuario expulsado correctamente.'
+            );
+
+        } catch (error) {
+            console.error(
+                '[KICK]',
+                error?.stack || error?.message || error
+            );
+
+            await responder.texto(
+                '⚠️ No se pudo expulsar al usuario.\n\n' +
+                'Puede que ya no esté en el grupo, ' +
+                'sea administrador o que el bot no tenga permisos.'
+            );
         }
     }
 };
