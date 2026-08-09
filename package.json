@@ -4,15 +4,18 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node --env-file=.env index.js"
   },
   "dependencies": {
-    "baileys": "7.0.0-rc14",
     "@hapi/boom": "^10.0.1",
+    "@img/sharp-wasm32": "^0.35.3",
     "axios": "^1.7.2",
+    "baileys": "7.0.0-rc14",
     "fastify": "^4.28.1",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2",
     "pino": "^9.3.2",
     "qrcode": "^1.5.4",
-    "node-cache": "^5.1.2"
+    "sharp": "^0.35.3"
   }
 }

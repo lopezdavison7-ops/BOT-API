@@ -3,58 +3,179 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { crearRespondedor } from './lib/responder.js';
 import { registrarUso } from './lib/estadisticas.js';
+import { esOwner } from './lib/owner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PREFIJO = '.';
 
-// Lee todos los archivos de /commands y los carga en un mapa nombre -> comando
+// ============================================================
+// CARGAR COMANDOS
+// ============================================================
+
 export async function cargarComandos() {
     const carpeta = path.join(__dirname, 'commands');
-    const archivos = fs.readdirSync(carpeta).filter(f => f.endsWith('.js'));
+
+    const archivos = fs
+        .readdirSync(carpeta)
+        .filter(f => f.endsWith('.js'));
+
     const mapaComandos = new Map();
     const listaComandos = [];
 
     for (const archivo of archivos) {
-        const modulo = await import(`./commands/${archivo}`);
-        const cmd = modulo.default;
-        mapaComandos.set(cmd.nombre, cmd);
-        (cmd.alias || []).forEach(a => mapaComandos.set(a, cmd));
-        listaComandos.push(cmd);
+        try {
+            const modulo = await import(`./commands/${archivo}`);
+            const cmd = modulo.default;
+
+            if (!cmd || !cmd.nombre || typeof cmd.ejecutar !== 'function') {
+                console.warn(
+                    `⚠️ Comando ignorado: ${archivo} (formato inválido)`
+                );
+                continue;
+            }
+
+            mapaComandos.set(cmd.nombre.toLowerCase(), cmd);
+
+            for (const alias of cmd.alias || []) {
+                mapaComandos.set(alias.toLowerCase(), cmd);
+            }
+
+            listaComandos.push(cmd);
+
+        } catch (error) {
+            console.error(
+                `❌ No se pudo cargar ${archivo}:`,
+                error.message
+            );
+        }
     }
 
-    return { mapaComandos, listaComandos };
+    return {
+        mapaComandos,
+        listaComandos
+    };
 }
 
-// Crea la función que se ejecuta cada vez que llega un mensaje
-export function crearManejador(sock, mapaComandos, listaComandos) {
+// ============================================================
+// MANEJADOR DE MENSAJES
+// ============================================================
+
+export function crearManejador(
+    sock,
+    mapaComandos,
+    listaComandos
+) {
     return async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
 
-        // Ignora mensajes viejos (ej. que llegaron de golpe al reconectar el bot)
-        const marcaTiempo = (msg.messageTimestamp?.low ?? msg.messageTimestamp ?? 0) * 1000;
-        if (marcaTiempo && Date.now() - marcaTiempo > 10000) return;
+        const msg = messages?.[0];
 
-        const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-        if (!texto.startsWith(PREFIJO)) return;
-
-        const [comandoCrudo, ...resto] = texto.slice(PREFIJO.length).trim().split(' ');
-        const nombreComando = comandoCrudo.toLowerCase();
-        const argumento = resto.join(' ').trim();
-        const responder = crearRespondedor(sock, msg);
-
-        const cmd = mapaComandos.get(nombreComando);
-        if (!cmd) {
-            if (nombreComando) await responder.texto(`Comando no reconocido. Escribe *${PREFIJO}menu* para ver todos los comandos.`);
+        if (!msg?.message || msg.key?.fromMe) {
             return;
         }
 
+        // ----------------------------------------------------
+        // IGNORAR MENSAJES ANTIGUOS
+        // ----------------------------------------------------
+
+        const marcaTiempo =
+            (msg.messageTimestamp?.low ??
+                msg.messageTimestamp ??
+                0) * 1000;
+
+        if (
+            marcaTiempo &&
+            Date.now() - marcaTiempo > 10000
+        ) {
+            return;
+        }
+
+        // ----------------------------------------------------
+        // OBTENER TEXTO
+        // ----------------------------------------------------
+
+        const texto =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            '';
+
+        if (!texto.startsWith(PREFIJO)) {
+            return;
+        }
+
+        const partes = texto
+            .slice(PREFIJO.length)
+            .trim()
+            .split(/\s+/);
+
+        const comandoCrudo = partes.shift() || '';
+
+        const nombreComando =
+            comandoCrudo.toLowerCase();
+
+        const argumento =
+            partes.join(' ').trim();
+
+        const responder =
+            crearRespondedor(sock, msg);
+
+        // ----------------------------------------------------
+        // BUSCAR COMANDO
+        // ----------------------------------------------------
+
+        const cmd =
+            mapaComandos.get(nombreComando);
+
+        if (!cmd) {
+            if (nombreComando) {
+                await responder.texto(
+                    `❌ Comando no reconocido.\n\nEscribe *${PREFIJO}menu* para ver los comandos.`
+                );
+            }
+
+            return;
+        }
+
+        // ----------------------------------------------------
+        // COMPROBAR OWNER
+        // ----------------------------------------------------
+
+        if (cmd.owner === true && !esOwner(msg)) {
+
+            await responder.texto(
+                '⛔ Este comando es exclusivo del Owner.'
+            );
+
+            return;
+        }
+
+        // ----------------------------------------------------
+        // EJECUTAR COMANDO
+        // ----------------------------------------------------
+
         try {
-            await cmd.ejecutar({ sock, msg, responder, argumento, listaComandos, prefijo: PREFIJO });
+
+            await cmd.ejecutar({
+                sock,
+                msg,
+                responder,
+                argumento,
+                listaComandos,
+                prefijo: PREFIJO,
+                esOwner: esOwner(msg)
+            });
+
             registrarUso(cmd.nombre);
-        } catch (e) {
-            console.error(`[COMANDO ${nombreComando}]`, e.message);
-            await responder.texto('⚠️ Ocurrió un error procesando tu solicitud. Intenta de nuevo.');
+
+        } catch (error) {
+
+            console.error(
+                `[COMANDO ${nombreComando}]`,
+                error
+            );
+
+            await responder.texto(
+                '⚠️ Ocurrió un error procesando tu solicitud.'
+            );
         }
     };
 }

@@ -248,7 +248,7 @@ async function iniciarBot() {
             listaComandos.map(c => c.nombre).join(', ')
         );
 
-        const logger = pino({ level: 'silent' });
+        const logger = pino({ level: 'debug' });
 
         const opciones = {
             logger,
@@ -268,6 +268,7 @@ async function iniciarBot() {
             msgRetryCounterCache,
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 30000,
+            mediaUploadTimeoutMs: 120000,
             keepAliveIntervalMs: 20000,
             emitOwnEvents: true,
             getMessage: async () => undefined
