@@ -1,13 +1,21 @@
 // ============================================================
-// MENÚ PRINCIPAL - ALEX BOT
+// MENÚ PRINCIPAL - BOT-API
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const VERSION = '1.0.0';
+const CREADOR = 'Luis González';
+const MOTOR = 'Baileys';
 
 const FOTO_MENU = path.join(
     __dirname,
@@ -17,11 +25,22 @@ const FOTO_MENU = path.join(
     'menu.jpg'
 );
 
+// ============================================================
+// COMANDO
+// ============================================================
+
 export default {
     nombre: 'menu',
+
     categoria: 'Utilidades',
-    alias: ['ayuda', 'help'],
-    descripcion: 'Muestra todos los comandos disponibles',
+
+    alias: [
+        'ayuda',
+        'help'
+    ],
+
+    descripcion:
+        'Muestra todos los comandos disponibles.',
 
     async ejecutar({
         sock,
@@ -31,123 +50,203 @@ export default {
         prefijo
     }) {
 
-        // ====================================================
-        // ORDEN DE CATEGORÍAS
-        // ====================================================
+        try {
 
-        const orden = [
-            'Owner',
-            'Administrador',
-            'Grupos',
-            'Multimedia',
-            'Diversión',
-            'Utilidades',
-            'Descargas',
-            'Otros'
-        ];
+            // ====================================================
+            // ORDEN DE CATEGORÍAS
+            // ====================================================
 
-        const grupos = {};
+            const orden = [
+                'Owner',
+                'Administrador',
+                'Grupos',
+                'Economia',
+                'economia',
+                'Multimedia',
+                'Diversión',
+                'Utilidades',
+                'Descargas',
+                'Otros'
+            ];
 
-        // ====================================================
-        // ORGANIZAR COMANDOS
-        // ====================================================
+            const grupos = {};
 
-        for (const cmd of listaComandos) {
-            const categoria = cmd.categoria || 'Otros';
+            // ====================================================
+            // ORGANIZAR COMANDOS
+            // ====================================================
 
-            if (!grupos[categoria]) {
-                grupos[categoria] = [];
+            for (const cmd of listaComandos) {
+
+                const categoria =
+                    cmd.categoria || 'Otros';
+
+                if (!grupos[categoria]) {
+                    grupos[categoria] = [];
+                }
+
+                grupos[categoria].push(cmd);
             }
 
-            grupos[categoria].push(cmd);
-        }
+            // ====================================================
+            // CATEGORÍAS DISPONIBLES
+            // ====================================================
 
-        // ====================================================
-        // ENCABEZADO
-        // ====================================================
+            const categorias = [
+                ...orden.filter(
+                    categoria => grupos[categoria]
+                ),
 
-        let texto =
-            '╭━━━〔 🤖 *ALEX BOT* 〕━━━╮\n' +
-            '┃\n' +
-            '┃ ⚡ *Bot de WhatsApp*\n' +
-            '┃ 🚀 Rápido • Estable • Completo\n' +
-            '┃ 📚 Menú de comandos\n' +
-            '┃\n' +
-            '╰━━━━━━━━━━━━━━━━━━━━╯\n';
+                ...Object.keys(grupos).filter(
+                    categoria =>
+                        !orden.includes(categoria)
+                )
+            ];
 
-        // ====================================================
-        // CATEGORÍAS
-        // ====================================================
+            // ====================================================
+            // INFORMACIÓN
+            // ====================================================
 
-        const categorias = [
-            ...orden.filter(c => grupos[c]),
-            ...Object.keys(grupos).filter(
-                c => !orden.includes(c)
-            )
-        ];
+            const cantidadComandos =
+                listaComandos.length;
 
-        for (const categoria of categorias) {
+            // ====================================================
+            // ENCABEZADO
+            // ====================================================
 
-            texto +=
-                `\n╭──〔 ${obtenerIcono(categoria)} *${categoria.toUpperCase()}* 〕\n`;
+            let texto =
+                `╭━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n` +
+                `┃       🌙 𝐁𝐎𝐓-𝐀𝐏𝐈       ┃\n` +
+                `┃        𝐌𝐄𝐍𝐔́ 𝟐.𝟎        ┃\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
 
-            for (const cmd of grupos[categoria]) {
+                `┌─〔 ⚡ 𝐈𝐍𝐅𝐎 〕\n` +
+                `│ 👨‍💻 Creador › ${CREADOR}\n` +
+                `│ 📦 Versión › ${VERSION}\n` +
+                `│ ⚙️ Motor    › ${MOTOR}\n` +
+                `│ 📚 Comandos › ${cantidadComandos}\n` +
+                `│ 🟢 Estado   › Online\n` +
+                `│ 🔧 Prefijo  › ${prefijo}\n` +
+                `└──────────────────────────\n\n`;
 
-                const descripcion =
-                    cmd.descripcion ||
-                    'Sin descripción disponible.';
+            // ====================================================
+            // MENÚ DE CATEGORÍAS
+            // ====================================================
+
+            for (const categoria of categorias) {
+
+                const comandos =
+                    grupos[categoria];
+
+                if (!comandos?.length) {
+                    continue;
+                }
+
+                texto +=
+                    `╭─〔 ${obtenerIcono(categoria)} ` +
+                    `𝐄𝐂𝐎𝐍𝐎𝐌𝐈́𝐀 〕\n`;
+
+                // Cambiar título según categoría
+                texto =
+                    texto.slice(
+                        0,
+                        texto.lastIndexOf(
+                            `╭─〔 ${obtenerIcono(categoria)}`
+                        )
+                    ) +
+                    `╭─〔 ${obtenerIcono(categoria)} ` +
+                    `𝐄𝐂𝐎𝐍𝐎𝐌𝐈́𝐀 〕\n`;
+
+                // =================================================
+                // TÍTULO CORRECTO DE LA CATEGORÍA
+                // =================================================
+
+                const titulo =
+                    obtenerNombreCategoria(
+                        categoria
+                    );
+
+                const inicioCategoria =
+                    texto.lastIndexOf(
+                        `╭─〔 ${obtenerIcono(categoria)} 𝐄𝐂𝐎𝐍𝐎𝐌𝐈́𝐀 〕`
+                    );
+
+                if (inicioCategoria !== -1) {
+
+                    texto =
+                        texto.substring(
+                            0,
+                            inicioCategoria
+                        ) +
+                        `╭─〔 ${obtenerIcono(categoria)} ${titulo} 〕\n`;
+                }
+
+                // =================================================
+                // COMANDOS
+                // =================================================
+
+                for (const cmd of comandos) {
+
+                    const descripcion =
+                        cmd.descripcion ||
+                        'Sin descripción.';
+
+                    texto +=
+                        `│\n` +
+                        `│ ✦ ${prefijo}${cmd.nombre}\n` +
+                        `│   ↳ ${descripcion}\n`;
+                }
 
                 texto +=
                     `│\n` +
-                    `│ ✦ *${prefijo}${cmd.nombre}*\n` +
-                    `│   ↳ ${descripcion}\n`;
+                    `╰──────────────────────────\n`;
             }
 
+            // ====================================================
+            // CÓMO USAR
+            // ====================================================
+
             texto +=
-                '│\n' +
-                '╰──────────────────\n';
-        }
+                `\n╭─〔 📖 𝐂𝐎́𝐌𝐎 𝐔𝐒𝐀𝐑 〕\n` +
+                `│ ✦ Escribe ${prefijo}<comando>\n` +
+                `│ ✦ Ejemplo › ${prefijo}ping\n` +
+                `│ ✦ ${prefijo}help › Volver al menú\n` +
+                `╰──────────────────────────\n\n`;
 
-        // ====================================================
-        // PIE DEL MENÚ
-        // ====================================================
+            // ====================================================
+            // PIE
+            // ====================================================
 
-        texto +=
-            '\n╭──〔 📖 *CÓMO USAR* 〕\n' +
-            `│ ✦ Escribe *${prefijo}<menu>*\n` +
-            '│ ✦ Ejemplo: *.ping*\n' +
-            '│ ✦ Usa *.help* para volver a ver este menú\n' +
-            '╰──────────────────\n\n' +
-            '🌙 *ALEX BOT*';
+            texto +=
+                `╭━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n` +
+                `┃       ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈       ┃\n` +
+                `┃ 🚀 Rápido • 🔒 Seguro   ┃\n` +
+                `┃ 💫 Siempre evolucionando ┃\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
-        // ====================================================
-        // COMPROBAR IMAGEN
-        // ====================================================
+            // ====================================================
+            // COMPROBAR FOTO
+            // ====================================================
 
-        if (!fs.existsSync(FOTO_MENU)) {
+            if (!fs.existsSync(FOTO_MENU)) {
 
-            console.error(
-                `[MENU FOTO] No existe: ${FOTO_MENU}`
-            );
+                console.error(
+                    `[MENU FOTO] No existe: ${FOTO_MENU}`
+                );
 
-            await responder.texto(texto);
-            return;
-        }
+                await responder.texto(texto);
 
-        // ====================================================
-        // ENVIAR IMAGEN
-        // ====================================================
+                return;
+            }
 
-        try {
+            // ====================================================
+            // ENVIAR FOTO + MENÚ
+            // ====================================================
 
-            const stats = fs.statSync(FOTO_MENU);
-
-            console.log(
-                `[MENU FOTO] Archivo encontrado: ${stats.size} bytes`
-            );
+            const stats =
+                fs.statSync(FOTO_MENU);
 
             console.log(
-                `[MENU FOTO] Enviando: ${FOTO_MENU}`
+                `[MENU FOTO] Encontrado: ${stats.size} bytes`
             );
 
             await sock.sendMessage(
@@ -161,35 +260,37 @@ export default {
                 {
                     quoted: msg,
                     mediaUploadTimeoutMs: 120000
-                      
                 }
             );
 
             console.log(
-                '[MENU FOTO] Foto enviada correctamente.'
+                '[MENU FOTO] ✓ Menú enviado correctamente.'
             );
 
         } catch (error) {
 
             console.error(
-                '[MENU FOTO] ERROR AL ENVIAR'
-            );
-
-            console.error(
-                error?.stack ||
-                error?.message ||
+                '[MENU] Error:',
                 error
             );
 
-            // Si falla la imagen, todavía enviamos el menú
-            // como texto para que el comando no quede inutilizado.
+            // ====================================================
+            // FALLBACK A TEXTO
+            // ====================================================
 
             try {
-                await responder.texto(texto);
-            } catch (textoError) {
+
+                await responder.texto(
+                    `❌ *MENÚ*\n\n` +
+                    `No se pudo enviar la imagen del menú.\n\n` +
+                    `Puedes usar *${prefijo}help* nuevamente.`
+                );
+
+            } catch (errorTexto) {
+
                 console.error(
-                    '[MENU] También falló el envío de texto:',
-                    textoError?.message || textoError
+                    '[MENU] Error enviando fallback:',
+                    errorTexto
                 );
             }
         }
@@ -203,15 +304,85 @@ export default {
 function obtenerIcono(categoria) {
 
     const iconos = {
-        Owner: '👑',
-        Administrador: '🛡️',
-        Grupos: '👥',
-        Multimedia: '🎵',
-        Diversión: '🎮',
-        Utilidades: '🛠️',
-        Descargas: '📥',
-        Otros: '📦'
+
+        Owner:
+            '👑',
+
+        Administrador:
+            '🛡️',
+
+        Grupos:
+            '👥',
+
+        Economia:
+            '💎',
+
+        economia:
+            '💎',
+
+        Multimedia:
+            '🎨',
+
+        Diversión:
+            '🎮',
+
+        Utilidades:
+            '🛠️',
+
+        Descargas:
+            '📥',
+
+        Otros:
+            '📦'
     };
 
-    return iconos[categoria] || '📦';
+    return (
+        iconos[categoria] ||
+        '📦'
+    );
+}
+
+// ============================================================
+// NOMBRES BONITOS DE CATEGORÍAS
+// ============================================================
+
+function obtenerNombreCategoria(categoria) {
+
+    const nombres = {
+
+        Owner:
+            '𝐎𝐖𝐍𝐄𝐑',
+
+        Administrador:
+            '𝐀𝐃𝐌𝐈𝐍𝐈𝐒𝐓𝐑𝐀𝐃𝐎𝐑',
+
+        Grupos:
+            '𝐆𝐑𝐔𝐏𝐎𝐒',
+
+        Economia:
+            '𝐄𝐂𝐎𝐍𝐎𝐌𝐈́𝐀',
+
+        economia:
+            '𝐄𝐂𝐎𝐍𝐎𝐌𝐈́𝐀',
+
+        Multimedia:
+            '𝐌𝐔𝐋𝐓𝐈𝐌𝐄𝐃𝐈𝐀',
+
+        Diversión:
+            '𝐃𝐈𝐕𝐄𝐑𝐒𝐈𝐎́𝐍',
+
+        Utilidades:
+            '𝐔𝐓𝐈𝐋𝐈𝐃𝐀𝐃𝐄𝐒',
+
+        Descargas:
+            '𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐒',
+
+        Otros:
+            '𝐎𝐓𝐑𝐎𝐒'
+    };
+
+    return (
+        nombres[categoria] ||
+        categoria.toUpperCase()
+    );
 }
