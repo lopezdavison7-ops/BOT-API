@@ -4,16 +4,19 @@
 // ============================================================
 // Elimina un propietario del bot.
 //
-// Uso:
-//
-// .delowner @usuario
-//
-// O respondiendo al mensaje del usuario:
-//
-// .delowner
-//
 // Compatible con Baileys 7.
-// Soporta owners almacenados como LID.
+// Soporta:
+//   • Mención directa
+//   • Respuesta a un mensaje
+//   • Owners almacenados como LID
+//   • Conversión LID -> PN mediante lidMapping
+//
+// Ejemplos:
+//   .delowner @usuario
+//   .delowner 505XXXXXXXX
+//
+// O respondiendo a un mensaje:
+//   .delowner
 // ============================================================
 
 import fs from 'fs/promises';
@@ -31,71 +34,15 @@ const OWNER_FILE = path.join(
 );
 
 // ============================================================
-// LEER OWNER.JSON
-// ============================================================
-
-async function leerDatabase() {
-
-    const raw =
-        await fs.readFile(
-            OWNER_FILE,
-            'utf8'
-        );
-
-    const data =
-        JSON.parse(raw);
-
-    if (
-        !data ||
-        typeof data !== 'object'
-    ) {
-        throw new Error(
-            'La base de datos de owners no es válida.'
-        );
-    }
-
-    if (
-        !Array.isArray(data.owners)
-    ) {
-        data.owners = [];
-    }
-
-    return data;
-}
-
-// ============================================================
-// GUARDAR OWNER.JSON
-// ============================================================
-
-async function guardarDatabase(
-    data
-) {
-
-    await fs.writeFile(
-        OWNER_FILE,
-        JSON.stringify(
-            data,
-            null,
-            2
-        ),
-        'utf8'
-    );
-}
-
-// ============================================================
 // LIMPIAR JID
 // ============================================================
 
 function limpiarJid(valor) {
-
     if (!valor) {
         return null;
     }
 
-    if (
-        typeof valor === 'object'
-    ) {
-
+    if (typeof valor === 'object') {
         valor =
             valor.lid ||
             valor.jid ||
@@ -106,52 +53,31 @@ function limpiarJid(valor) {
             '';
     }
 
-    const texto =
-        String(valor).trim();
+    const texto = String(valor).trim();
 
-    if (!texto) {
-        return null;
-    }
-
-    return texto;
+    return texto || null;
 }
 
 // ============================================================
-// OBTENER LID JID
+// OBTENER LID
 // ============================================================
 
-function obtenerLidJid(
-    owner
-) {
-
-    const valor =
-        limpiarJid(owner);
+function obtenerLidJid(owner) {
+    const valor = limpiarJid(owner);
 
     if (!valor) {
         return null;
     }
 
-    if (
-        valor.endsWith('@lid')
-    ) {
-
+    if (valor.endsWith('@lid')) {
         return valor;
     }
 
-    if (
-        valor.endsWith(
-            '@s.whatsapp.net'
-        )
-    ) {
-
-        return valor;
+    if (valor.endsWith('@s.whatsapp.net')) {
+        return null;
     }
 
-    const numero =
-        valor.replace(
-            /[^0-9]/g,
-            ''
-        );
+    const numero = valor.replace(/[^0-9]/g, '');
 
     if (!numero) {
         return null;
@@ -164,36 +90,300 @@ function obtenerLidJid(
 // NORMALIZAR PN
 // ============================================================
 
-function normalizarPN(
-    valor
-) {
-
+function normalizarPN(valor) {
     if (!valor) {
         return null;
     }
 
-    let texto =
-        String(valor).trim();
+    const texto = String(valor).trim();
 
     if (!texto) {
         return null;
     }
 
-    if (
-        texto.includes('@')
-    ) {
-
+    if (texto.includes('@')) {
         try {
-
-            return jidNormalizedUser(
-                texto
-            );
-
+            return jidNormalizedUser(texto);
         } catch {
-            // Continuar con limpieza.
+            // Continuamos con limpieza manual.
         }
     }
 
+    const numero = texto.replace(/[^0-9]/g, '');
+
+    if (!numero) {
+        return null;
+    }
+
+    return `${numero}@s.whatsapp.net`;
+}
+
+// ============================================================
+// RESOLVER LID -> PN
+// ============================================================
+
+async function resolverPN(sock, owner) {
+    const valor = limpiarJid(owner);
+
+    if (!valor) {
+        return null;
+    }
+
+    // Si ya es PN.
+    if (valor.endsWith('@s.whatsapp.net')) {
+        return normalizarPN(valor);
+    }
+
+    const lid = obtenerLidJid(owner);
+
+    if (!lid) {
+        return null;
+    }
+
+    const mapping =
+        sock?.signalRepository?.lidMapping;
+
+    if (
+        !mapping ||
+        typeof mapping.getPNForLID !== 'function'
+    ) {
+        console.error(
+            '[DELOWNER] getPNForLID no está disponible.'
+        );
+
+        return null;
+    }
+
+    try {
+        const resultado =
+            await mapping.getPNForLID(lid);
+
+        if (!resultado) {
+            console.warn(
+                `[DELOWNER] No existe mapping para ${lid}`
+            );
+
+            return null;
+        }
+
+        const pn = normalizarPN(resultado);
+
+        if (!pn) {
+            return null;
+        }
+
+        console.log(
+            `[DELOWNER] LID ${lid} -> PN ${pn}`
+        );
+
+        return pn;
+
+    } catch (error) {
+        console.error(
+            `[DELOWNER] Error resolviendo ${lid}:`,
+            error?.message || error
+        );
+
+        return null;
+    }
+}
+
+// ============================================================
+// OBTENER LID DE UN PN
+// ============================================================
+
+async function resolverLIDDesdePN(sock, pn) {
+    if (!pn) {
+        return null;
+    }
+
+    const mapping =
+        sock?.signalRepository?.lidMapping;
+
+    if (!mapping) {
+        return null;
+    }
+
+    // Algunas versiones pueden disponer de getLIDForPN.
+    if (
+        typeof mapping.getLIDForPN === 'function'
+    ) {
+        try {
+            const resultado =
+                await mapping.getLIDForPN(pn);
+
+            if (resultado) {
+                if (
+                    String(resultado).includes('@')
+                ) {
+                    return String(resultado);
+                }
+
+                return `${resultado}@lid`;
+            }
+        } catch (error) {
+            console.warn(
+                '[DELOWNER] No se pudo obtener LID desde PN:',
+                error?.message || error
+            );
+        }
+    }
+
+    return null;
+}
+
+// ============================================================
+// OBTENER NÚMERO
+// ============================================================
+
+function obtenerNumero(jid) {
+    if (!jid) {
+        return null;
+    }
+
+    const numero =
+        String(jid)
+            .split('@')[0]
+            .replace(/[^0-9]/g, '');
+
+    return numero || null;
+}
+
+// ============================================================
+// LEER OWNERS
+// ============================================================
+
+async function leerOwners() {
+    const raw =
+        await fs.readFile(
+            OWNER_FILE,
+            'utf8'
+        );
+
+    const data =
+        JSON.parse(raw);
+
+    if (Array.isArray(data)) {
+        return data;
+    }
+
+    if (Array.isArray(data?.owners)) {
+        return data.owners;
+    }
+
+    if (Array.isArray(data?.owner)) {
+        return data.owner;
+    }
+
+    if (
+        data &&
+        typeof data === 'object'
+    ) {
+        return Object.values(data).filter(
+            value =>
+                typeof value === 'string' ||
+                typeof value === 'object'
+        );
+    }
+
+    return [];
+}
+
+// ============================================================
+// GUARDAR OWNERS
+// ============================================================
+
+async function guardarOwners(owners) {
+    const contenido =
+        JSON.stringify(
+            {
+                owners
+            },
+            null,
+            2
+        ) + '\n';
+
+    await fs.writeFile(
+        OWNER_FILE,
+        contenido,
+        'utf8'
+    );
+}
+
+// ============================================================
+// OBTENER JID DEL OBJETIVO
+// ============================================================
+
+function obtenerObjetivoDesdeMensaje(msg) {
+    // --------------------------------------------------------
+    // 1. Mención
+    // --------------------------------------------------------
+
+    const mencionados =
+        msg?.message?.extendedTextMessage
+            ?.contextInfo
+            ?.mentionedJid;
+
+    if (
+        Array.isArray(mencionados) &&
+        mencionados.length > 0
+    ) {
+        return mencionados[0];
+    }
+
+    // --------------------------------------------------------
+    // 2. Mensaje citado
+    // --------------------------------------------------------
+
+    const citado =
+        msg?.message?.extendedTextMessage
+            ?.contextInfo
+            ?.participant;
+
+    if (citado) {
+        return citado;
+    }
+
+    return null;
+}
+
+// ============================================================
+// OBTENER ARGUMENTO COMO JID
+// ============================================================
+
+function obtenerJidDesdeArgumento(argumento) {
+    if (!argumento) {
+        return null;
+    }
+
+    const texto =
+        String(argumento).trim();
+
+    if (!texto) {
+        return null;
+    }
+
+    // Busca un JID PN.
+    const jidPN =
+        texto.match(
+            /\d+@s\.whatsapp\.net/
+        );
+
+    if (jidPN) {
+        return jidPN[0];
+    }
+
+    // Busca un JID LID.
+    const jidLID =
+        texto.match(
+            /\d+@lid/
+        );
+
+    if (jidLID) {
+        return jidLID[0];
+    }
+
+    // Busca un número.
     const numero =
         texto.replace(
             /[^0-9]/g,
@@ -208,202 +398,30 @@ function normalizarPN(
 }
 
 // ============================================================
-// RESOLVER LID -> PN
+// COMPARAR OWNERS
 // ============================================================
 
-async function resolverPN(
-    sock,
-    owner
-) {
-
-    const valor =
-        limpiarJid(owner);
-
-    if (!valor) {
-        return null;
-    }
-
-    // Ya es PN.
-    if (
-        valor.endsWith(
-            '@s.whatsapp.net'
-        )
-    ) {
-
-        return normalizarPN(
-            valor
-        );
-    }
-
-    const lid =
-        obtenerLidJid(
-            owner
-        );
-
-    if (!lid) {
-        return null;
-    }
-
-    const mapping =
-        sock?.signalRepository?.lidMapping;
-
-    if (
-        !mapping ||
-        typeof mapping.getPNForLID !==
-            'function'
-    ) {
-
-        return null;
-    }
-
-    try {
-
-        const resultado =
-            await mapping.getPNForLID(
-                lid
-            );
-
-        return normalizarPN(
-            resultado
-        );
-
-    } catch {
-        return null;
-    }
-}
-
-// ============================================================
-// OBTENER NÚMERO
-// ============================================================
-
-function obtenerNumero(
-    jid
-) {
-
-    if (!jid) {
-        return null;
-    }
-
-    const numero =
-        String(jid)
-            .split('@')[0]
-            .replace(
-                /[^0-9]/g,
-                ''
-            );
-
-    return numero || null;
-}
-
-// ============================================================
-// OBTENER JID DEL USUARIO QUE EJECUTA
-// ============================================================
-
-function obtenerAutor(
-    msg
-) {
-
-    if (
-        msg?.key?.participant
-    ) {
-
-        return msg.key.participant;
-    }
-
-    if (
-        msg?.participant
-    ) {
-
-        return msg.participant;
-    }
-
-    if (
-        msg?.key?.remoteJid &&
-        !msg.key.remoteJid.endsWith(
-            '@g.us'
-        )
-    ) {
-
-        return msg.key.remoteJid;
-    }
-
-    return null;
-}
-
-// ============================================================
-// OBTENER USUARIO OBJETIVO
-// ============================================================
-
-function obtenerObjetivo(
-    msg
-) {
-
-    // --------------------------------------------------------
-    // 1. MENCIÓN
-    // --------------------------------------------------------
-
-    const mencionados =
-        msg?.message?.extendedTextMessage
-            ?.contextInfo
-            ?.mentionedJid ||
-        msg?.message?.contextInfo
-            ?.mentionedJid ||
-        [];
-
-    if (
-        Array.isArray(mencionados) &&
-        mencionados.length > 0
-    ) {
-
-        return mencionados[0];
-    }
-
-    // --------------------------------------------------------
-    // 2. RESPUESTA A UN MENSAJE
-    // --------------------------------------------------------
-
-    const contexto =
-        msg?.message
-            ?.extendedTextMessage
-            ?.contextInfo;
-
-    const participante =
-        contexto?.participant;
-
-    if (participante) {
-
-        return participante;
-    }
-
-    return null;
-}
-
-// ============================================================
-// COMPROBAR SI UN USUARIO ES OWNER
-// ============================================================
-
-async function esOwner(
+async function encontrarOwner(
     sock,
     owners,
-    jid
+    objetivo
 ) {
-
-    if (!jid) {
-        return false;
-    }
-
     const objetivoPN =
         normalizarPN(
-            jid
+            objetivo
         );
 
     if (!objetivoPN) {
-        return false;
+        return null;
     }
 
     for (
-        const owner of owners
+        let i = 0;
+        i < owners.length;
+        i++
     ) {
+        const owner =
+            owners[i];
 
         const ownerPN =
             await resolverPN(
@@ -411,15 +429,22 @@ async function esOwner(
                 owner
             );
 
+        if (!ownerPN) {
+            continue;
+        }
+
         if (
             ownerPN === objetivoPN
         ) {
-
-            return true;
+            return {
+                index: i,
+                owner,
+                pn: ownerPN
+            };
         }
     }
 
-    return false;
+    return null;
 }
 
 // ============================================================
@@ -427,7 +452,6 @@ async function esOwner(
 // ============================================================
 
 export default {
-
     nombre: 'delowner',
 
     categoria: 'Owner',
@@ -444,27 +468,25 @@ export default {
     ejecutar: async ({
         msg,
         sock,
-        responder
+        responder,
+        argumento
     }) => {
 
         try {
 
             // ------------------------------------------------
-            // LEER DATABASE
+            // LEER OWNERS
             // ------------------------------------------------
 
-            const data =
-                await leerDatabase();
-
             const owners =
-                data.owners;
+                await leerOwners();
 
             if (
+                !Array.isArray(owners) ||
                 owners.length === 0
             ) {
-
                 await responder.texto(
-                    '❌ No hay owners registrados.'
+                    '❌ No hay propietarios registrados.'
                 );
 
                 return;
@@ -474,19 +496,50 @@ export default {
             // COMPROBAR QUIÉN EJECUTA
             // ------------------------------------------------
 
-            const autor =
-                obtenerAutor(
-                    msg
+            const ejecutor =
+                msg?.key?.participant ||
+                msg?.key?.remoteJid;
+
+            if (!ejecutor) {
+                await responder.texto(
+                    '❌ No pude identificar al usuario.'
                 );
 
-            const autorizado =
-                await esOwner(
-                    sock,
-                    owners,
-                    autor
+                return;
+            }
+
+            const ejecutorPN =
+                normalizarPN(
+                    ejecutor
                 );
 
-            if (!autorizado) {
+            let esOwner = false;
+
+            for (
+                const owner of owners
+            ) {
+
+                const ownerPN =
+                    await resolverPN(
+                        sock,
+                        owner
+                    );
+
+                if (
+                    ownerPN &&
+                    ejecutorPN &&
+                    ownerPN === ejecutorPN
+                ) {
+                    esOwner = true;
+                    break;
+                }
+            }
+
+            // ------------------------------------------------
+            // SOLO OWNERS
+            // ------------------------------------------------
+
+            if (!esOwner) {
 
                 await responder.texto(
                     '╭〔 🔐 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
@@ -504,22 +557,35 @@ export default {
             // OBTENER OBJETIVO
             // ------------------------------------------------
 
-            const objetivo =
-                obtenerObjetivo(
+            let objetivo =
+                obtenerObjetivoDesdeMensaje(
                     msg
                 );
+
+            // Si no hay mención/respuesta,
+            // intentamos usar el argumento.
+            if (!objetivo) {
+
+                objetivo =
+                    obtenerJidDesdeArgumento(
+                        argumento
+                    );
+            }
 
             if (!objetivo) {
 
                 await responder.texto(
                     '╭〔 👑 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
                     '┃\n' +
-                    '┃ ❌ Debes mencionar a un owner\n' +
-                    '┃ o responder a su mensaje.\n' +
+                    '┃ ❌ Debes mencionar al owner\n' +
+                    '┃ que deseas eliminar o\n' +
+                    '┃ responder a su mensaje.\n' +
                     '┃\n' +
-                    '┃ 📌 Ejemplos:\n' +
+                    '┃ 📌 Ejemplo:\n' +
                     '┃ › .delowner @usuario\n' +
-                    '┃ › Responder → .delowner\n' +
+                    '┃\n' +
+                    '┃ ↩️ O responde a su mensaje\n' +
+                    '┃ con *.delowner*\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -528,63 +594,39 @@ export default {
             }
 
             // ------------------------------------------------
-            // RESOLVER OBJETIVO A PN
+            // NORMALIZAR OBJETIVO
             // ------------------------------------------------
 
             const objetivoPN =
-                await resolverPN(
-                    sock,
+                normalizarPN(
                     objetivo
                 );
 
             if (!objetivoPN) {
 
                 await responder.texto(
-                    '❌ No pude resolver el usuario seleccionado.'
+                    '❌ No pude identificar correctamente al usuario objetivo.'
                 );
 
                 return;
             }
 
-            const objetivoNumero =
-                obtenerNumero(
-                    objetivoPN
-                );
+            console.log(
+                `[DELOWNER] Objetivo PN: ${objetivoPN}`
+            );
 
             // ------------------------------------------------
             // BUSCAR OWNER
             // ------------------------------------------------
 
-            let indiceOwner = -1;
+            const encontrado =
+                await encontrarOwner(
+                    sock,
+                    owners,
+                    objetivoPN
+                );
 
-            for (
-                let i = 0;
-                i < owners.length;
-                i++
-            ) {
-
-                const ownerPN =
-                    await resolverPN(
-                        sock,
-                        owners[i]
-                    );
-
-                if (
-                    ownerPN === objetivoPN
-                ) {
-
-                    indiceOwner = i;
-                    break;
-                }
-            }
-
-            // ------------------------------------------------
-            // NO ES OWNER
-            // ------------------------------------------------
-
-            if (
-                indiceOwner === -1
-            ) {
+            if (!encontrado) {
 
                 await responder.texto(
                     '╭〔 👑 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
@@ -601,64 +643,59 @@ export default {
             // EVITAR ELIMINAR AL ÚLTIMO OWNER
             // ------------------------------------------------
 
-            if (
-                owners.length === 1
-            ) {
+            if (owners.length <= 1) {
 
                 await responder.texto(
-                    '❌ No puedes eliminar al último owner del bot.'
+                    '╭〔 👑 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
+                    '┃\n' +
+                    '┃ ⚠️ No puedes eliminar al\n' +
+                    '┃ único propietario del bot.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
                 );
 
                 return;
             }
 
             // ------------------------------------------------
-            // GUARDAR LID ORIGINAL
-            // ------------------------------------------------
-
-            const eliminado =
-                owners[indiceOwner];
-
-            // ------------------------------------------------
             // ELIMINAR
             // ------------------------------------------------
 
-            owners.splice(
-                indiceOwner,
-                1
-            );
+            const nuevosOwners =
+                owners.filter(
+                    (_, index) =>
+                        index !==
+                        encontrado.index
+                );
 
-            await guardarDatabase(
-                data
+            await guardarOwners(
+                nuevosOwners
             );
 
             // ------------------------------------------------
-            // CONFIRMACIÓN
+            // MENCIÓN DEL ELIMINADO
             // ------------------------------------------------
 
             const numero =
-                objetivoNumero;
-
-            const jidMention =
-                objetivoPN;
-
-            const texto =
-                '╭〔 👑 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
-                '┃\n' +
-                `┃ ✅ Owner eliminado correctamente.\n` +
-                '┃\n' +
-                `┃ 👤 Usuario: @${numero}\n` +
-                `┃ 📌 Owners restantes: ${owners.length}\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣\n\n' +
-                '╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣';
+                obtenerNumero(
+                    encontrado.pn
+                );
 
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    text: texto,
+                    text:
+                        '╭〔 👑 𝐃𝐄𝐋𝐎𝐖𝐍𝐄𝐑 〕⬣\n' +
+                        '┃\n' +
+                        `┃ ✅ Owner eliminado: @${numero}\n` +
+                        '┃\n' +
+                        `┃ 👑 Owners restantes: ${nuevosOwners.length}\n` +
+                        '┃\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣\n\n' +
+                        '╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣',
+
                     mentions: [
-                        jidMention
+                        encontrado.pn
                     ]
                 },
                 {
@@ -667,15 +704,7 @@ export default {
             );
 
             console.log(
-                `[DELOWNER] Owner eliminado: ${eliminado}`
-            );
-
-            console.log(
-                `[DELOWNER] PN: ${objetivoPN}`
-            );
-
-            console.log(
-                `[DELOWNER] Owners restantes: ${owners.length}`
+                `[DELOWNER] Owner eliminado: ${encontrado.pn}`
             );
 
         } catch (error) {
@@ -688,7 +717,7 @@ export default {
             );
 
             await responder.texto(
-                '❌ Ocurrió un error al eliminar el owner.'
+                '❌ Error al eliminar el propietario.'
             );
         }
     }
