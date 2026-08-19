@@ -5,7 +5,7 @@ export default {
     nombre: 'brat',
     categoria: 'Multimedia',
     alias: ['bratwhite', 'bratblanco'],
-    descripcion: 'Genera un sticker BRAT en color blanco',
+    descripcion: 'Genera un sticker BRAT en color blanco usando YO SOY YO',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const texto = String(argumento || '').trim();
@@ -20,8 +20,10 @@ export default {
             }
 
             const color = 'white';
+            const apiKey = 'yosoyyo_sk_gincmnk3';
 
-            const apiUrl = `https://apiyosoyyo-ofc.onrender.com/api/brat?text=${encodeURIComponent(texto)}&color=${color}&apiKey=yosoyyo_sk_gincmnk3`;
+            // 1. Petición a la API para obtener la URL de la imagen
+            const apiUrl = `https://apiyosoyyo-ofc.onrender.com/api/brat?text=${encodeURIComponent(texto)}&color=${color}&apiKey=${apiKey}`;
 
             console.log(`[BRAT] Solicitando: ${apiUrl}`);
 
@@ -31,7 +33,8 @@ export default {
             }
 
             const data = await response.json();
-            
+
+            // 2. Verificar que la API devolvió una URL válida
             if (!data || !data.data || !data.data.url) {
                 throw new Error('La API no devolvió una URL válida.');
             }
@@ -39,17 +42,21 @@ export default {
             const imageUrl = `https://apiyosoyyo-ofc.onrender.com${data.data.url}`;
             console.log(`[BRAT] URL de imagen: ${imageUrl}`);
 
-            // Descargar la imagen
+            // 3. Descargar la imagen desde la URL
             const imgResponse = await fetch(imageUrl);
+            if (!imgResponse.ok) {
+                throw new Error(`No se pudo descargar la imagen: ${imgResponse.status}`);
+            }
+
             const buffer = await imgResponse.buffer();
 
-            // ✅ Enviar el sticker con el crédito en el caption
+            // 4. Enviar como sticker con crédito
             await sock.sendMessage(msg.key.remoteJid, {
                 sticker: buffer,
                 caption: `⚡ Creado por *Bot-API* ⚡`
             }, { quoted: msg });
 
-            console.log('[BRAT] ✓ Sticker enviado con créditos.');
+            console.log('[BRAT] ✓ Sticker enviado correctamente.');
 
         } catch (error) {
             console.error('[BRAT] Error:', error);
