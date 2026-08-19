@@ -5,11 +5,14 @@
 // Muestra los propietarios del bot mediante menciones reales
 // de WhatsApp.
 //
-// Compatible con Baileys 7 y propietarios almacenados como LID.
+// Compatible con Baileys 7.
+// Soporta owners almacenados como LID.
+// Convierte LID -> PN y utiliza el JID PN real para mentions.
 // ============================================================
 
 import fs from 'fs/promises';
 import path from 'path';
+import { jidNormalizedUser } from 'baileys';
 
 // ============================================================
 // CONFIGURACIÓN
@@ -22,101 +25,189 @@ const OWNER_FILE = path.join(
 );
 
 // ============================================================
-// LIMPIAR VALOR
+// LIMPIAR JID
 // ============================================================
 
-function limpiarNumero(valor) {
+function limpiarJid(valor) {
+
     if (!valor) {
-        return '';
-    }
-
-    return String(valor)
-        .replace(/[^0-9]/g, '');
-}
-
-// ============================================================
-// CONVERTIR OWNER A LID JID
-// ============================================================
-
-function obtenerLidJid(owner) {
-    if (!owner) {
         return null;
     }
 
-    // Soporta también owners guardados como objetos.
-    if (typeof owner === 'object') {
-        owner =
-            owner.lid ||
-            owner.jid ||
-            owner.id ||
-            owner.number ||
-            owner.numero ||
+    if (
+        typeof valor === 'object'
+    ) {
+        valor =
+            valor.lid ||
+            valor.jid ||
+            valor.id ||
+            valor.number ||
+            valor.numero ||
+            valor.phone ||
             '';
     }
 
+    const texto =
+        String(valor).trim();
+
+    if (!texto) {
+        return null;
+    }
+
+    // Ya es un JID.
+    if (
+        texto.includes('@')
+    ) {
+        return texto;
+    }
+
+    // Si es solamente un número/LID,
+    // no asumimos todavía qué tipo es.
+    return texto;
+}
+
+// ============================================================
+// OBTENER LID
+// ============================================================
+
+function obtenerLidJid(owner) {
+
     const valor =
-        String(owner).trim();
+        limpiarJid(owner);
 
     if (!valor) {
         return null;
     }
 
-    // Si ya viene como LID.
-    if (valor.endsWith('@lid')) {
+    // Ya es LID.
+    if (
+        valor.endsWith('@lid')
+    ) {
         return valor;
     }
 
-    // Si viene como PN.
+    // Ya es PN.
     if (
         valor.endsWith('@s.whatsapp.net')
     ) {
         return valor;
     }
 
+    // owner.json actualmente guarda LIDs
+    // como números sin @lid.
     const numero =
-        limpiarNumero(valor);
+        valor.replace(
+            /[^0-9]/g,
+            ''
+        );
 
     if (!numero) {
         return null;
     }
 
-    // En owner.json los valores actuales
-    // son LIDs numéricos.
     return `${numero}@lid`;
 }
 
 // ============================================================
-// OBTENER PN REAL DESDE LID
+// NORMALIZAR PN
+// ============================================================
+// getPNForLID puede devolver un JID o un valor numérico,
+// dependiendo de la versión/estado del mapping.
+// Aquí nos aseguramos de obtener:
+// 521234567890@s.whatsapp.net
+// ============================================================
+
+function normalizarPN(valor) {
+
+    if (!valor) {
+        return null;
+    }
+
+    let texto =
+        String(valor).trim();
+
+    if (!texto) {
+        return null;
+    }
+
+    // Si ya es un JID válido.
+    if (
+        texto.includes('@')
+    ) {
+
+        try {
+
+            return jidNormalizedUser(
+                texto
+            );
+
+        } catch {
+            // Continuamos con limpieza manual.
+        }
+    }
+
+    // Si solamente devuelve el número.
+    const numero =
+        texto.replace(
+            /[^0-9]/g,
+            ''
+        );
+
+    if (!numero) {
+        return null;
+    }
+
+    return `${numero}@s.whatsapp.net`;
+}
+
+// ============================================================
+// RESOLVER LID -> PN
 // ============================================================
 
 async function resolverPN(
     sock,
     owner
 ) {
-    const jid =
-        obtenerLidJid(owner);
 
-    if (!jid) {
+    const valor =
+        limpiarJid(owner);
+
+    if (!valor) {
         return null;
     }
 
-    // Si ya es un PN, no hace falta resolverlo.
+    // Si owner.json ya contiene PN.
     if (
-        jid.endsWith('@s.whatsapp.net')
+        valor.endsWith(
+            '@s.whatsapp.net'
+        )
     ) {
-        return jid;
+
+        return normalizarPN(
+            valor
+        );
     }
 
-    // Baileys 7
+    const lid =
+        obtenerLidJid(
+            owner
+        );
+
+    if (!lid) {
+        return null;
+    }
+
     const mapping =
         sock?.signalRepository?.lidMapping;
 
     if (
         !mapping ||
-        typeof mapping.getPNForLID !== 'function'
+        typeof mapping.getPNForLID !==
+            'function'
     ) {
+
         console.error(
-            '[OWNER] Baileys no tiene disponible getPNForLID().'
+            '[OWNER] getPNForLID no está disponible.'
         );
 
         return null;
@@ -124,27 +215,46 @@ async function resolverPN(
 
     try {
 
-        const pn =
+        const resultado =
             await mapping.getPNForLID(
-                jid
+                lid
+            );
+
+        if (!resultado) {
+
+            console.warn(
+                `[OWNER] No existe mapping PN para ${lid}`
+            );
+
+            return null;
+        }
+
+        const pn =
+            normalizarPN(
+                resultado
             );
 
         if (!pn) {
 
             console.warn(
-                `[OWNER] No se encontró PN para ${jid}`
+                `[OWNER] PN inválido para ${lid}`
             );
 
             return null;
         }
+
+        console.log(
+            `[OWNER] LID ${lid} -> PN ${pn}`
+        );
 
         return pn;
 
     } catch (error) {
 
         console.error(
-            `[OWNER] Error resolviendo ${jid}:`,
-            error?.message || error
+            `[OWNER] Error resolviendo ${lid}:`,
+            error?.message ||
+            error
         );
 
         return null;
@@ -152,10 +262,13 @@ async function resolverPN(
 }
 
 // ============================================================
-// OBTENER NÚMERO PARA MOSTRAR
+// NÚMERO PARA MOSTRAR
 // ============================================================
 
-function obtenerNumeroPN(jid) {
+function obtenerNumero(
+    jid
+) {
+
     if (!jid) {
         return null;
     }
@@ -163,17 +276,16 @@ function obtenerNumeroPN(jid) {
     const numero =
         String(jid)
             .split('@')[0]
-            .replace(/[^0-9]/g, '');
+            .replace(
+                /[^0-9]/g,
+                ''
+            );
 
-    if (!numero) {
-        return null;
-    }
-
-    return numero;
+    return numero || null;
 }
 
 // ============================================================
-// LEER OWNERS
+// LEER OWNER.JSON
 // ============================================================
 
 async function leerOwners() {
@@ -187,19 +299,28 @@ async function leerOwners() {
     const data =
         JSON.parse(raw);
 
-    if (Array.isArray(data)) {
+    if (
+        Array.isArray(data)
+    ) {
+
         return data;
     }
 
     if (
-        Array.isArray(data?.owners)
+        Array.isArray(
+            data?.owners
+        )
     ) {
+
         return data.owners;
     }
 
     if (
-        Array.isArray(data?.owner)
+        Array.isArray(
+            data?.owner
+        )
     ) {
+
         return data.owner;
     }
 
@@ -207,19 +328,21 @@ async function leerOwners() {
         data &&
         typeof data === 'object'
     ) {
-        return Object.values(data)
-            .filter(
-                valor =>
-                    typeof valor === 'string' ||
-                    typeof valor === 'object'
-            );
+
+        return Object.values(
+            data
+        ).filter(
+            value =>
+                typeof value === 'string' ||
+                typeof value === 'object'
+        );
     }
 
     return [];
 }
 
 // ============================================================
-// COMANDO
+// COMANDO OWNER
 // ============================================================
 
 export default {
@@ -235,7 +358,7 @@ export default {
     ],
 
     descripcion:
-        'Muestra los propietarios del bot mediante menciones reales.',
+        'Muestra los propietarios mediante menciones reales de WhatsApp.',
 
     ejecutar: async ({
         msg,
@@ -246,7 +369,7 @@ export default {
         try {
 
             // ------------------------------------------------
-            // LEER DATABASE
+            // LEER OWNERS
             // ------------------------------------------------
 
             let owners;
@@ -271,7 +394,7 @@ export default {
             }
 
             if (
-                !owners ||
+                !Array.isArray(owners) ||
                 owners.length === 0
             ) {
 
@@ -283,7 +406,7 @@ export default {
             }
 
             // ------------------------------------------------
-            // RESOLVER LID → PN
+            // RESOLVER TODOS LOS OWNERS
             // ------------------------------------------------
 
             const propietarios = [];
@@ -303,7 +426,7 @@ export default {
                 }
 
                 const numero =
-                    obtenerNumeroPN(
+                    obtenerNumero(
                         pn
                     );
 
@@ -318,6 +441,7 @@ export default {
                             item.jid === pn
                     )
                 ) {
+
                     continue;
                 }
 
@@ -328,7 +452,7 @@ export default {
             }
 
             // ------------------------------------------------
-            // SI NO SE PUDO RESOLVER NINGUNO
+            // NINGÚN OWNER RESUELTO
             // ------------------------------------------------
 
             if (
@@ -336,15 +460,15 @@ export default {
             ) {
 
                 await responder.texto(
-                    '❌ No pude resolver los propietarios a sus números de WhatsApp.\n\n' +
-                    '⚠️ El mapeo LID → PN todavía no está disponible en la sesión de Baileys.'
+                    '❌ No pude resolver los propietarios.\n\n' +
+                    '⚠️ Baileys todavía no tiene disponible el mapeo LID → número para estos usuarios.'
                 );
 
                 return;
             }
 
             // ------------------------------------------------
-            // CONSTRUIR MENSAJE
+            // CREAR TEXTO
             // ------------------------------------------------
 
             let texto =
@@ -353,19 +477,37 @@ export default {
                 `┃ 📌 Total: ${propietarios.length} owner(s)\n` +
                 '┃\n';
 
+            // MUY IMPORTANTE:
+            // Este array debe contener JIDs completos:
+            //
+            // 521234567890@s.whatsapp.net
+            //
+            // NO:
+            //
+            // 521234567890
+            //
+            // NO:
+            //
+            // 123456789@lid
+
             const mentions = [];
 
-            propietarios.forEach(
-                (owner, index) => {
+            for (
+                let i = 0;
+                i < propietarios.length;
+                i++
+            ) {
 
-                    texto +=
-                        `┃ ${index + 1}. @${owner.numero}\n`;
+                const owner =
+                    propietarios[i];
 
-                    mentions.push(
-                        owner.jid
-                    );
-                }
-            );
+                texto +=
+                    `┃ ${i + 1}. @${owner.numero}\n`;
+
+                mentions.push(
+                    owner.jid
+                );
+            }
 
             texto +=
                 '┃\n' +
@@ -373,22 +515,47 @@ export default {
                 '╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣';
 
             // ------------------------------------------------
-            // ENVIAR MENSAJE CON MENCIONES REALES
+            // ENVIAR MENCIÓN REAL
             // ------------------------------------------------
 
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
                     text: texto,
-                    mentions
+                    mentions: mentions
                 },
                 {
                     quoted: msg
                 }
             );
 
+            // ------------------------------------------------
+            // LOG
+            // ------------------------------------------------
+
+            console.log(
+                '================================================'
+            );
+
+            console.log(
+                `[OWNER] Owners encontrados: ${owners.length}`
+            );
+
             console.log(
                 `[OWNER] Menciones enviadas: ${mentions.length}`
+            );
+
+            for (
+                const jid of mentions
+            ) {
+
+                console.log(
+                    `[OWNER] Mention JID: ${jid}`
+                );
+            }
+
+            console.log(
+                '================================================'
             );
 
         } catch (error) {
