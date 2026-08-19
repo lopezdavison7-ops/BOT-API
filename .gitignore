@@ -1,6 +1,0 @@
-.env
-node_modules/
-auth_info/
-media/
-*.log
-error-bot.txt
