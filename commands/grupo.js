@@ -3,7 +3,7 @@ export default {
     nombre: 'grupo',
     categoria: 'Utilidades',
     alias: ['grup', 'groupinfo'],
-    descripcion: 'Muestra información del grupo actual',
+    descripcion: 'Muestra información del grupo actual con menciones',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const groupId = msg.key.remoteJid;
@@ -17,6 +17,16 @@ export default {
             const admins = metadata.participants.filter(p => p.admin).map(p => p.id);
             const total = metadata.participants.length;
 
+            // 🔥 OBTENER EL CREADOR Y PREPARAR LA MENCIÓN
+            let creadorNombre = 'Desconocido';
+            let creadorMention = null;
+
+            if (metadata.owner) {
+                creadorNombre = `@${metadata.owner.split('@')[0]}`;
+                creadorMention = metadata.owner;
+            }
+
+            // Construir el mensaje
             const respuesta = `
 ╭〔 📊 𝐈𝐍𝐅𝐎 𝐆𝐑𝐔𝐏𝐎 〕⬣
 ┃
@@ -28,7 +38,7 @@ export default {
 ┃
 ┃ 🛡️ Administradores: ${admins.length}
 ┃
-┃ 🧑‍💼 Creador: @${metadata.owner?.split('@')[0] || 'Desconocido'}
+┃ 🧑‍💼 Creador: ${creadorNombre}
 ┃
 ┃ 📅 Creado: ${fechaCreacion}
 ┃
@@ -36,7 +46,14 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            await responder.texto(respuesta, { mentions: [metadata.owner].filter(Boolean) });
+
+            // 🔥 ENVIAR CON sock.sendMessage Y LA MENCIÓN FORZADA
+            const mentionsList = creadorMention ? [creadorMention] : [];
+
+            await sock.sendMessage(groupId, {
+                text: respuesta,
+                mentions: mentionsList
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[GRUPO] Error:', error);
