@@ -23,7 +23,6 @@ export default {
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
-                // Si hay argumento, esa es la razón
                 if (argumento && argumento.trim()) {
                     razon = argumento.trim();
                 }
@@ -33,11 +32,9 @@ export default {
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
-                // Si hay argumento, esa es la razón
                 if (argumento && argumento.trim()) {
                     razon = argumento.trim();
                 }
-                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
@@ -76,12 +73,14 @@ export default {
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
             const total = warns[target].length;
+            const moderadorJid = msg.key.participant || msg.key.remoteJid;
 
             // AUTO-KICK A LAS 3
             if (total >= 3) {
                 try {
                     await sock.groupParticipantsUpdate(msg.key.remoteJid, [target], 'remove');
-                    const respuestaKick = `
+                    
+                    const textoKick = `
 ╭〔 🚫 𝐀𝐔𝐓𝐎-𝐊𝐈𝐂𝐊 〕⬣
 ┃
 ┃ 👤 Usuario: @${target.split('@')[0]}
@@ -92,13 +91,16 @@ export default {
 ┃
 ┃ 🔢 Total: 3/3
 ┃
-┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
+┃ 🛡️ Moderador: @${moderadorJid.split('@')[0]}
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-                    await responder.texto(respuestaKick, { mentions: [target, msg.key.participant || msg.key.remoteJid] });
+                    await sock.sendMessage(msg.key.remoteJid, { 
+                        text: textoKick,
+                        mentions: [target, moderadorJid]
+                    }, { quoted: msg });
                     return;
                 } catch (error) {
                     console.error('[WARN] Error al kickear:', error);
@@ -106,7 +108,8 @@ export default {
                 }
             }
 
-            const respuesta = `
+            // MENSAJE NORMAL DE WARN
+            const textoWarn = `
 ╭〔 ⚠️ 𝐖𝐀𝐑𝐍 〕⬣
 ┃
 ┃ 👤 Usuario: @${target.split('@')[0]}
@@ -115,13 +118,16 @@ export default {
 ┃
 ┃ 🔢 Total: ${total}/3
 ┃
-┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
+┃ 🛡️ Moderador: @${moderadorJid.split('@')[0]}
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            await responder.texto(respuesta, { mentions: [target, msg.key.participant || msg.key.remoteJid] });
+            await sock.sendMessage(msg.key.remoteJid, { 
+                text: textoWarn,
+                mentions: [target, moderadorJid]
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[WARN] Error:', error);
