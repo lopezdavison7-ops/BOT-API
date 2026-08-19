@@ -3,7 +3,7 @@ export default {
     nombre: 'gstatus',
     categoria: 'Utilidades',
     alias: ['estado', 'groupstatus'],
-    descripcion: 'Publica un estado real en la cabecera del grupo (pantalla completa)',
+    descripcion: 'Publica un estado real en la cabecera del grupo',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const remoteJid = msg.key.remoteJid;
@@ -30,27 +30,17 @@ export default {
                 return;
             }
 
-            // 🔥 TRUCO: Publicar en el estado del grupo usando status@broadcast + contexto del grupo
-            const statusJid = 'status@broadcast';
+            // 🔥 CAMBIO CLAVE: PUBLICAR DIRECTAMENTE EN EL GRUPO, NO EN status@broadcast
+            // WhatsApp interpretará esto como un "Estado de Grupo" y lo pondrá en la cabecera.
 
             // 1. CASO: SOLO TEXTO (pantalla completa, fondo oscuro)
             if (!quotedMsg && textoEscrito) {
-                await sock.sendMessage(statusJid, {
+                await sock.sendMessage(remoteJid, {
                     text: textoEscrito,
-                    contextInfo: {
-                        remoteJid: remoteJid,
-                        isGroupStatus: true,
-                        statusSourceType: 0,
-                        statusAttributions: [{ AttributionData: null, type: 10 }],
-                        statusAudienceMetadata: {
-                            audienceType: 2,
-                            listName: "Mejores Amigos",
-                            listEmoji: "⭐"
-                        }
-                    }
+                    // Sin contextInfo especial, solo el texto en el grupo.
                 });
 
-                // ✅ MENSAJE DE CONFIRMACIÓN CON TU NOMBRE: BOT-API
+                // Confirmación en el chat
                 await sock.sendMessage(remoteJid, {
                     text: `╭〔 ✅ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣\n┃\n┃ 🟢 ESTADO PUBLICADO\n┃\n╰━━━━━━━━━━━━━━━━⬣\n\n┃ > El estado se ha subido correctamente al grupo.\n\n╰〔 ⚡ SYSTEM INFO 〕⬣`
                 }, { quoted: msg });
@@ -68,7 +58,8 @@ export default {
                     return;
                 }
 
-                await sock.sendMessage(statusJid, {
+                // Reenviar al grupo directamente como estado
+                await sock.sendMessage(remoteJid, {
                     forward: {
                         key: {
                             remoteJid: remoteJid,
@@ -77,21 +68,10 @@ export default {
                             participant: quotedParticipant
                         },
                         message: quotedMsg
-                    },
-                    contextInfo: {
-                        remoteJid: remoteJid,
-                        isGroupStatus: true,
-                        statusSourceType: 0,
-                        statusAttributions: [{ AttributionData: null, type: 10 }],
-                        statusAudienceMetadata: {
-                            audienceType: 2,
-                            listName: "Mejores Amigos",
-                            listEmoji: "⭐"
-                        }
                     }
                 });
 
-                // ✅ MENSAJE DE CONFIRMACIÓN CON TU NOMBRE: BOT-API
+                // Confirmación en el chat
                 await sock.sendMessage(remoteJid, {
                     text: `╭〔 ✅ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣\n┃\n┃ 🟢 ESTADO PUBLICADO\n┃\n╰━━━━━━━━━━━━━━━━⬣\n\n┃ > El estado se ha subido correctamente al grupo.\n\n╰〔 ⚡ SYSTEM INFO 〕⬣`
                 }, { quoted: msg });
