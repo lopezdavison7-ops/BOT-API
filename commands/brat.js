@@ -1,9 +1,8 @@
 // commands/brat.js
-import fetch from 'node-fetch';
-import sharp from 'sharp';
-import { createSticker } from 'webp-sticker'; // Importamos la librería
+const fetch = require('node-fetch');
+const sharp = require('sharp');
 
-export default {
+module.exports = {
     nombre: 'brat',
     categoria: 'Multimedia',
     alias: ['bratwhite', 'bratblanco'],
@@ -32,25 +31,18 @@ export default {
 
             const pngBuffer = await response.buffer();
 
-            // 1. Hacer la imagen cuadrada y convertirla a WebP con sharp
+            // Hacer la imagen cuadrada y convertirla a WebP
             const webpBuffer = await sharp(pngBuffer)
                 .resize(512, 512, { fit: 'cover', position: 'center' })
                 .webp({ quality: 90 })
                 .toBuffer();
 
-            // 2. Usar webp-sticker para ponerle los créditos
-            const stickerBuffer = await createSticker({
-                file: webpBuffer,     // La imagen ya convertida
-                pack: 'Bot-API',      // El nombre del pack
-                author: '⚡ Bot-API ⚡' // El autor que aparecerá al tocar
-            });
-
-            // 3. Enviar el sticker con la info
+            // ✅ Enviar el sticker (créditos incrustados en la imagen)
             await sock.sendMessage(msg.key.remoteJid, { 
-                sticker: stickerBuffer 
+                sticker: webpBuffer 
             }, { quoted: msg });
 
-            console.log('[BRAT] ✓ Sticker con créditos enviado.');
+            console.log('[BRAT] ✓ Sticker enviado.');
 
         } catch (error) {
             console.error('[BRAT] Error:', error);
