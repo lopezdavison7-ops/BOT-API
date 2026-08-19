@@ -21,7 +21,6 @@ export default {
                 const raw = await fs.readFile(OWNER_FILE, 'utf8');
                 data = JSON.parse(raw);
 
-                // Detectar formato
                 if (Array.isArray(data)) {
                     owners = data;
                 } else if (data.owners && Array.isArray(data.owners)) {
@@ -34,18 +33,21 @@ export default {
                 return;
             }
 
-            // 2. LIMPIAR NÚMEROS (quitar +, espacios, y caracteres raros)
+            // 🔥 LIMPIEZA EXTREMA (quita +, espacios, ⁨, ⁩, puntos, guiones)
             const cleanedOwners = owners.map(o => {
-                let num = String(o).replace(/[^0-9]/g, ''); // Solo números
+                let num = String(o)
+                    .replace(/[⁨⁩]/g, '')       // Quita caracteres invisibles
+                    .replace(/[+\s\-.]/g, '')    // Quita +, espacios, guiones, puntos
+                    .replace(/[^0-9]/g, '');     // Deja solo números
                 return num;
-            }).filter(num => num.length >= 10); // Filtrar números válidos
+            }).filter(num => num.length >= 10);
 
             if (cleanedOwners.length === 0) {
                 await responder.texto('❌ La lista de propietarios está vacía o inválida.');
                 return;
             }
 
-            // 3. Construir la lista con JIDs limpios
+            // 2. Construir lista con JIDs limpios
             let listaTexto = '';
             const mentionsList = [];
 
@@ -55,7 +57,7 @@ export default {
                 mentionsList.push(jid);
             });
 
-            // 4. Mensaje con estilo
+            // 3. Mensaje con estilo
             const respuesta = `
 ╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
 ┃
@@ -68,7 +70,7 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 5. ENVIAR CON sock.sendMessage Y EL ARRAY DE MENCIONES
+            // 4. ENVIAR CON sock.sendMessage Y EL ARRAY DE MENCIONES
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentionsList
