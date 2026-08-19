@@ -15,27 +15,30 @@ export default {
             const mensajeInicial = `🔄 *ACTUALIZANDO...*\n\n⏳ Buscando cambios en el repositorio...`;
             const sentMsg = await sock.sendMessage(msg.key.remoteJid, { text: mensajeInicial }, { quoted: msg });
 
-            // Guardar el ID del mensaje para editarlo después
             const messageId = sentMsg.key.id;
 
-            // 2. Ejecutar git pull
+            // 2. Ejecutar git pull con timeout de 10 segundos
             let cambios = '';
             let errorMsg = '';
-            
+
             try {
-                const { stdout, stderr } = await execAsync('git pull');
+                const { stdout, stderr } = await execAsync('git pull', { timeout: 10000 });
                 cambios = stdout || stderr;
-                if (!cambios) cambios = '✅ No hubo cambios nuevos.';
             } catch (error) {
-                errorMsg = '❌ Error al ejecutar git pull. Verifica que tengas Git instalado y el repositorio configurado.';
+                if (error.code === 'ETIMEDOUT') {
+                    errorMsg = '⏱️ El comando git pull tardó demasiado. Verifica tu conexión o si Git está instalado.';
+                } else {
+                    errorMsg = `❌ Error al ejecutar git pull:\n${error.message || error}`;
+                }
                 console.error('[UPDATE] Error:', error);
             }
 
-            // 3. Editar el mismo mensaje con el resultado
+            // 3. Editar el mensaje con el resultado
             let textoFinal = `✅ *ACTUALIZACIÓN COMPLETADA*\n\n`;
 
             if (errorMsg) {
                 textoFinal += errorMsg;
+                textoFinal += `\n\n📌 Para actualizar manualmente, haz \`git pull\` en la terminal.`;
             } else {
                 // Limpiar la salida de git pull
                 const cambiosLimpios = cambios
@@ -48,7 +51,7 @@ export default {
                     .replace(/Checking out files:.*/g, '')
                     .trim();
 
-                if (cambiosLimpios.includes('Already up to date')) {
+                if (!cambiosLimpios || cambiosLimpios.includes('Already up to date')) {
                     textoFinal += `📂 El bot ya está en la última versión.\n\n✅ No se aplicaron cambios.`;
                 } else {
                     textoFinal += `📂 Cambios aplicados:\n\`\`\`\n${cambiosLimpios || 'No se detectaron cambios específicos.'}\n\`\`\`\n\n🔄 El bot está listo.`;
@@ -70,8 +73,8 @@ export default {
             console.log('[UPDATE] Mensaje actualizado correctamente.');
 
         } catch (error) {
-            console.error('[UPDATE] Error:', error);
-            await responder.texto('❌ Error al ejecutar la actualización.');
+            console.error('[UPDATE] Error general:', error);
+            await responder.texto('❌ Error crítico al ejecutar la actualización.');
         }
     }
 };
