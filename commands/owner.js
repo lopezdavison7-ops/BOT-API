@@ -10,44 +10,40 @@ export default {
     nombre: 'owner',
     categoria: 'Owner',
     alias: ['owners', 'dueños'],
-    descripcion: 'Muestra la lista de propietarios con menciones cliqueables',
+    descripcion: 'Muestra la lista de propietarios del bot con menciones',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. Cargar el archivo
+            // 1. Cargar el JSON
             let data = {};
-            let owners = [];
-
             try {
                 const raw = await fs.readFile(OWNER_FILE, 'utf8');
                 data = JSON.parse(raw);
-
-                if (Array.isArray(data)) {
-                    owners = data;
-                } else if (data.owners && Array.isArray(data.owners)) {
-                    owners = data.owners;
-                } else {
-                    owners = Object.values(data);
-                }
             } catch {
-                await responder.texto('❌ No hay propietarios configurados en la base de datos.');
+                await responder.texto('❌ No se pudo leer la base de datos de owners.');
                 return;
             }
 
-            // 🔥 LIMPIEZA EXTREMA (quita +, espacios, ⁨, ⁩, puntos, guiones)
-            const cleanedOwners = owners.map(o => {
-                let num = String(o)
-                    .replace(/[⁨⁩]/g, '')       // Quita caracteres invisibles
-                    .replace(/[+\s\-.]/g, '')    // Quita +, espacios, guiones, puntos
-                    .replace(/[^0-9]/g, '');     // Deja solo números
-                return num;
-            }).filter(num => num.length >= 10);
+            // 2. Obtener el array de owners (soporte para formato array o { owners: [...] })
+            let owners = [];
+            if (Array.isArray(data)) {
+                owners = data;
+            } else if (data.owners && Array.isArray(data.owners)) {
+                owners = data.owners;
+            } else {
+                owners = Object.values(data).filter(v => typeof v === 'string');
+            }
+
+            // 3. Limpiar números (quitar todo lo que no sea dígito)
+            const cleanedOwners = owners
+                .map(o => String(o).replace(/[^0-9]/g, ''))
+                .filter(num => num.length >= 10);
 
             if (cleanedOwners.length === 0) {
-                await responder.texto('❌ La lista de propietarios está vacía o inválida.');
+                await responder.texto('❌ No hay propietarios válidos en la base de datos.');
                 return;
             }
 
-            // 2. Construir lista con JIDs limpios
+            // 4. Construir la lista con menciones
             let listaTexto = '';
             const mentionsList = [];
 
@@ -57,7 +53,6 @@ export default {
                 mentionsList.push(jid);
             });
 
-            // 3. Mensaje con estilo
             const respuesta = `
 ╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
 ┃
@@ -70,7 +65,7 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 4. ENVIAR CON sock.sendMessage Y EL ARRAY DE MENCIONES
+            // 5. Enviar con menciones forzadas
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentionsList
