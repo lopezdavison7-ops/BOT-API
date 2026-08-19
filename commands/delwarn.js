@@ -44,26 +44,6 @@ export default {
                 return;
             }
 
-            // 🔥 OBTENER EL NOMBRE REAL DEL USUARIO
-            let nombreUsuario = `@${target.split('@')[0]}`;
-            try {
-                // Intentar obtener el nombre del grupo
-                const metadata = await sock.groupMetadata(msg.key.remoteJid);
-                const participante = metadata.participants.find(p => p.id === target);
-                if (participante && participante.name) {
-                    nombreUsuario = participante.name;
-                } else {
-                    // Si no tiene nombre en el grupo, intentar con el contacto guardado
-                    const contacto = await sock.contacts[target];
-                    if (contacto && contacto.name) {
-                        nombreUsuario = contacto.name;
-                    }
-                }
-            } catch {
-                // Si falla, dejar el número
-                nombreUsuario = `@${target.split('@')[0]}`;
-            }
-
             // Cargar base de datos
             let warns = {};
             try {
@@ -75,7 +55,9 @@ export default {
             }
 
             if (!warns[target] || warns[target].length === 0) {
-                await responder.texto(`✅ ${nombreUsuario} ya está limpio, no tiene advertencias.`, { mentions: [target] });
+                // ✅ Respuesta con mención forzada
+                const mensajeLimpio = `✅ @${target.split('@')[0]} ya está limpio, no tiene advertencias.`;
+                await responder.texto(mensajeLimpio, { mentions: [target] });
                 return;
             }
 
@@ -83,10 +65,11 @@ export default {
             delete warns[target];
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
+            // ✅ Respuesta con mención forzada
             const respuesta = `
 ╭〔 🧹 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 𝐄𝐋𝐈𝐌𝐈𝐍𝐀𝐃𝐀𝐒 〕⬣
 ┃
-┃ 👤 Usuario: ${nombreUsuario}
+┃ 👤 Usuario: @${target.split('@')[0]}
 ┃
 ┃ 🗑️ Advertencias borradas: ${cantidad}
 ┃
@@ -96,6 +79,7 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
+            // 🔥 FORZAMOS LA MENCIÓN EN EL OBJETO DE RESPUESTA
             await responder.texto(respuesta, { mentions: [target] });
 
         } catch (error) {
