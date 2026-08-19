@@ -20,9 +20,13 @@ export default {
                 return;
             }
 
+            // Construir lista con @mención en el texto
             const lista = admins.map((p, i) => 
                 `${i + 1}. @${p.id.split('@')[0]} ${p.admin === 'superadmin' ? '👑' : '🛡️'}`
             ).join('\n');
+
+            // Sacar los JIDs para mencionarlos
+            const mentions = admins.map(p => p.id);
 
             const respuesta = `
 ╭〔 🛡️ 𝐀𝐃𝐌𝐈𝐍𝐈𝐒𝐓𝐑𝐀𝐃𝐎𝐑𝐄𝐒 〕⬣
@@ -37,7 +41,12 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            await responder.texto(respuesta, { mentions: admins.map(p => p.id) });
+
+            // 🔥 ENVIAR CON MENCIONES OBLIGADAS
+            await sock.sendMessage(msg.key.remoteJid, {
+                text: respuesta,
+                mentions: mentions
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[LISTADMINS] Error:', error);
