@@ -3,7 +3,7 @@ export default {
     nombre: 'gstatus',
     categoria: 'Utilidades',
     alias: ['estado', 'groupstatus'],
-    descripcion: 'Publica un estado real en la cabecera del grupo',
+    descripcion: 'Publica un estado real en la cabecera del grupo (pantalla completa)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const remoteJid = msg.key.remoteJid;
@@ -30,36 +30,36 @@ export default {
                 return;
             }
 
-            // 1. CASO: SOLO TEXTO
+            // 🔥 TRUCO: Publicar en el estado del grupo usando status@broadcast + contexto del grupo
+            const statusJid = 'status@broadcast';
+
+            // 1. CASO: SOLO TEXTO (pantalla completa, fondo oscuro)
             if (!quotedMsg && textoEscrito) {
-                // Enviar estado de grupo V2 (texto)
-                const statusMessage = {
-                    groupStatusMessageV2: {
-                        message: {
-                            extendedTextMessage: {
-                                text: textoEscrito,
-                                textArgb: 4292401368, // Blanco
-                                backgroundArgb: 4283453520, // Fondo oscuro
-                                font: 5,
-                                previewType: 0,
-                                contextInfo: {
-                                    isGroupStatus: true,
-                                    statusSourceType: 0,
-                                    statusAttributions: [{ AttributionData: null, type: 10 }]
-                                }
-                            }
+                await sock.sendMessage(statusJid, {
+                    text: textoEscrito,
+                    contextInfo: {
+                        remoteJid: remoteJid,
+                        isGroupStatus: true,
+                        statusSourceType: 0,
+                        statusAttributions: [{ AttributionData: null, type: 10 }],
+                        statusAudienceMetadata: {
+                            audienceType: 2,
+                            listName: "Mejores Amigos",
+                            listEmoji: "⭐"
                         }
                     }
-                };
+                });
 
-                await sock.sendMessage(remoteJid, statusMessage);
-                await responder.texto(`✅ *ESTADO PUBLICADO*\n\n📝 Texto subido a la cabecera del grupo.`);
+                // ✅ MENSAJE DE CONFIRMACIÓN CON TU NOMBRE: BOT-API
+                await sock.sendMessage(remoteJid, {
+                    text: `╭〔 ✅ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣\n┃\n┃ 🟢 ESTADO PUBLICADO\n┃\n╰━━━━━━━━━━━━━━━━⬣\n\n┃ > El estado se ha subido correctamente al grupo.\n\n╰〔 ⚡ SYSTEM INFO 〕⬣`
+                }, { quoted: msg });
+
                 return;
             }
 
-            // 2. CASO: MULTIMEDIA (RESPONDIENDO A UN ARCHIVO)
+            // 2. CASO: MULTIMEDIA (foto, video, audio, sticker)
             if (quotedMsg) {
-                // Usar el reenvío directo del mensaje citado como estado de grupo
                 const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
                 const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
 
@@ -68,21 +68,40 @@ export default {
                     return;
                 }
 
-                // Construir el mensaje de estado de grupo con el archivo citado
-                const statusMessage = {
-                    groupStatusMessageV2: {
+                await sock.sendMessage(statusJid, {
+                    forward: {
+                        key: {
+                            remoteJid: remoteJid,
+                            fromMe: false,
+                            id: quotedId,
+                            participant: quotedParticipant
+                        },
                         message: quotedMsg
+                    },
+                    contextInfo: {
+                        remoteJid: remoteJid,
+                        isGroupStatus: true,
+                        statusSourceType: 0,
+                        statusAttributions: [{ AttributionData: null, type: 10 }],
+                        statusAudienceMetadata: {
+                            audienceType: 2,
+                            listName: "Mejores Amigos",
+                            listEmoji: "⭐"
+                        }
                     }
-                };
+                });
 
-                await sock.sendMessage(remoteJid, statusMessage);
-                await responder.texto(`✅ *ESTADO PUBLICADO*\n\n📤 Archivo subido a la cabecera del grupo.`);
+                // ✅ MENSAJE DE CONFIRMACIÓN CON TU NOMBRE: BOT-API
+                await sock.sendMessage(remoteJid, {
+                    text: `╭〔 ✅ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣\n┃\n┃ 🟢 ESTADO PUBLICADO\n┃\n╰━━━━━━━━━━━━━━━━⬣\n\n┃ > El estado se ha subido correctamente al grupo.\n\n╰〔 ⚡ SYSTEM INFO 〕⬣`
+                }, { quoted: msg });
+
                 return;
             }
 
         } catch (error) {
             console.error('[GSTATUS] Error:', error);
-            await responder.texto(`❌ *ERROR*\n\nNo se pudo publicar el estado. Verifica que el bot tenga permisos.`);
+            await responder.texto(`❌ *ERROR*\n\nNo se pudo publicar el estado. Verifica la versión de Baileys.`);
         }
     }
 };
