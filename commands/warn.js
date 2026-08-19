@@ -23,6 +23,7 @@ export default {
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
+                // Si hay argumento, esa es la razón
                 if (argumento && argumento.trim()) {
                     razon = argumento.trim();
                 }
@@ -32,7 +33,7 @@ export default {
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
-                // Si mencionó y escribió algo, eso es la razón
+                // Si hay argumento, esa es la razón
                 if (argumento && argumento.trim()) {
                     razon = argumento.trim();
                 }
@@ -60,9 +61,7 @@ export default {
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
                 warns = JSON.parse(data);
-            } catch {
-                // Archivo no existe
-            }
+            } catch {}
 
             if (!warns[target]) warns[target] = [];
 
@@ -78,15 +77,10 @@ export default {
 
             const total = warns[target].length;
 
-            // ✅ AUTO-KICK SI LLEGA A 3 ADVERTENCIAS
+            // AUTO-KICK A LAS 3
             if (total >= 3) {
                 try {
-                    await sock.groupParticipantsUpdate(
-                        msg.key.remoteJid,
-                        [target],
-                        'remove'
-                    );
-                    
+                    await sock.groupParticipantsUpdate(msg.key.remoteJid, [target], 'remove');
                     const respuestaKick = `
 ╭〔 🚫 𝐀𝐔𝐓𝐎-𝐊𝐈𝐂𝐊 〕⬣
 ┃
@@ -96,7 +90,7 @@ export default {
 ┃
 ┃ 📝 Última razón: ${razon}
 ┃
-┃ 🔢 Total: 3/3 advertencias
+┃ 🔢 Total: 3/3
 ┃
 ┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
 ┃
@@ -112,7 +106,6 @@ export default {
                 }
             }
 
-            // Si no llegó a 3, solo muestra el warn normal
             const respuesta = `
 ╭〔 ⚠️ 𝐖𝐀𝐑𝐍 〕⬣
 ┃
@@ -120,7 +113,7 @@ export default {
 ┃
 ┃ 📝 Razón: ${razon}
 ┃
-┃ 🔢 Total: ${total}/3 advertencia(s)
+┃ 🔢 Total: ${total}/3
 ┃
 ┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
 ┃
