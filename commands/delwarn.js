@@ -28,7 +28,6 @@ export default {
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
-                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
@@ -45,6 +44,26 @@ export default {
                 return;
             }
 
+            // 🔥 OBTENER EL NOMBRE REAL DEL USUARIO
+            let nombreUsuario = `@${target.split('@')[0]}`;
+            try {
+                // Intentar obtener el nombre del grupo
+                const metadata = await sock.groupMetadata(msg.key.remoteJid);
+                const participante = metadata.participants.find(p => p.id === target);
+                if (participante && participante.name) {
+                    nombreUsuario = participante.name;
+                } else {
+                    // Si no tiene nombre en el grupo, intentar con el contacto guardado
+                    const contacto = await sock.contacts[target];
+                    if (contacto && contacto.name) {
+                        nombreUsuario = contacto.name;
+                    }
+                }
+            } catch {
+                // Si falla, dejar el número
+                nombreUsuario = `@${target.split('@')[0]}`;
+            }
+
             // Cargar base de datos
             let warns = {};
             try {
@@ -55,23 +74,19 @@ export default {
                 return;
             }
 
-            // Verificar si el usuario tiene warns
             if (!warns[target] || warns[target].length === 0) {
-                await responder.texto(`✅ @${target.split('@')[0]} ya está limpio, no tiene advertencias.`, { mentions: [target] });
+                await responder.texto(`✅ ${nombreUsuario} ya está limpio, no tiene advertencias.`, { mentions: [target] });
                 return;
             }
 
-            // 🔥 BORRAR TODAS LAS ADVERTENCIAS DEL USUARIO
             const cantidad = warns[target].length;
             delete warns[target];
-
-            // Guardar cambios
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
             const respuesta = `
 ╭〔 🧹 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 𝐄𝐋𝐈𝐌𝐈𝐍𝐀𝐃𝐀𝐒 〕⬣
 ┃
-┃ 👤 Usuario: @${target.split('@')[0]}
+┃ 👤 Usuario: ${nombreUsuario}
 ┃
 ┃ 🗑️ Advertencias borradas: ${cantidad}
 ┃
