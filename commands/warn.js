@@ -8,32 +8,51 @@ export default {
     nombre: 'warn',
     categoria: 'Moderación',
     alias: ['advertir'],
-    descripcion: 'Agrega una advertencia a un usuario',
+    descripcion: 'Agrega una advertencia (responde o menciona)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Verificar si es grupo
             if (!msg.key.remoteJid.endsWith('@g.us')) {
                 await responder.texto('❌ Este comando solo funciona en grupos.');
                 return;
             }
 
-            // Obtener mencionados
+            let target = null;
+            let razon = (argumento || '').trim();
+
+            // FORMA 1: Respondiendo a un mensaje
+            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
+            if (quoted) {
+                target = quoted;
+                // Si no hay razón, usar "Sin razón"
+                if (!razon) razon = 'Sin razón especificada';
+            }
+
+            // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentioned.length === 0) {
+            if (mentioned.length > 0) {
+                target = mentioned[0];
+                // Si respondió y mencionó, prioriza la mención
+                if (quoted && mentioned.length > 0) {
+                    target = mentioned[0];
+                }
+                // Si no hay razón, usar "Sin razón"
+                if (!razon) razon = 'Sin razón especificada';
+            }
+
+            if (!target) {
                 await responder.texto(
                     `❌ *WARN*\n\n` +
-                    `Menciona a un usuario.\n\n` +
-                    `📌 Ejemplo:\n` +
-                    `*.warn @usuario razón*`
+                    `Usa una de estas formas:\n` +
+                    `1️⃣ Responde a un mensaje del usuario: *.warn razón*\n` +
+                    `2️⃣ Menciona al usuario: *.warn @usuario razón*\n\n` +
+                    `📌 Ejemplos:\n` +
+                    `*.warn Spam* (respondiendo)\n` +
+                    `*.warn @pedro Spam*`
                 );
                 return;
             }
 
-            const target = mentioned[0];
-            const args = (argumento || '').trim().split(' ');
-            const razon = args.slice(1).join(' ') || 'Sin razón especificada';
-
-            // Cargar warns existentes
+            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
@@ -52,7 +71,6 @@ export default {
             };
 
             warns[target].push(warnData);
-
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
             const total = warns[target].length;
