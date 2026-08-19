@@ -1,0 +1,25 @@
+# Backups
+.backup-cartas/
+.backup-rw/
+*.bak
+*.bak2
+*.backup
+*.before-*
+*.meta-bak
+
+# Pruebas
+.sticker-test/
+captura-ss.png
+spack-test.html
+
+# Backups de index
+index.js.bak*
+index.js.antes-*
+
+# Backups de scripts
+seleccionar-gacha.sh.bak
+
+# Variables privadas
+.env
+.env.*
+!.env.example
