@@ -8,7 +8,7 @@ export default {
     nombre: 'warns',
     categoria: 'Moderación',
     alias: ['advertencias', 'warnings'],
-    descripcion: 'Muestra advertencias (responde o menciona)',
+    descripcion: 'Muestra las advertencias de un usuario',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             let target = null;
@@ -19,7 +19,7 @@ export default {
                 target = quoted;
             }
 
-            // FORMA 2: Mención
+            // FORMA 2: Mención (@usuario)
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
@@ -31,38 +31,47 @@ export default {
             if (!target) {
                 await responder.texto(
                     `❌ *WARNS*\n\n` +
-                    `Usa una de estas formas:\n` +
-                    `1️⃣ Responde a un mensaje del usuario: *.warns*\n` +
-                    `2️⃣ Menciona al usuario: *.warns @usuario*\n\n` +
+                    `Menciona a un usuario o responde a su mensaje.\n\n` +
                     `📌 Ejemplos:\n` +
-                    `*.warns* (respondiendo)\n` +
-                    `*.warns @pedro*`
+                    `*.warns @usuario*`
                 );
                 return;
             }
 
+            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
                 warns = JSON.parse(data);
-            } catch {
-                await responder.texto('❌ No hay advertencias registradas.');
-                return;
-            }
+            } catch {}
 
             if (!warns[target] || warns[target].length === 0) {
-                await responder.texto(
-                    `✅ @${target.split('@')[0]} no tiene advertencias.`,
-                    { mentions: [target] }
-                );
+                const textoLimpio = `
+╭〔 ✅ 𝐒𝐈𝐍 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 〕⬣
+┃
+┃ 👤 Usuario: @${target.split('@')[0]}
+┃
+┃ 🔢 Total: 0
+┃
+┃ 🍀 Usuario limpio.
+┃
+╰━━━━━━━━━━━━━━━━⬣
+
+╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
+`;
+                await sock.sendMessage(msg.key.remoteJid, {
+                    text: textoLimpio,
+                    mentions: [target]
+                }, { quoted: msg });
                 return;
             }
 
+            // Construir lista de advertencias
             const lista = warns[target].map((w, i) => 
                 `${i + 1}. #${w.id} | ${w.fecha} | ${w.razon}`
             ).join('\n');
 
-            const respuesta = `
+            const textoWarns = `
 ╭〔 📋 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 〕⬣
 ┃
 ┃ 👤 Usuario: @${target.split('@')[0]}
@@ -75,7 +84,10 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            await responder.texto(respuesta, { mentions: [target] });
+            await sock.sendMessage(msg.key.remoteJid, {
+                text: textoWarns,
+                mentions: [target]
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[WARNS] Error:', error);
