@@ -23,7 +23,7 @@ export default {
                 return;
             }
 
-            // 2. Obtener el array de owners
+            // 2. Obtener el array de owners (sin limpiar nada, tal cual)
             let owners = [];
             if (Array.isArray(data)) {
                 owners = data;
@@ -33,28 +33,30 @@ export default {
                 owners = Object.values(data).filter(v => typeof v === 'string');
             }
 
-            // 3. Limpiar números (por si acaso)
-            const cleanedOwners = owners
-                .map(o => String(o).replace(/[^0-9]/g, ''))
-                .filter(num => num.length >= 10);
-
-            if (cleanedOwners.length === 0) {
-                await responder.texto('❌ No hay propietarios válidos en la base de datos.');
+            if (owners.length === 0) {
+                await responder.texto('❌ No hay propietarios en la base de datos.');
                 return;
             }
 
-            // 4. Construir la lista CON NOMBRES AMIGABLES
+            // 3. Construir la lista con JIDs y nombres
             let listaTexto = '';
             const mentionsList = [];
 
-            // Lista de nombres para mostrar (puedes cambiarlos aquí)
+            // Nombres personalizados para cada owner
             const nombresAmigables = [
                 '👑 Owner Principal',
-                '🛡️ Dueño Secundario'
+                '🛡️ Dueño Secundario',
+                '⭐ Owner 3',
+                '⚡ Owner 4'
             ];
 
-            cleanedOwners.forEach((numero, i) => {
-                const jid = `${numero}@s.whatsapp.net`;
+            owners.forEach((numero, i) => {
+                // Si el número no tiene @s.whatsapp.net, se lo agregamos
+                let jid = numero;
+                if (!jid.includes('@s.whatsapp.net')) {
+                    jid = `${jid}@s.whatsapp.net`;
+                }
+                
                 const nombre = nombresAmigables[i] || `Owner ${i + 1}`;
                 listaTexto += `${i + 1}. ${nombre}\n`;
                 mentionsList.push(jid);
@@ -63,7 +65,7 @@ export default {
             const respuesta = `
 ╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
 ┃
-┃ 📌 Total: ${cleanedOwners.length} owner(s)
+┃ 📌 Total: ${owners.length} owner(s)
 ┃
 ┃ ${listaTexto}
 ┃
@@ -72,7 +74,7 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 5. Enviar con menciones forzadas
+            // 4. Enviar con menciones forzadas
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentionsList
