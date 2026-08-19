@@ -23,7 +23,7 @@ export default {
                 return;
             }
 
-            // 2. Obtener el array de owners (soporte para formato array o { owners: [...] })
+            // 2. Obtener el array de owners
             let owners = [];
             if (Array.isArray(data)) {
                 owners = data;
@@ -33,7 +33,7 @@ export default {
                 owners = Object.values(data).filter(v => typeof v === 'string');
             }
 
-            // 3. Limpiar números (quitar todo lo que no sea dígito)
+            // 3. Limpiar números (por si acaso)
             const cleanedOwners = owners
                 .map(o => String(o).replace(/[^0-9]/g, ''))
                 .filter(num => num.length >= 10);
@@ -43,13 +43,20 @@ export default {
                 return;
             }
 
-            // 4. Construir la lista con menciones
+            // 4. Construir la lista CON NOMBRES AMIGABLES
             let listaTexto = '';
             const mentionsList = [];
 
+            // Lista de nombres para mostrar (puedes cambiarlos aquí)
+            const nombresAmigables = [
+                '👑 Owner Principal',
+                '🛡️ Dueño Secundario'
+            ];
+
             cleanedOwners.forEach((numero, i) => {
                 const jid = `${numero}@s.whatsapp.net`;
-                listaTexto += `${i + 1}. @${numero} 👑\n`;
+                const nombre = nombresAmigables[i] || `Owner ${i + 1}`;
+                listaTexto += `${i + 1}. ${nombre}\n`;
                 mentionsList.push(jid);
             });
 
