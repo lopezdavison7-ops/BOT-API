@@ -10,7 +10,7 @@ export default {
     nombre: 'owner',
     categoria: 'Owner',
     alias: ['owners', 'dueños'],
-    descripcion: 'Muestra la lista de propietarios del bot con menciones',
+    descripcion: 'Muestra la lista de propietarios con sus números',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             // 1. Cargar el JSON
@@ -23,7 +23,7 @@ export default {
                 return;
             }
 
-            // 2. Obtener el array de owners (sin limpiar nada, tal cual)
+            // 2. Obtener el array de owners
             let owners = [];
             if (Array.isArray(data)) {
                 owners = data;
@@ -38,27 +38,17 @@ export default {
                 return;
             }
 
-            // 3. Construir la lista con JIDs y nombres
+            // 3. Construir la lista con los números y menciones
             let listaTexto = '';
             const mentionsList = [];
 
-            // Nombres personalizados para cada owner
-            const nombresAmigables = [
-                '👑 Owner Principal',
-                '🛡️ Dueño Secundario',
-                '⭐ Owner 3',
-                '⚡ Owner 4'
-            ];
-
             owners.forEach((numero, i) => {
-                // Si el número no tiene @s.whatsapp.net, se lo agregamos
-                let jid = numero;
-                if (!jid.includes('@s.whatsapp.net')) {
-                    jid = `${jid}@s.whatsapp.net`;
-                }
+                // Limpiar cualquier carácter no numérico (por si acaso)
+                const numLimpio = String(numero).replace(/[^0-9]/g, '');
+                const jid = `${numLimpio}@s.whatsapp.net`;
                 
-                const nombre = nombresAmigables[i] || `Owner ${i + 1}`;
-                listaTexto += `${i + 1}. ${nombre}\n`;
+                // Mostrar el número con @ (para intentar la mención)
+                listaTexto += `${i + 1}. @${numLimpio}\n`;
                 mentionsList.push(jid);
             });
 
