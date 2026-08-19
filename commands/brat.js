@@ -1,5 +1,6 @@
 // commands/brat.js
 import fetch from 'node-fetch';
+import sharp from 'sharp'; // Asegúrate de tener esto instalado
 
 export default {
     nombre: 'brat',
@@ -22,7 +23,7 @@ export default {
             const color = 'white';
             const apiKey = 'yosoyyo_sk_gincmnk3';
 
-            // 🔥 URL directa a la imagen (sin esperar JSON)
+            // URL directa a la imagen PNG
             const apiUrl = `https://apiyosoyyo-ofc.onrender.com/api/brat?text=${encodeURIComponent(texto)}&color=${color}&apiKey=${apiKey}`;
 
             console.log(`[BRAT] Solicitando: ${apiUrl}`);
@@ -32,12 +33,17 @@ export default {
                 throw new Error(`API respondió con ${response.status}`);
             }
 
-            // ✅ Aquí el cambio clave: usamos .buffer() directamente
-            const buffer = await response.buffer();
+            // Obtener el buffer de la imagen PNG
+            const pngBuffer = await response.buffer();
+
+            // 🔥 CONVERTIR PNG A WEBP (sticker)
+            const webpBuffer = await sharp(pngBuffer)
+                .webp({ quality: 90 }) // Calidad alta
+                .toBuffer();
 
             // Enviar como sticker con crédito
             await sock.sendMessage(msg.key.remoteJid, {
-                sticker: buffer,
+                sticker: webpBuffer,
                 caption: `⚡ Creado por *Bot-API* ⚡`
             }, { quoted: msg });
 
