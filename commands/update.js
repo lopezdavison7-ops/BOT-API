@@ -7,33 +7,71 @@ const execAsync = promisify(exec);
 export default {
     nombre: 'update',
     categoria: 'Owner',
-    alias: ['reiniciar', 'restart'],
-    descripcion: 'Actualiza el bot (git pull) y lo reinicia',
+    alias: ['actualizar'],
+    descripcion: 'Actualiza el bot desde Git y muestra los cambios',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Verificar si es el owner (opcional, ya tienes owner.js)
-            // Si quieres restringirlo, puedes agregar una verificación aquí
+            // 1. Enviar mensaje de "Actualizando..."
+            const mensajeInicial = `🔄 *ACTUALIZANDO...*\n\n⏳ Buscando cambios en el repositorio...`;
+            const sentMsg = await sock.sendMessage(msg.key.remoteJid, { text: mensajeInicial }, { quoted: msg });
 
-            await responder.texto(`🔄 *ACTUALIZANDO...*\n\n⏳ Por favor espera, el bot se reiniciará en unos segundos.`);
+            // Guardar el ID del mensaje para editarlo después
+            const messageId = sentMsg.key.id;
 
-            // Opcional: hacer git pull si tienes repositorio conectado
+            // 2. Ejecutar git pull
+            let cambios = '';
+            let errorMsg = '';
+            
             try {
                 const { stdout, stderr } = await execAsync('git pull');
-                console.log('[UPDATE] git pull:', stdout);
-                if (stderr) console.error('[UPDATE] git pull stderr:', stderr);
+                cambios = stdout || stderr;
+                if (!cambios) cambios = '✅ No hubo cambios nuevos.';
             } catch (error) {
-                console.log('[UPDATE] No se pudo hacer git pull (quizás no hay repo o internet).');
+                errorMsg = '❌ Error al ejecutar git pull. Verifica que tengas Git instalado y el repositorio configurado.';
+                console.error('[UPDATE] Error:', error);
             }
 
-            // Opcional: si quieres esperar un poco antes de reiniciar
-            setTimeout(async () => {
-                // Reiniciar el proceso (esto mata el proceso actual y lo revive)
-                process.exit(0); // Si usas PM2 o nodemon, esto lo reiniciará automáticamente
-            }, 3000);
+            // 3. Editar el mismo mensaje con el resultado
+            let textoFinal = `✅ *ACTUALIZACIÓN COMPLETADA*\n\n`;
+
+            if (errorMsg) {
+                textoFinal += errorMsg;
+            } else {
+                // Limpiar la salida de git pull
+                const cambiosLimpios = cambios
+                    .replace(/From https:\/\/github\.com\/[\w\-]+\/[\w\-]+\.git/g, '')
+                    .replace(/remote: Enumerating objects:.*/g, '')
+                    .replace(/remote: Counting objects:.*/g, '')
+                    .replace(/remote: Compressing objects:.*/g, '')
+                    .replace(/remote: Total.*/g, '')
+                    .replace(/Unpacking objects:.*/g, '')
+                    .replace(/Checking out files:.*/g, '')
+                    .trim();
+
+                if (cambiosLimpios.includes('Already up to date')) {
+                    textoFinal += `📂 El bot ya está en la última versión.\n\n✅ No se aplicaron cambios.`;
+                } else {
+                    textoFinal += `📂 Cambios aplicados:\n\`\`\`\n${cambiosLimpios || 'No se detectaron cambios específicos.'}\n\`\`\`\n\n🔄 El bot está listo.`;
+                }
+            }
+
+            // 4. Editar el mensaje original
+            await sock.sendMessage(msg.key.remoteJid, {
+                text: textoFinal,
+                edit: {
+                    key: {
+                        remoteJid: msg.key.remoteJid,
+                        fromMe: true,
+                        id: messageId
+                    }
+                }
+            });
+
+            console.log('[UPDATE] Mensaje actualizado correctamente.');
 
         } catch (error) {
             console.error('[UPDATE] Error:', error);
-            await responder.texto('❌ Error al intentar actualizar/reiniciar.');
+            await responder.texto('❌ Error al ejecutar la actualización.');
         }
     }
 };
