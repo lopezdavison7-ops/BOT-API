@@ -1,130 +1,160 @@
 // commands/gstatus.js
+import { 
+  generateWAMessageContent, 
+  generateWAMessageFromContent, 
+  jidNormalizedUser,
+  downloadMediaMessage
+} from "@whiskeysockets/baileys";
 import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATUS_LOG_FILE = path.join(process.cwd(), 'database', 'statuslog.json');
 
 export default {
     nombre: 'gstatus',
     categoria: 'Utilidades',
-    alias: ['gst', 'estado', 'upstatus'],
-    descripcion: 'Publica contenido como "estado" en el grupo',
+    alias: ['estado', 'groupstatus'],
+    descripcion: 'Publica un estado real en la cabecera del grupo',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Verificar que sea en un grupo
-            if (!msg.key.remoteJid.endsWith('@g.us')) {
+            const remoteJid = msg.key.remoteJid;
+
+            // ⚠️ SOLO GRUPOS
+            if (!remoteJid.endsWith('@g.us')) {
                 await responder.texto('❌ Este comando solo funciona en grupos.');
                 return;
             }
 
-            const groupId = msg.key.remoteJid;
-
-            // 1. LEER REGISTRO
-            let statusLog = {};
-            try {
-                const data = await fs.readFile(STATUS_LOG_FILE, 'utf8');
-                statusLog = JSON.parse(data);
-            } catch {}
-
-            const today = new Date().toDateString();
-            const userJid = msg.key.participant || msg.key.remoteJid;
-
-            // 2. LÍMITE DIARIO
-            if (!statusLog[userJid]) statusLog[userJid] = {};
-            if (!statusLog[userJid][today]) statusLog[userJid][today] = 0;
-
-            if (statusLog[userJid][today] >= 10) {
-                await responder.texto(`❌ Límite diario alcanzado (10 usos).`);
-                return;
-            }
-
-            // 3. TIEMPO ENTRE USOS
-            const lastTime = statusLog[userJid].lastTime || 0;
-            const now = Date.now();
-            if (now - lastTime < 5000) {
-                await responder.texto(`⏳ Espera 5 segundos.`);
-                return;
-            }
-
-            // 4. OBTENER CONTENIDO
+            // ✅ Obtener contenido
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             const textoEscrito = String(argumento || '').trim();
 
-            let mensajeRespuesta = '';
-
-            // ✅ CASO 1: Solo texto
-            if (!quotedMsg && textoEscrito) {
-                await sock.sendMessage(groupId, {
-                    text: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito}`
-                });
-                mensajeRespuesta = `✅ Estado de texto publicado en el grupo.`;
-            }
-
-            // ✅ CASO 2: Imagen
-            else if (quotedMsg?.imageMessage) {
-                const imgBuffer = quotedMsg.imageMessage.file;
-                if (!imgBuffer) throw new Error('No se pudo obtener la imagen.');
-                await sock.sendMessage(groupId, {
-                    image: imgBuffer,
-                    caption: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito || '📸 Imagen'}`
-                });
-                mensajeRespuesta = `✅ Imagen publicada como estado en el grupo.`;
-            }
-
-            // ✅ CASO 3: Video
-            else if (quotedMsg?.videoMessage) {
-                const vidBuffer = quotedMsg.videoMessage.file;
-                if (!vidBuffer) throw new Error('No se pudo obtener el video.');
-                await sock.sendMessage(groupId, {
-                    video: vidBuffer,
-                    caption: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito || '🎥 Video'}`
-                });
-                mensajeRespuesta = `✅ Video publicado como estado en el grupo.`;
-            }
-
-            // ✅ CASO 4: Audio
-            else if (quotedMsg?.audioMessage) {
-                const audBuffer = quotedMsg.audioMessage.file;
-                if (!audBuffer) throw new Error('No se pudo obtener el audio.');
-                await sock.sendMessage(groupId, {
-                    audio: audBuffer,
-                    mimetype: quotedMsg.audioMessage.mimetype || 'audio/mpeg'
-                });
-                mensajeRespuesta = `✅ Audio publicado como estado en el grupo.`;
-            }
-
-            // ✅ CASO 5: Sticker
-            else if (quotedMsg?.stickerMessage) {
-                const stkBuffer = quotedMsg.stickerMessage.file;
-                if (!stkBuffer) throw new Error('No se pudo obtener el sticker.');
-                await sock.sendMessage(groupId, {
-                    sticker: stkBuffer
-                });
-                mensajeRespuesta = `✅ Sticker publicado como estado en el grupo.`;
-            }
-
-            // ❌ Si no se pudo hacer nada
-            else {
+            // ❌ Si no hay texto ni contenido
+            if (!textoEscrito && !quotedMsg) {
                 await responder.texto(
                     `❌ *GSTATUS*\n\n` +
-                    `Usa: *.gstatus texto* o responde a una foto/video/audio/sticker con *.gstatus*`
+                    `Escribe un texto o responde a una foto/video/audio/sticker.\n\n` +
+                    `📌 Ejemplos:\n` +
+                    `*.gstatus Hola grupo*\n` +
+                    `*.gstatus* (respondiendo a una foto)`
                 );
                 return;
             }
 
-            // 5. ACTUALIZAR REGISTRO
-            statusLog[userJid][today] += 1;
-            statusLog[userJid].lastTime = now;
-            await fs.writeFile(STATUS_LOG_FILE, JSON.stringify(statusLog, null, 2));
+            // 🔥 FUNCIÓN INTERNA PARA SUBIR EL ESTADO (GROUP STATUS V2)
+            const sendGroupStatus = async (text, media, type, caption) => {
+                // Configuración del contexto del estado
+                const contextInfo = {
+                    statusSourceType: 0,
+                    isGroupStatus: true,
+                    statusAttributions: [{ AttributionData: null, type: 10 }],
+                    statusAudienceMetadata: { audienceType: 2, listName: "Grupo", listEmoji: "⭐" }
+                };
 
-            // 6. RESPONDER
-            await responder.texto(mensajeRespuesta);
+                let innerMessage;
+
+                // CASO: TEXTO
+                if (type === 'text') {
+                    innerMessage = {
+                        extendedTextMessage: {
+                            text: text || 'Estado del grupo',
+                            textArgb: 4292401368, // Color blanco
+                            backgroundArgb: 4283453520, // Fondo oscuro
+                            font: 5,
+                            previewType: 0,
+                            contextInfo
+                        }
+                    };
+                } 
+                // CASO: MULTIMEDIA (Foto, Video, Audio, Sticker)
+                else {
+                    if (!sock.waUploadToServer) {
+                        throw new Error('El servidor de carga no está disponible.');
+                    }
+
+                    const contentInput = { [type]: media };
+                    if (caption && ['image', 'video'].includes(type)) {
+                        contentInput.caption = caption;
+                    }
+
+                    const content = await generateWAMessageContent(contentInput, {
+                        upload: sock.waUploadToServer,
+                    });
+
+                    const messageKey = `${type}Message`;
+                    if (!content?.[messageKey]) {
+                        throw new Error(`No se pudo generar el mensaje de tipo ${type}`);
+                    }
+
+                    content[messageKey].contextInfo = contextInfo;
+                    innerMessage = { [messageKey]: content[messageKey] };
+                }
+
+                // Generar y enviar el mensaje de estado
+                const senderJid = sock.user?.id ? jidNormalizedUser(sock.user.id) : undefined;
+                const message = generateWAMessageFromContent(
+                    remoteJid,
+                    { groupStatusMessageV2: { message: innerMessage } },
+                    { userJid: senderJid }
+                );
+
+                await sock.relayMessage(remoteJid, message.message, {
+                    messageId: message.key.id,
+                });
+                return message;
+            };
+
+            // 1. CASO: SOLO TEXTO
+            if (!quotedMsg && textoEscrito) {
+                await sendGroupStatus(textoEscrito, null, 'text', null);
+                await responder.texto(`✅ *ESTADO PUBLICADO*\n\n📝 Texto subido a la cabecera del grupo.`);
+                return;
+            }
+
+            // 2. CASO: MULTIMEDIA (RESPONDIENDO A UN ARCHIVO)
+            if (quotedMsg) {
+                const type = Object.keys(quotedMsg)[0];
+                const mediaType = type.replace('Message', '').toLowerCase();
+
+                // Tipos soportados
+                const allowedTypes = ['image', 'video', 'audio', 'sticker', 'document'];
+                if (!allowedTypes.includes(mediaType)) {
+                    await responder.texto('❌ El archivo respondido no es compatible con estados de grupo.');
+                    return;
+                }
+
+                // Descargar el archivo del mensaje citado
+                let buffer;
+                try {
+                    const quotedCtx = msg.message?.extendedTextMessage?.contextInfo;
+                    buffer = await downloadMediaMessage(
+                        {
+                            key: {
+                                remoteJid: remoteJid,
+                                id: quotedCtx?.stanzaId,
+                                participant: quotedCtx?.participant,
+                                fromMe: false
+                            },
+                            message: quotedMsg
+                        },
+                        'buffer',
+                        {},
+                        { logger: console, reuploadRequest: sock.updateMediaMessage }
+                    );
+                } catch (err) {
+                    console.error('[GSTATUS] Error descargando:', err);
+                    await responder.texto('❌ No se pudo descargar el archivo del mensaje citado.');
+                    return;
+                }
+
+                const caption = textoEscrito || quotedMsg[type]?.caption || '';
+                
+                // Subir el estado
+                await sendGroupStatus(null, buffer, mediaType, caption);
+                await responder.texto(`✅ *ESTADO PUBLICADO*\n\n📤 ${mediaType.toUpperCase()} subido a la cabecera del grupo.`);
+                return;
+            }
 
         } catch (error) {
             console.error('[GSTATUS] Error:', error);
-            await responder.texto('❌ Error al publicar en el grupo.');
+            await responder.texto(`❌ *ERROR*\n\nNo se pudo publicar el estado. Verifica que el bot tenga permisos.`);
         }
     }
 };
