@@ -10,54 +10,45 @@ export default {
     nombre: 'gstatus',
     categoria: 'Utilidades',
     alias: ['gst', 'estado', 'upstatus'],
-    descripcion: 'Sube estados con protección anti-ban',
+    descripcion: 'Publica contenido como "estado" en el grupo',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. LEER Y VALIDAR EL REGISTRO DE ESTADOS
+            // Verificar que sea en un grupo
+            if (!msg.key.remoteJid.endsWith('@g.us')) {
+                await responder.texto('❌ Este comando solo funciona en grupos.');
+                return;
+            }
+
+            const groupId = msg.key.remoteJid;
+
+            // 1. LEER REGISTRO
             let statusLog = {};
             try {
                 const data = await fs.readFile(STATUS_LOG_FILE, 'utf8');
                 statusLog = JSON.parse(data);
-            } catch {
-                // Si no existe el archivo, se crea vacío
-            }
+            } catch {}
 
             const today = new Date().toDateString();
             const userJid = msg.key.participant || msg.key.remoteJid;
 
-            // 2. VERIFICAR LÍMITE DIARIO (10 estados por día)
-            if (!statusLog[userJid]) {
-                statusLog[userJid] = {};
-            }
-            if (!statusLog[userJid][today]) {
-                statusLog[userJid][today] = 0;
-            }
+            // 2. LÍMITE DIARIO
+            if (!statusLog[userJid]) statusLog[userJid] = {};
+            if (!statusLog[userJid][today]) statusLog[userJid][today] = 0;
 
             if (statusLog[userJid][today] >= 10) {
-                await responder.texto(
-                    `❌ *LÍMITE DIARIO ALCANZADO*\n\n` +
-                    `Ya subiste 10 estados hoy. Espera hasta mañana para usar este comando nuevamente.\n\n` +
-                    `🛡️ *Medida anti-ban activa.*`
-                );
+                await responder.texto(`❌ Límite diario alcanzado (10 usos).`);
                 return;
             }
 
-            // 3. VERIFICAR TIEMPO ENTRE ESTADOS (mínimo 5 segundos)
-            const lastStatusTime = statusLog[userJid].lastTime || 0;
+            // 3. TIEMPO ENTRE USOS
+            const lastTime = statusLog[userJid].lastTime || 0;
             const now = Date.now();
-            const timeDiff = now - lastStatusTime;
-
-            if (timeDiff < 5000) {
-                const remaining = 5 - Math.floor(timeDiff / 1000);
-                await responder.texto(
-                    `⏳ *ESPERA UN MOMENTO*\n\n` +
-                    `Debes esperar ${remaining} segundos antes de subir otro estado.\n\n` +
-                    `🛡️ *Medida anti-ban activa.*`
-                );
+            if (now - lastTime < 5000) {
+                await responder.texto(`⏳ Espera 5 segundos.`);
                 return;
             }
 
-            // 4. OBTENER MENSAJE CITADO Y TEXTO
+            // 4. OBTENER CONTENIDO
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             const textoEscrito = String(argumento || '').trim();
 
@@ -65,89 +56,75 @@ export default {
 
             // ✅ CASO 1: Solo texto
             if (!quotedMsg && textoEscrito) {
-                await sock.sendMessage('status@broadcast', {
-                    text: textoEscrito
+                await sock.sendMessage(groupId, {
+                    text: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito}`
                 });
-                mensajeRespuesta = `✅ *ESTADO SUBIDO*\n\n📝 Texto: ${textoEscrito}`;
-                console.log('[GSTATUS] Texto subido.');
+                mensajeRespuesta = `✅ Estado de texto publicado en el grupo.`;
             }
 
             // ✅ CASO 2: Imagen
             else if (quotedMsg?.imageMessage) {
                 const imgBuffer = quotedMsg.imageMessage.file;
                 if (!imgBuffer) throw new Error('No se pudo obtener la imagen.');
-                await sock.sendMessage('status@broadcast', {
+                await sock.sendMessage(groupId, {
                     image: imgBuffer,
-                    caption: textoEscrito || '📸 Estado'
+                    caption: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito || '📸 Imagen'}`
                 });
-                mensajeRespuesta = `✅ *ESTADO SUBIDO*\n\n🖼️ Imagen subida como estado.`;
-                console.log('[GSTATUS] Imagen subida.');
+                mensajeRespuesta = `✅ Imagen publicada como estado en el grupo.`;
             }
 
             // ✅ CASO 3: Video
             else if (quotedMsg?.videoMessage) {
                 const vidBuffer = quotedMsg.videoMessage.file;
                 if (!vidBuffer) throw new Error('No se pudo obtener el video.');
-                await sock.sendMessage('status@broadcast', {
+                await sock.sendMessage(groupId, {
                     video: vidBuffer,
-                    caption: textoEscrito || '🎥 Estado'
+                    caption: `📢 *ESTADO DEL GRUPO*\n\n${textoEscrito || '🎥 Video'}`
                 });
-                mensajeRespuesta = `✅ *ESTADO SUBIDO*\n\n🎥 Video subido como estado.`;
-                console.log('[GSTATUS] Video subido.');
+                mensajeRespuesta = `✅ Video publicado como estado en el grupo.`;
             }
 
             // ✅ CASO 4: Audio
             else if (quotedMsg?.audioMessage) {
                 const audBuffer = quotedMsg.audioMessage.file;
                 if (!audBuffer) throw new Error('No se pudo obtener el audio.');
-                await sock.sendMessage('status@broadcast', {
+                await sock.sendMessage(groupId, {
                     audio: audBuffer,
                     mimetype: quotedMsg.audioMessage.mimetype || 'audio/mpeg'
                 });
-                mensajeRespuesta = `✅ *ESTADO SUBIDO*\n\n🎵 Audio subido como estado.`;
-                console.log('[GSTATUS] Audio subido.');
+                mensajeRespuesta = `✅ Audio publicado como estado en el grupo.`;
             }
 
             // ✅ CASO 5: Sticker
             else if (quotedMsg?.stickerMessage) {
                 const stkBuffer = quotedMsg.stickerMessage.file;
                 if (!stkBuffer) throw new Error('No se pudo obtener el sticker.');
-                await sock.sendMessage('status@broadcast', {
+                await sock.sendMessage(groupId, {
                     sticker: stkBuffer
                 });
-                mensajeRespuesta = `✅ *ESTADO SUBIDO*\n\n🔖 Sticker subido como estado.`;
-                console.log('[GSTATUS] Sticker subido.');
+                mensajeRespuesta = `✅ Sticker publicado como estado en el grupo.`;
             }
 
             // ❌ Si no se pudo hacer nada
             else {
                 await responder.texto(
                     `❌ *GSTATUS*\n\n` +
-                    `Usa una de estas formas:\n` +
-                    `1️⃣ Escribe: *.gstatus Tu texto*\n` +
-                    `2️⃣ Responde a una foto/video/audio/sticker: *.gstatus*\n\n` +
-                    `📌 Ejemplos:\n` +
-                    `*.gstatus Buenos días*\n` +
-                    `*.gstatus* (respondiendo a una foto)`
+                    `Usa: *.gstatus texto* o responde a una foto/video/audio/sticker con *.gstatus*`
                 );
                 return;
             }
 
-            // 5. ACTUALIZAR REGISTRO Y GUARDAR
+            // 5. ACTUALIZAR REGISTRO
             statusLog[userJid][today] += 1;
             statusLog[userJid].lastTime = now;
             await fs.writeFile(STATUS_LOG_FILE, JSON.stringify(statusLog, null, 2));
 
-            // 6. RESPONDER AL USUARIO CON ÉXITO
+            // 6. RESPONDER
             await responder.texto(mensajeRespuesta);
 
         } catch (error) {
             console.error('[GSTATUS] Error:', error);
-            if (error.message.includes('status@broadcast')) {
-                await responder.texto('❌ WhatsApp bloqueó el envío del estado. Espera unos minutos.');
-            } else {
-                await responder.texto('❌ Error al subir el estado.');
-            }
+            await responder.texto('❌ Error al publicar en el grupo.');
         }
     }
 };
