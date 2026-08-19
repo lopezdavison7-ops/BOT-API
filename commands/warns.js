@@ -8,24 +8,39 @@ export default {
     nombre: 'warns',
     categoria: 'Moderación',
     alias: ['advertencias', 'warnings'],
-    descripcion: 'Muestra las advertencias de un usuario',
+    descripcion: 'Muestra advertencias (responde o menciona)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Obtener mencionados
+            let target = null;
+
+            // FORMA 1: Respondiendo a un mensaje
+            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
+            if (quoted) {
+                target = quoted;
+            }
+
+            // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentioned.length === 0) {
+            if (mentioned.length > 0) {
+                target = mentioned[0];
+                if (quoted && mentioned.length > 0) {
+                    target = mentioned[0];
+                }
+            }
+
+            if (!target) {
                 await responder.texto(
                     `❌ *WARNS*\n\n` +
-                    `Menciona a un usuario.\n\n` +
-                    `📌 Ejemplo:\n` +
-                    `*.warns @usuario*`
+                    `Usa una de estas formas:\n` +
+                    `1️⃣ Responde a un mensaje del usuario: *.warns*\n` +
+                    `2️⃣ Menciona al usuario: *.warns @usuario*\n\n` +
+                    `📌 Ejemplos:\n` +
+                    `*.warns* (respondiendo)\n` +
+                    `*.warns @pedro*`
                 );
                 return;
             }
 
-            const target = mentioned[0];
-
-            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
