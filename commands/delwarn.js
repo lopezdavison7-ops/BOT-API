@@ -55,9 +55,11 @@ export default {
             }
 
             if (!warns[target] || warns[target].length === 0) {
-                // ✅ Respuesta con mención forzada
-                const mensajeLimpio = `✅ @${target.split('@')[0]} ya está limpio, no tiene advertencias.`;
-                await responder.texto(mensajeLimpio, { mentions: [target] });
+                // 🔥 ENVÍO DIRECTO CON MENCIÓN OBLIGADA
+                await sock.sendMessage(msg.key.remoteJid, { 
+                    text: `✅ @${target.split('@')[0]} ya está limpio, no tiene advertencias.`,
+                    mentions: [target] 
+                }, { quoted: msg });
                 return;
             }
 
@@ -65,8 +67,8 @@ export default {
             delete warns[target];
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
-            // ✅ Respuesta con mención forzada
-            const respuesta = `
+            // 🔥 ENVÍO DIRECTO CON MENCIÓN OBLIGADA Y FORMATO
+            const texto = `
 ╭〔 🧹 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 𝐄𝐋𝐈𝐌𝐈𝐍𝐀𝐃𝐀𝐒 〕⬣
 ┃
 ┃ 👤 Usuario: @${target.split('@')[0]}
@@ -79,8 +81,11 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            // 🔥 FORZAMOS LA MENCIÓN EN EL OBJETO DE RESPUESTA
-            await responder.texto(respuesta, { mentions: [target] });
+
+            await sock.sendMessage(msg.key.remoteJid, { 
+                text: texto,
+                mentions: [target] 
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[DELWARN] Error:', error);
