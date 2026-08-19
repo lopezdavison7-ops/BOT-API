@@ -13,18 +13,33 @@ export default {
     descripcion: 'Muestra la lista de propietarios del bot con menciones',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. Cargar la lista de owners desde el JSON
-            let ownersData = [];
+            // 1. Cargar el archivo
+            let data = {};
+            let owners = [];
+
             try {
-                const data = await fs.readFile(OWNER_FILE, 'utf8');
-                ownersData = JSON.parse(data);
+                const raw = await fs.readFile(OWNER_FILE, 'utf8');
+                data = JSON.parse(raw);
+
+                // Detectar el formato: si es un array directo o un objeto con una propiedad
+                if (Array.isArray(data)) {
+                    owners = data;
+                } else if (data.owners && Array.isArray(data.owners)) {
+                    owners = data.owners;
+                } else {
+                    // Si es un objeto con números como keys (formato antiguo)
+                    owners = Object.values(data);
+                }
             } catch {
                 await responder.texto('❌ No hay propietarios configurados en la base de datos.');
                 return;
             }
 
+            // Limpiar números (quitar espacios y caracteres especiales)
+            owners = owners.map(o => String(o).replace(/[^0-9]/g, ''));
+
             // Si no hay owners, avisar
-            if (!Array.isArray(ownersData) || ownersData.length === 0) {
+            if (owners.length === 0) {
                 await responder.texto('❌ La lista de propietarios está vacía.');
                 return;
             }
@@ -33,22 +48,17 @@ export default {
             let listaTexto = '';
             const mentionsList = [];
 
-            ownersData.forEach((ownerId, i) => {
-                // Asegurar que el owner tenga formato de JID (si no, agregarlo)
-                const jid = ownerId.includes('@s.whatsapp.net') 
-                    ? ownerId 
-                    : `${ownerId}@s.whatsapp.net`;
-                
-                const numero = jid.split('@')[0];
+            owners.forEach((numero, i) => {
+                const jid = `${numero}@s.whatsapp.net`;
                 listaTexto += `${i + 1}. @${numero} 👑\n`;
                 mentionsList.push(jid);
             });
 
-            // 3. Construir el mensaje con estilo
+            // 3. Mensaje con estilo
             const respuesta = `
 ╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
 ┃
-┃ 📌 Total: ${ownersData.length} owner(s)
+┃ 📌 Total: ${owners.length} owner(s)
 ┃
 ┃ ${listaTexto}
 ┃
@@ -57,7 +67,7 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 4. Enviar con sock.sendMessage y menciones forzadas
+            // 4. Enviar con menciones
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentionsList
