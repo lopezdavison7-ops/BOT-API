@@ -8,37 +8,51 @@ export default {
     nombre: 'delwarn',
     categoria: 'Moderación',
     alias: ['removewarn', 'borrarwarn'],
-    descripcion: 'Elimina una advertencia específica',
+    descripcion: 'Elimina una advertencia (responde o menciona + ID)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Verificar si es grupo
             if (!msg.key.remoteJid.endsWith('@g.us')) {
                 await responder.texto('❌ Este comando solo funciona en grupos.');
                 return;
             }
 
-            const args = (argumento || '').trim().split(' ');
-            if (args.length < 2) {
+            let target = null;
+            let warnId = null;
+
+            // FORMA 1: Respondiendo a un mensaje + ID en texto
+            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
+            if (quoted) {
+                target = quoted;
+                const args = (argumento || '').trim().split(' ');
+                warnId = args[0] || null;
+            }
+
+            // FORMA 2: Mención + ID en texto
+            const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            if (mentioned.length > 0) {
+                target = mentioned[0];
+                if (quoted && mentioned.length > 0) {
+                    target = mentioned[0];
+                }
+                const args = (argumento || '').trim().split(' ');
+                // Si hay mención, el ID es el segundo argumento
+                warnId = args[1] || args[0] || null;
+            }
+
+            if (!target || !warnId) {
                 await responder.texto(
                     `❌ *DELWARN*\n\n` +
-                    `Uso: *.delwarn @usuario ID*\n\n` +
-                    `📌 Ejemplo:\n` +
-                    `*.delwarn @usuario a1b2c3*\n\n` +
-                    `📌 Para ver los IDs usa: *.warns @usuario*`
+                    `Usa una de estas formas:\n` +
+                    `1️⃣ Responde a un mensaje del usuario: *.delwarn ID*\n` +
+                    `2️⃣ Menciona al usuario: *.delwarn @usuario ID*\n\n` +
+                    `📌 Ejemplos:\n` +
+                    `*.delwarn a1b2c3* (respondiendo)\n` +
+                    `*.delwarn @pedro a1b2c3*\n\n` +
+                    `📌 Para ver IDs usa: *.warns @usuario*`
                 );
                 return;
             }
 
-            const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentioned.length === 0) {
-                await responder.texto('❌ Menciona al usuario.');
-                return;
-            }
-
-            const target = mentioned[0];
-            const warnId = args[1];
-
-            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
