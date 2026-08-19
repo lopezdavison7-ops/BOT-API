@@ -8,7 +8,7 @@ export default {
     nombre: 'warn',
     categoria: 'Moderación',
     alias: ['advertir'],
-    descripcion: 'Agrega una advertencia (responde o menciona)',
+    descripcion: 'Agrega advertencia y expulsa al llegar a 3',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             if (!msg.key.remoteJid.endsWith('@g.us')) {
@@ -23,7 +23,6 @@ export default {
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
-                // Si no hay razón, usar "Sin razón"
                 if (!razon) razon = 'Sin razón especificada';
             }
 
@@ -31,11 +30,9 @@ export default {
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
-                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
-                // Si no hay razón, usar "Sin razón"
                 if (!razon) razon = 'Sin razón especificada';
             }
 
@@ -75,6 +72,41 @@ export default {
 
             const total = warns[target].length;
 
+            // ✅ AUTO-KICK SI LLEGA A 3 ADVERTENCIAS
+            if (total >= 3) {
+                try {
+                    await sock.groupParticipantsUpdate(
+                        msg.key.remoteJid,
+                        [target],
+                        'remove'
+                    );
+                    
+                    const respuestaKick = `
+╭〔 🚫 𝐀𝐔𝐓𝐎-𝐊𝐈𝐂𝐊 〕⬣
+┃
+┃ 👤 Usuario: @${target.split('@')[0]}
+┃
+┃ ⚠️ Motivo: Llegó a 3 advertencias
+┃
+┃ 📝 Última razón: ${razon}
+┃
+┃ 🔢 Total: 3/3 advertencias
+┃
+┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
+┃
+╰━━━━━━━━━━━━━━━━⬣
+
+╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
+`;
+                    await responder.texto(respuestaKick, { mentions: [target, msg.key.participant || msg.key.remoteJid] });
+                    return;
+                } catch (error) {
+                    console.error('[WARN] Error al kickear:', error);
+                    await responder.texto('❌ No se pudo expulsar al usuario (revisa permisos).');
+                }
+            }
+
+            // Si no llegó a 3, solo muestra el warn normal
             const respuesta = `
 ╭〔 ⚠️ 𝐖𝐀𝐑𝐍 〕⬣
 ┃
@@ -82,7 +114,7 @@ export default {
 ┃
 ┃ 📝 Razón: ${razon}
 ┃
-┃ 🔢 Total: ${total} advertencia(s)
+┃ 🔢 Total: ${total}/3 advertencia(s)
 ┃
 ┃ 🛡️ Moderador: @${(msg.key.participant || msg.key.remoteJid).split('@')[0]}
 ┃
