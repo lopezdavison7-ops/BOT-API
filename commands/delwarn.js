@@ -19,24 +19,26 @@ export default {
             let target = null;
             let warnId = null;
 
-            // FORMA 1: Respondiendo a un mensaje + ID en texto
+            // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
+                // El ID es el argumento escrito
                 const args = (argumento || '').trim().split(' ');
                 warnId = args[0] || null;
             }
 
-            // FORMA 2: Mención + ID en texto
+            // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
+                // El ID es el argumento después de la mención
+                const args = (argumento || '').trim().split(' ');
+                warnId = args[1] || args[0] || null;
+                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
-                const args = (argumento || '').trim().split(' ');
-                // Si hay mención, el ID es el segundo argumento
-                warnId = args[1] || args[0] || null;
             }
 
             if (!target || !warnId) {
@@ -75,10 +77,7 @@ export default {
 
             const removida = warns[target][index];
             warns[target].splice(index, 1);
-
-            if (warns[target].length === 0) {
-                delete warns[target];
-            }
+            if (warns[target].length === 0) delete warns[target];
 
             await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
 
