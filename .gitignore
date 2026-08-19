@@ -54,3 +54,21 @@ seleccionar-gacha.sh.bak
 # Pruebas
 captura-ss.png
 spack-test.html
+
+# Backups y archivos temporales
+.backup-cartas/
+.backup-rw/
+.sticker-test/
+*.bak
+*.bak2
+*.backup
+*.before-*
+*.meta-bak
+index.js.bak-*
+index.js.antes-de-limpiar-bienvenida
+captura-ss.png
+spack-test.html
+reparar-sticker.sh
+seleccionar-gacha.sh.bak
+.gacha-selector/*.bak*
+.gacha-selector/*.backup
