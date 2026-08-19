@@ -10,7 +10,7 @@ export default {
     nombre: 'owner',
     categoria: 'Owner',
     alias: ['owners', 'dueños'],
-    descripcion: 'Muestra la lista de propietarios del bot con menciones',
+    descripcion: 'Muestra la lista de propietarios con menciones cliqueables',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             // 1. Cargar el archivo
@@ -21,13 +21,12 @@ export default {
                 const raw = await fs.readFile(OWNER_FILE, 'utf8');
                 data = JSON.parse(raw);
 
-                // Detectar el formato: si es un array directo o un objeto con una propiedad
+                // Detectar formato
                 if (Array.isArray(data)) {
                     owners = data;
                 } else if (data.owners && Array.isArray(data.owners)) {
                     owners = data.owners;
                 } else {
-                    // Si es un objeto con números como keys (formato antiguo)
                     owners = Object.values(data);
                 }
             } catch {
@@ -35,30 +34,32 @@ export default {
                 return;
             }
 
-            // Limpiar números (quitar espacios y caracteres especiales)
-            owners = owners.map(o => String(o).replace(/[^0-9]/g, ''));
+            // 2. LIMPIAR NÚMEROS (quitar +, espacios, y caracteres raros)
+            const cleanedOwners = owners.map(o => {
+                let num = String(o).replace(/[^0-9]/g, ''); // Solo números
+                return num;
+            }).filter(num => num.length >= 10); // Filtrar números válidos
 
-            // Si no hay owners, avisar
-            if (owners.length === 0) {
-                await responder.texto('❌ La lista de propietarios está vacía.');
+            if (cleanedOwners.length === 0) {
+                await responder.texto('❌ La lista de propietarios está vacía o inválida.');
                 return;
             }
 
-            // 2. Construir la lista con menciones @
+            // 3. Construir la lista con JIDs limpios
             let listaTexto = '';
             const mentionsList = [];
 
-            owners.forEach((numero, i) => {
+            cleanedOwners.forEach((numero, i) => {
                 const jid = `${numero}@s.whatsapp.net`;
                 listaTexto += `${i + 1}. @${numero} 👑\n`;
                 mentionsList.push(jid);
             });
 
-            // 3. Mensaje con estilo
+            // 4. Mensaje con estilo
             const respuesta = `
 ╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
 ┃
-┃ 📌 Total: ${owners.length} owner(s)
+┃ 📌 Total: ${cleanedOwners.length} owner(s)
 ┃
 ┃ ${listaTexto}
 ┃
@@ -67,7 +68,7 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 4. Enviar con menciones
+            // 5. ENVIAR CON sock.sendMessage Y EL ARRAY DE MENCIONES
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentionsList
