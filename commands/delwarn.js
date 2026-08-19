@@ -8,7 +8,7 @@ export default {
     nombre: 'delwarn',
     categoria: 'Moderación',
     alias: ['removewarn', 'borrarwarn'],
-    descripcion: 'Elimina una advertencia (responde o menciona + ID)',
+    descripcion: 'Elimina una advertencia (responde, menciona o escribe el número)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             if (!msg.key.remoteJid.endsWith('@g.us')) {
@@ -18,43 +18,54 @@ export default {
 
             let target = null;
             let warnId = null;
+            const args = (argumento || '').trim().split(' ');
 
-            // FORMA 1: Respondiendo a un mensaje
+            // 🔥 FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
-                // El ID es el argumento escrito
-                const args = (argumento || '').trim().split(' ');
                 warnId = args[0] || null;
             }
 
-            // FORMA 2: Mención
+            // 🔥 FORMA 2: Mención (@usuario)
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
-                // El ID es el argumento después de la mención
-                const args = (argumento || '').trim().split(' ');
+                // El ID es el siguiente argumento después de la mención
                 warnId = args[1] || args[0] || null;
-                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
             }
 
+            // 🔥 FORMA 3: Número escrito directamente (ej: +50576641902 o 50576641902)
+            if (!target && args.length >= 1) {
+                let posibleNumero = args[0].replace(/[^0-9]/g, ''); // Quitar + y espacios
+                if (posibleNumero.length >= 10) {
+                    // Convertir a formato JID de WhatsApp (ej: 50576641902@s.whatsapp.net)
+                    target = `${posibleNumero}@s.whatsapp.net`;
+                    warnId = args[1] || null;
+                }
+            }
+
+            // Si no tenemos target ni ID, mostramos el mensaje de ayuda
             if (!target || !warnId) {
                 await responder.texto(
                     `❌ *DELWARN*\n\n` +
                     `Usa una de estas formas:\n` +
                     `1️⃣ Responde a un mensaje del usuario: *.delwarn ID*\n` +
-                    `2️⃣ Menciona al usuario: *.delwarn @usuario ID*\n\n` +
+                    `2️⃣ Menciona al usuario: *.delwarn @usuario ID*\n` +
+                    `3️⃣ Escribe el número: *.delwarn +50576641902 ID*\n\n` +
                     `📌 Ejemplos:\n` +
-                    `*.delwarn a1b2c3* (respondiendo)\n` +
-                    `*.delwarn @pedro a1b2c3*\n\n` +
+                    `*.delwarn mt0baxzi* (respondiendo)\n` +
+                    `*.delwarn @pedro mt0baxzi*\n` +
+                    `*.delwarn +50576641902 mt0baxzi*\n\n` +
                     `📌 Para ver IDs usa: *.warns @usuario*`
                 );
                 return;
             }
 
+            // Cargar base de datos
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
@@ -69,9 +80,10 @@ export default {
                 return;
             }
 
+            // Buscar el ID de la advertencia
             const index = warns[target].findIndex(w => w.id === warnId);
             if (index === -1) {
-                await responder.texto('❌ ID de advertencia no encontrado.');
+                await responder.texto('❌ ID de advertencia no encontrado. Revisa el ID correcto en *.warns*');
                 return;
             }
 
