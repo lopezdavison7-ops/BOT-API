@@ -10,20 +10,20 @@ export default {
     nombre: 'owner',
     categoria: 'Owner',
     alias: ['owners', 'dueños'],
-    descripcion: 'Muestra la lista de propietarios con sus números',
+    descripcion: 'Muestra la lista de propietarios con menciones reales',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. Cargar el JSON
+            // Cargar JSON
             let data = {};
             try {
                 const raw = await fs.readFile(OWNER_FILE, 'utf8');
                 data = JSON.parse(raw);
             } catch {
-                await responder.texto('❌ No se pudo leer la base de datos de owners.');
+                await responder.texto('❌ No se pudo leer la base de datos.');
                 return;
             }
 
-            // 2. Obtener el array de owners
+            // Obtener array de owners
             let owners = [];
             if (Array.isArray(data)) {
                 owners = data;
@@ -34,45 +34,37 @@ export default {
             }
 
             if (owners.length === 0) {
-                await responder.texto('❌ No hay propietarios en la base de datos.');
+                await responder.texto('❌ No hay propietarios.');
                 return;
             }
 
-            // 3. Construir la lista con los números y menciones
-            let listaTexto = '';
-            const mentionsList = [];
+            // 🔥 FORZAR MENCIÓN CON EL MÉTODO QUE SIEMPRE FUNCIONA
+            let textoRespuesta = `╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣\n┃\n┃ 📌 Total: ${owners.length} owner(s)\n┃\n`;
+            const mentions = [];
 
-            owners.forEach((numero, i) => {
-                // Limpiar cualquier carácter no numérico (por si acaso)
-                const numLimpio = String(numero).replace(/[^0-9]/g, '');
-                const jid = `${numLimpio}@s.whatsapp.net`;
+            owners.forEach((owner, i) => {
+                // Limpiar TODO lo que no sea número
+                const numeroLimpio = String(owner).replace(/[^0-9]/g, '');
+                const jid = `${numeroLimpio}@s.whatsapp.net`;
                 
-                // Mostrar el número con @ (para intentar la mención)
-                listaTexto += `${i + 1}. @${numLimpio}\n`;
-                mentionsList.push(jid);
+                // Agregar el JID al array de menciones
+                mentions.push(jid);
+                
+                // En el texto, poner solo el número (sin @, sin +, sin caracteres)
+                textoRespuesta += `┃ ${i + 1}. ${numeroLimpio}\n`;
             });
 
-            const respuesta = `
-╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣
-┃
-┃ 📌 Total: ${owners.length} owner(s)
-┃
-┃ ${listaTexto}
-┃
-╰━━━━━━━━━━━━━━━━⬣
+            textoRespuesta += `┃\n╰━━━━━━━━━━━━━━━━⬣\n\n╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`;
 
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
-`;
-
-            // 4. Enviar con menciones forzadas
+            // 🚀 ENVÍO CON MENCIONES FORZADAS
             await sock.sendMessage(msg.key.remoteJid, {
-                text: respuesta,
-                mentions: mentionsList
+                text: textoRespuesta,
+                mentions: mentions
             }, { quoted: msg });
 
         } catch (error) {
             console.error('[OWNER] Error:', error);
-            await responder.texto('❌ Error al obtener la lista de propietarios.');
+            await responder.texto('❌ Error al mostrar owners.');
         }
     }
 };
