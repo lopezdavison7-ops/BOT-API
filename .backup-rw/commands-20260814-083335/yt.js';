@@ -1,0 +1,238 @@
+============================================================
+a buscar.'
+        );
+    }
+
+    const respuesta = await axios.get(
+        API_URL,
+        {
+            params: {
+                q: query,
+                apiKey: API_KEY
+            },
+
+            timeout: 60000,
+
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'AlexBot/1.0'
+            }
+        }
+    );
+
+    const data = respuesta?.data;
+
+    console.log(
+        '[YT] Respuesta API:',
+        JSON.stringify(data).slice(0, 1500)
+    );
+
+    // ========================================================
+    // VALIDAR RESPUESTA
+    // ========================================================
+    //
+    // La API devuelve:
+    //
+    // {
+    //   status: true,
+    //   creator: "...",
+    //   result: [...]
+    // }
+    //
+    // NO devuelve status: 200.
+    // ========================================================
+
+    if (
+        !data ||
+        data.status !== true ||
+        !Array.isArray(data.result)
+    ) {
+
+        throw new Error(
+            data?.message ||
+            'La API no devolvió resultados válidos.'
+        );
+    }
+
+    if (data.result.length === 0) {
+
+        throw new Error(
+            'No se encontraron resultados.'
+        );
+    }
+
+    return data.result;
+}
+
+// ============================================================
+// COMANDO
+// ============================================================
+
+export default {
+
+    nombre: 'yt',
+
+    categoria: 'Descargas',
+
+    alias: [
+        'youtube',
+        'yts'
+    ],
+
+    descripcion:
+        'Busca videos de YouTube y permite obtener MP3 o MP4.',
+
+    ejecutar: async ({
+        responder,
+        argumento
+    }) => {
+
+        try {
+
+            // ==================================================
+            // QUERY
+            // ==================================================
+
+            const query =
+                argumento?.trim();
+
+            // ==================================================
+            // VALIDAR BÚSQUEDA
+            // ==================================================
+
+            if (!query) {
+
+                await responder.texto(
+                    '╭━━〔 🎬 𝐘𝐎𝐔𝐓𝐔𝐁𝐄 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ❌ Escribe algo para buscar.\n' +
+                    '┃\n' +
+                    '┃ 📌 Ejemplos:\n' +
+                    '┃ › *.yt gura*\n' +
+                    '┃ › *.yt bad bunny*\n' +
+                    '┃ › *.yt música nica*\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+
+                return;
+            }
+
+            // ==================================================
+            // MENSAJE DE CARGA
+            // ==================================================
+
+            await responder.texto(
+                '╭━━〔 🔎 𝐁𝐔𝐒𝐂𝐀𝐍𝐃𝐎 〕━━⬣\n' +
+                '┃\n' +
+                `┃ 🎵 Búsqueda: *${query}*\n` +
+                '┃ ⏳ Espera un momento...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+
+            // ==================================================
+            // BUSCAR
+            // ==================================================
+
+            const resultados =
+                await buscarYouTube(query);
+
+            // ==================================================
+            // MOSTRAR RESULTADOS
+            // ==================================================
+
+            let texto =
+                '╭━━〔 🎬 𝐘𝐎𝐔𝐓𝐔𝐁𝐄 〕━━⬣\n' +
+                '┃\n' +
+                `┃ 🔎 *${query}*\n` +
+                '┃\n';
+
+            const limite =
+                Math.min(
+                    resultados.length,
+                    5
+                );
+
+            for (
+                let i = 0;
+                i < limite;
+                i++
+            ) {
+
+                const video =
+                    resultados[i];
+
+                const titulo =
+                    video?.title ||
+                    'Sin título';
+
+                const canal =
+                    video?.channelName ||
+                    'Desconocido';
+
+                const duracion =
+                    video?.duration ||
+                    'Desconocida';
+
+                const url =
+                    video?.videoUrl ||
+                    '';
+
+                texto +=
+                    `┃ *${i + 1}.* ${titulo}\n` +
+                    `┃ 👤 ${canal}\n` +
+                    `┃ ⏱️ ${duracion}\n`;
+
+                if (url) {
+                    texto +=
+                        `┃ 🔗 ${url}\n`;
+                }
+
+                texto +=
+                    '┃\n';
+            }
+
+            // ==================================================
+            // PIE
+            // ==================================================
+
+            texto +=
+                '╰━━━━━━━━━━━━━━━━⬣\n\n' +
+                '💡 *DESCARGAR*\n' +
+                '› *.ytmp3 <enlace>*\n' +
+                '› *.ytmp4 <enlace>*';
+
+            await responder.texto(
+                texto
+            );
+
+        } catch (error) {
+
+            // ==================================================
+            // ERROR
+            // ==================================================
+
+            console.error(
+                '[YT] Error:',
+                error?.response?.data ||
+                error?.stack ||
+                error?.message ||
+                error
+            );
+
+            const mensaje =
+                error?.response?.data?.message ||
+                error?.message ||
+                'Error desconocido.';
+
+            await responder.texto(
+                '╭━━〔 ❌ 𝐘𝐓 〕━━⬣\n' +
+                '┃\n' +
+                `┃ ${mensaje}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+        }
+    }
+};

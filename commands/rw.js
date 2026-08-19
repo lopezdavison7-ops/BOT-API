@@ -5,7 +5,9 @@ import { fileURLToPath } from 'url';
 import {
     registrarRW,
     puedeUsarRW,
-    tiempoRestanteRW
+    tiempoRestanteRW,
+    obtenerUsuario,
+    guardarUsuario
 } from '../database/economia.js';
 
 // ============================================================
@@ -21,7 +23,7 @@ const __dirname =
 const RW_DIR =
     path.join(
         __dirname,
-        '../media/gacha/jpg'
+        '../media/gacha'
     );
 
 const GACHA_DATABASE =
@@ -369,6 +371,7 @@ export default {
     }) => {
 
         const id =
+            msg.key.participant ||
             msg.key.remoteJid;
 
         try {
@@ -446,6 +449,29 @@ export default {
             await responder.imagen(
                 buffer,
                 mensaje
+            );
+
+            // ------------------------------------------------
+            // GUARDAR CARTA PENDIENTE
+            // ------------------------------------------------
+
+            const usuario =
+                obtenerUsuario(id);
+
+            usuario.cartaPendiente = {
+                nombre: carta.nombre,
+                genero: carta.genero,
+                serie: carta.serie,
+                valor: Number(carta.valor || 0)
+            };
+
+            guardarUsuario(
+                id,
+                usuario
+            );
+
+            console.log(
+                `[COMANDO rw] ✓ Carta pendiente guardada para ${id}`
             );
 
             // ------------------------------------------------

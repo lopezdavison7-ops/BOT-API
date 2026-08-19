@@ -593,7 +593,7 @@ async function terminar() {
             .textContent =
             'Se copiaron ' +
             resultado.cantidad +
-            ' foto(s) a media/gacha/.';
+            ' foto(s) a media/gacha/jpg/.';
 
         setTimeout(() => {
 
@@ -839,7 +839,7 @@ const server = http.createServer(
                             );
 
                             console.log(
-                                `\n✅ ${cantidad} foto(s) copiadas a media/gacha/`
+                                `\n✅ ${cantidad} foto(s) copiadas a media/gacha/jpg/`
                             );
 
                             // Cerrar después de terminar
@@ -958,7 +958,7 @@ echo "2. Marca las que quieras."
 echo "3. Pulsa ✅ LISTO."
 echo
 echo "Las seleccionadas reemplazarán las actuales"
-echo "de media/gacha/."
+echo "de media/gacha/jpg/."
 echo
 echo "📂 Carpeta:"
 echo "$GACHA"

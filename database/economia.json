@@ -1,15 +1,28 @@
 {
   "2599176675473@lid": {
-    "dinero": 274,
-    "personajes": [],
-    "ultimoTrabajo": 1786403140591,
-    "ultimoRW": 1786451646687
+    "dinero": 15447,
+    "personajes": [
+      {
+        "nombre": "IMG 20260811 WA0170",
+        "genero": "Desconocido",
+        "serie": "Desconocida",
+        "valor": 0
+      }
+    ],
+    "ultimoTrabajo": 1786734689549,
+    "ultimoRW": 1786754355684
   },
   "120363428709099549@g.us": {
     "dinero": 6378,
     "personajes": [],
     "ultimoTrabajo": 1786473906990,
-    "ultimoRW": 1786473923515,
+    "ultimoRW": 1786625241032,
     "ultimoDaily": 1786457104149
+  },
+  "120363429140811226@g.us": {
+    "dinero": 0,
+    "personajes": [],
+    "ultimoTrabajo": 0,
+    "ultimoRW": 0
   }
 }

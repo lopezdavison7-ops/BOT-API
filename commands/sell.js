@@ -24,6 +24,7 @@ export default {
     }) => {
 
         const id =
+            msg.key.participant ||
             msg.key.remoteJid;
 
         const usuario =
