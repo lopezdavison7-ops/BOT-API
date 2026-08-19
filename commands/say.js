@@ -3,15 +3,16 @@ export default {
     nombre: 'say',
     categoria: 'Utilidades',
     alias: ['decir', 'repetir', 'send'],
-    descripcion: 'Envía texto, fotos, vídeos, stickers o audios (responde o escribe)',
+    descripcion: 'Reenvía cualquier mensaje (foto, video, sticker, audio) con texto extra',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. Obtener el mensaje citado (si existe)
+            // Obtener información del mensaje citado
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
             const textoEscrito = String(argumento || '').trim();
-            let textoFinal = textoEscrito;
 
-            // 2. Si NO respondió a nada y solo escribió texto
+            // 1. Si NO respondió a nada y solo escribió texto
             if (!quotedMsg && textoEscrito) {
                 await sock.sendMessage(msg.key.remoteJid, {
                     text: textoEscrito
@@ -20,99 +21,50 @@ export default {
                 return;
             }
 
-            // 3. Si respondió a un mensaje y no escribió nada, usa el texto del mensaje citado
-            if (quotedMsg && !textoEscrito) {
-                if (quotedMsg.conversation) {
-                    textoFinal = quotedMsg.conversation;
-                } else if (quotedMsg.extendedTextMessage) {
-                    textoFinal = quotedMsg.extendedTextMessage.text;
-                } else {
-                    textoFinal = '📎 Mensaje reenviado';
-                }
-            }
-
-            // 4. Detectar menciones en el texto (@usuario)
-            let mentions = [];
-            if (textoFinal) {
-                const mentionPattern = /@(\d+)/g;
-                const matches = textoFinal.match(mentionPattern);
-                if (matches) {
-                    mentions = matches.map(m => `${m.replace('@', '')}@s.whatsapp.net`);
-                }
-            }
-
-            // 5. Si respondió a un sticker
-            if (quotedMsg?.stickerMessage) {
-                const stickerBuffer = quotedMsg.stickerMessage.file;
-                if (stickerBuffer) {
-                    await sock.sendMessage(msg.key.remoteJid, {
-                        sticker: stickerBuffer
-                    }, { quoted: msg });
-                    console.log('[SAY] Sticker enviado.');
-                    return;
-                }
-            }
-
-            // 6. Si respondió a una imagen
-            if (quotedMsg?.imageMessage) {
-                const imageBuffer = quotedMsg.imageMessage.file;
-                const captionOriginal = quotedMsg.imageMessage.caption || '';
-                if (imageBuffer) {
-                    await sock.sendMessage(msg.key.remoteJid, {
-                        image: imageBuffer,
-                        caption: textoFinal || captionOriginal,
-                        mentions: mentions
-                    }, { quoted: msg });
-                    console.log('[SAY] Imagen enviada.');
-                    return;
-                }
-            }
-
-            // 7. Si respondió a un video
-            if (quotedMsg?.videoMessage) {
-                const videoBuffer = quotedMsg.videoMessage.file;
-                const captionOriginal = quotedMsg.videoMessage.caption || '';
-                if (videoBuffer) {
-                    await sock.sendMessage(msg.key.remoteJid, {
-                        video: videoBuffer,
-                        caption: textoFinal || captionOriginal,
-                        mentions: mentions
-                    }, { quoted: msg });
-                    console.log('[SAY] Video enviado.');
-                    return;
-                }
-            }
-
-            // 8. Si respondió a un audio
-            if (quotedMsg?.audioMessage) {
-                const audioBuffer = quotedMsg.audioMessage.file;
-                const mimetype = quotedMsg.audioMessage.mimetype || 'audio/mpeg';
-                if (audioBuffer) {
-                    await sock.sendMessage(msg.key.remoteJid, {
-                        audio: audioBuffer,
-                        mimetype: mimetype
-                    }, { quoted: msg });
-                    console.log('[SAY] Audio enviado.');
-                    return;
-                }
-            }
-
-            // 9. Si respondió a un mensaje de texto pero no había imagen/video/sticker
-            if (quotedMsg && textoFinal) {
-                await sock.sendMessage(msg.key.remoteJid, {
-                    text: textoFinal,
-                    mentions: mentions
-                }, { quoted: msg });
-                console.log('[SAY] Texto del mensaje citado reenviado.');
+            // 2. Si respondió pero no hay ID (error de seguridad)
+            if (!quotedId) {
+                await responder.texto('❌ No se pudo obtener el mensaje citado. Intenta responder directamente al mensaje.');
                 return;
             }
 
-            // 10. Si no se pudo hacer nada
-            await responder.texto('❌ *SAY*\n\nNo se pudo enviar el contenido. Asegúrate de responder a un mensaje válido.');
+            // 3. Si respondió a un archivo, reenviarlo completo con texto opcional
+            if (quotedMsg) {
+                // Detectar menciones en el texto escrito
+                let mentions = [];
+                if (textoEscrito) {
+                    const mentionPattern = /@(\d+)/g;
+                    const matches = textoEscrito.match(mentionPattern);
+                    if (matches) {
+                        mentions = matches.map(m => `${m.replace('@', '')}@s.whatsapp.net`);
+                    }
+                }
+
+                // 🔥 REENVÍO DIRECTO DEL MENSAJE COMPLETO
+                await sock.sendMessage(msg.key.remoteJid, {
+                    forward: {
+                        key: {
+                            remoteJid: msg.key.remoteJid,
+                            fromMe: false,
+                            id: quotedId,
+                            participant: quotedParticipant
+                        },
+                        message: quotedMsg
+                    },
+                    // Si escribiste texto, se agrega como caption (si es imagen/video) o como mensaje aparte
+                    text: textoEscrito || undefined,
+                    mentions: mentions
+                }, { quoted: msg });
+
+                console.log('[SAY] Mensaje reenviado correctamente.');
+                return;
+            }
+
+            // 4. Si no se pudo hacer nada
+            await responder.texto('❌ No se pudo reenviar el mensaje.');
 
         } catch (error) {
             console.error('[SAY] Error:', error);
-            await responder.texto('❌ Error al enviar el mensaje.');
+            await responder.texto('❌ Error al reenviar el mensaje.');
         }
     }
 };
