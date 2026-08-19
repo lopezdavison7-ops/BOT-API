@@ -8,7 +8,7 @@ export default {
     nombre: 'warn',
     categoria: 'Moderación',
     alias: ['advertir'],
-    descripcion: 'Agrega advertencia y expulsa al llegar a 3',
+    descripcion: 'Agrega una advertencia (responde o menciona)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             if (!msg.key.remoteJid.endsWith('@g.us')) {
@@ -17,23 +17,29 @@ export default {
             }
 
             let target = null;
-            let razon = (argumento || '').trim();
+            let razon = 'Sin razón especificada';
 
             // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
-                if (!razon) razon = 'Sin razón especificada';
+                if (argumento && argumento.trim()) {
+                    razon = argumento.trim();
+                }
             }
 
             // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
+                // Si mencionó y escribió algo, eso es la razón
+                if (argumento && argumento.trim()) {
+                    razon = argumento.trim();
+                }
+                // Si respondió y mencionó, prioriza la mención
                 if (quoted && mentioned.length > 0) {
                     target = mentioned[0];
                 }
-                if (!razon) razon = 'Sin razón especificada';
             }
 
             if (!target) {
