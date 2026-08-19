@@ -1,10 +1,12 @@
 // commands/gstatus.js
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATUS_LOG_FILE = path.join(process.cwd(), 'database', 'statuslog.json');
 
-module.exports = {
+export default {
     nombre: 'gstatus',
     categoria: 'Utilidades',
     alias: ['gst', 'estado', 'upstatus'],
@@ -14,10 +16,10 @@ module.exports = {
             // 1. LEER Y VALIDAR EL REGISTRO DE ESTADOS
             let statusLog = {};
             try {
-                const data = await fs.promises.readFile(STATUS_LOG_FILE, 'utf8');
+                const data = await fs.readFile(STATUS_LOG_FILE, 'utf8');
                 statusLog = JSON.parse(data);
             } catch {
-                // Si no existe el archivo, creamos uno nuevo
+                // Si no existe el archivo, se crea vacío
             }
 
             const today = new Date().toDateString();
@@ -134,14 +136,13 @@ module.exports = {
             // 5. ACTUALIZAR REGISTRO Y GUARDAR
             statusLog[userJid][today] += 1;
             statusLog[userJid].lastTime = now;
-            await fs.promises.writeFile(STATUS_LOG_FILE, JSON.stringify(statusLog, null, 2));
+            await fs.writeFile(STATUS_LOG_FILE, JSON.stringify(statusLog, null, 2));
 
             // 6. RESPONDER AL USUARIO CON ÉXITO
             await responder.texto(mensajeRespuesta);
 
         } catch (error) {
             console.error('[GSTATUS] Error:', error);
-            // Si es error de WhatsApp, no insistas
             if (error.message.includes('status@broadcast')) {
                 await responder.texto('❌ WhatsApp bloqueó el envío del estado. Espera unos minutos.');
             } else {
