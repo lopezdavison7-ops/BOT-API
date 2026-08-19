@@ -1,12 +1,12 @@
 // commands/brat.js
 import fetch from 'node-fetch';
-import sharp from 'sharp'; // Asegúrate de tener esto instalado
+import sharp from 'sharp';
 
 export default {
     nombre: 'brat',
     categoria: 'Multimedia',
     alias: ['bratwhite', 'bratblanco'],
-    descripcion: 'Genera un sticker BRAT en color blanco usando YO SOY YO',
+    descripcion: 'Genera un sticker BRAT con información del creador',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const texto = String(argumento || '').trim();
@@ -23,7 +23,6 @@ export default {
             const color = 'white';
             const apiKey = 'yosoyyo_sk_gincmnk3';
 
-            // URL directa a la imagen PNG
             const apiUrl = `https://apiyosoyyo-ofc.onrender.com/api/brat?text=${encodeURIComponent(texto)}&color=${color}&apiKey=${apiKey}`;
 
             console.log(`[BRAT] Solicitando: ${apiUrl}`);
@@ -33,25 +32,28 @@ export default {
                 throw new Error(`API respondió con ${response.status}`);
             }
 
-            // Obtener el buffer de la imagen PNG
             const pngBuffer = await response.buffer();
 
-            // 🔥 CONVERTIR PNG A WEBP (sticker)
+            // Convertir a WebP cuadrado
             const webpBuffer = await sharp(pngBuffer)
-                .webp({ quality: 90 }) // Calidad alta
+                .resize(512, 512, { fit: 'cover', position: 'center' })
+                .webp({ quality: 90 })
                 .toBuffer();
 
-            // Enviar como sticker con crédito
+            // 🔥 METADATA DEL STICKER (esto es lo que verás al tocar)
             await sock.sendMessage(msg.key.remoteJid, {
-                sticker: webpBuffer,
-                caption: `⚡ Creado por *Bot-API* ⚡`
+                sticker: {
+                    file: webpBuffer,
+                    packname: 'Bot-API',   // Nombre del pack
+                    author: '⚡ Bot-API ⚡' // Autor que aparecerá
+                }
             }, { quoted: msg });
 
-            console.log('[BRAT] ✓ Sticker enviado correctamente.');
+            console.log('[BRAT] ✓ Sticker con metadata enviado.');
 
         } catch (error) {
             console.error('[BRAT] Error:', error);
-            await responder.texto('❌ *BRAT*\n\nNo se pudo generar el sticker. Inténtalo nuevamente.');
+            await responder.texto('❌ *BRAT*\n\nNo se pudo generar el sticker.');
         }
     }
 };
