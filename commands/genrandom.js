@@ -10,9 +10,9 @@ const __dirname = path.dirname(__filename);
 const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
-if (!fs.existsSync(GACHA_IMG_DIR)) {
-    fs.mkdirSync(GACHA_IMG_DIR, { recursive: true });
-}
+// ============================================================
+// LISTA DE ANIMES POPULARES (Seed)
+// ============================================================
 
 const ANIME_LIST = [
     'Naruto', 'Bleach', 'One Piece', 'Fate/stay night', 'Fate/Zero',
@@ -24,6 +24,10 @@ const ANIME_LIST = [
     'Fullmetal Alchemist', 'Code Geass', 'Death Note', 'One Punch Man',
     'Jujutsu Kaisen', 'Demon Slayer', 'My Hero Academia', 'Steins;Gate'
 ];
+
+// ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -40,69 +44,87 @@ function guardarDatosGacha(data) {
     fs.writeFileSync(GACHA_DATABASE, JSON.stringify(data, null, 2));
 }
 
-async function descargarImagen(url, nombreArchivo) {
-    const response = await fetch(url);
-    const buffer = await response.buffer();
-    const ruta = path.join(GACHA_IMG_DIR, nombreArchivo);
-    fs.writeFileSync(ruta, buffer);
-    return ruta;
+// ============================================================
+// DESCARGA DE IMÁGENES Y REGISTRO
+// ============================================================
+
+async function descargarYRegistrar(url, nombreArchivo, gachaData) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return false;
+        const buffer = await response.buffer();
+        const ruta = path.join(GACHA_IMG_DIR, nombreArchivo);
+        fs.writeFileSync(ruta, buffer);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
-async function procesarAnime(anime, cantidad = 2) {
-    try {
-        const url = `https://konachan.net/post.json?limit=${cantidad}&tags=${encodeURIComponent(anime)}+rating:safe&order=random`;
-        const response = await fetch(url);
-        const data = await response.json();
+// ============================================================
+// MOTOR DE SCRAPING DE KONACHAN
+// ============================================================
 
-        if (!data || data.length === 0) return { anime, agregadas: 0 };
+async function scrapearAnime(anime, limite = 100) {
+    try {
+        const url = `https://konachan.net/post.json?limit=${limite}&tags=${encodeURIComponent(anime)}+rating:safe&order:random`;
+        const response = await fetch(url);
+        if (!response.ok) return { anime, nuevos: 0, saltados: 0, total: 0 };
+        
+        const data = await response.json();
+        if (!data || data.length === 0) return { anime, nuevos: 0, saltados: 0, total: 0 };
 
         const gachaData = cargarDatosGacha();
-        let agregadas = 0;
+        let nuevos = 0;
+        let saltados = 0;
 
         for (const img of data) {
             if (!img.file_url) continue;
+            
             const nombreArchivo = `gacha_${Date.now()}_${anime.replace(/\s/g, '_')}.jpg`;
-            try {
-                await descargarImagen(img.file_url, nombreArchivo);
+            const exito = await descargarYRegistrar(img.file_url, nombreArchivo, gachaData);
+            
+            if (exito) {
+                // Registrar en gacha.json
                 gachaData[nombreArchivo] = {
                     nombre: anime,
                     genero: 'Desconocido',
                     serie: anime,
                     valor: Math.floor(Math.random() * 100) + 1
                 };
-                agregadas++;
-            } catch (e) {
-                console.error(`Error descargando imagen de ${anime}:`, e);
+                nuevos++;
+            } else {
+                saltados++;
             }
         }
 
         guardarDatosGacha(gachaData);
-        return { anime, agregadas };
+        return { anime, nuevos, saltados, total: data.length };
     } catch (error) {
-        console.error(`Error procesando ${anime}:`, error);
-        return { anime, agregadas: 0 };
+        console.error(`[SCRAPER] Error en ${anime}:`, error.message);
+        return { anime, nuevos: 0, saltados: 0, total: 0 };
     }
 }
+
+// ============================================================
+// COMANDO GENRANDOM
+// ============================================================
 
 export default {
     nombre: 'genrandom',
     categoria: 'Diversión',
     alias: ['gr', 'gachaadd'],
-    descripcion: 'Descarga y agrega imágenes de animes al sistema de cartas .rw',
+    descripcion: 'Scrapea 5 animes aleatorios de Konachan y los agrega al gacha.',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            const cantidadAnimes = 3;
-            const imagenesPorAnime = 2;
-
-            // 1. Mensaje inicial
             const mensajeInicial = `
 ╭〔 🎲 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣
 ┃
-┃ 📦 INICIANDO DESCARGA
+┃ 📦 INICIANDO SCRAPEO
 ┃
-┃ ⏳ Buscando ${cantidadAnimes} animes...
+┃ ⏳ Buscando 5 animes al azar...
 ┃
-┃ ⚡ Descargando ${imagenesPorAnime} imágenes por anime
+┃ 🌐 konachan.net — Esto tardará varios minutos.
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
@@ -111,35 +133,38 @@ export default {
             const sentMsg = await sock.sendMessage(msg.key.remoteJid, { text: mensajeInicial }, { quoted: msg });
             const messageId = sentMsg.key.id;
 
-            // 2. Seleccionar animes aleatorios
+            // 2. Seleccionar 5 animes aleatorios
             const animesSeleccionados = [];
             const copia = [...ANIME_LIST];
-            for (let i = 0; i < cantidadAnimes; i++) {
+            for (let i = 0; i < 5; i++) {
+                if (copia.length === 0) break;
                 const index = Math.floor(Math.random() * copia.length);
                 animesSeleccionados.push(copia[index]);
                 copia.splice(index, 1);
             }
 
-            let totalAgregadas = 0;
+            const resultados = [];
+            let totalNuevos = 0;
+            let totalSaltados = 0;
 
-            // 3. Procesar cada anime con actualización en vivo
+            // 3. Scrapear cada anime
             for (let i = 0; i < animesSeleccionados.length; i++) {
                 const anime = animesSeleccionados[i];
 
-                // Actualizar mensaje: Buscando
-                const textoBuscando = `
+                // 📦 Procesando
+                const textoProcesando = `
 ╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣
 ┃
 ┃ 🔄 Procesando...
 ┃
-┃ [${i + 1}/${cantidadAnimes}] Buscando: ${anime}
+┃ [${i + 1}/5] ${anime}
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
                 await sock.sendMessage(msg.key.remoteJid, {
-                    text: textoBuscando,
+                    text: textoProcesando,
                     edit: {
                         key: {
                             remoteJid: msg.key.remoteJid,
@@ -149,19 +174,19 @@ export default {
                     }
                 });
 
-                // Procesar el anime (descarga y guarda)
-                const resultado = await procesarAnime(anime, imagenesPorAnime);
-                totalAgregadas += resultado.agregadas;
+                // Ejecutar el scrapeo
+                const resultado = await scrapearAnime(anime, 100);
+                resultados.push(resultado);
+                totalNuevos += resultado.nuevos;
+                totalSaltados += resultado.saltados;
 
-                // Actualizar mensaje: Finalizado
+                // 🔍 Analizando
                 const textoAnalizando = `
 ╭〔 🔍 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣
 ┃
-┃ 🔎 Analizando...
+┃ 🔎 Analizando "${anime}"...
 ┃
-┃ [${i + 1}/${cantidadAnimes}] "${anime}"
-┃
-┃ > ${resultado.agregadas} imágenes agregadas
+┃ > ${resultado.total} posts encontrados
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
@@ -177,13 +202,22 @@ export default {
                         }
                     }
                 });
+
+                await sleep(1500);
             }
 
-            // 4. Mensaje final con resumen
+            // 4. Mensaje final (Resumen detallado)
+            let resumen = '';
+            resultados.forEach(r => {
+                resumen += `┃ ✅ *${r.anime}* — ${r.nuevos} nuevos, ${r.saltados} saltados (${r.total} posts)\n`;
+            });
+
             const mensajeFinal = `
 ╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣
 ┃
-┃ 📦 Total de cartas agregadas: ${totalAgregadas}
+┃ ${resumen}
+┃
+┃ 👥 Total agregados: *${totalNuevos}* — ⏭️ Total saltados: *${totalSaltados}*
 ┃
 ┃ 💾 Base de datos actualizada en gacha.json
 ┃
