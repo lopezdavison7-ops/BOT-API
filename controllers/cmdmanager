@@ -1,0 +1,61 @@
+// controllers/cmdManager.js
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const COMMANDS_DIR = path.join(__dirname, '../commands');
+
+/**
+ * Carga todos los comandos de manera recursiva desde la carpeta commands/
+ * y sus subcarpetas.
+ * @returns {Map} Un mapa con los comandos cargados (nombre -> comando)
+ */
+export function loadCommands() {
+    const commands = new Map();
+
+    function readCommands(dir) {
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+
+        for (const item of items) {
+            const fullPath = path.join(dir, item.name);
+
+            if (item.isDirectory()) {
+                // Si es una carpeta, entramos recursivamente
+                readCommands(fullPath);
+            } else if (item.isFile() && item.name.endsWith('.js')) {
+                // Si es un archivo .js, lo intentamos cargar
+                try {
+                    // Usamos import dinámico para ES Modules
+                    const module = await import(`file://${fullPath}`);
+                    const command = module.default;
+
+                    // Si el comando tiene nombre, lo registramos
+                    if (command && command.nombre) {
+                        commands.set(command.nombre, command);
+                        
+                        // Si tiene alias, los registramos también
+                        if (command.alias && Array.isArray(command.alias)) {
+                            for (const alias of command.alias) {
+                                commands.set(alias, command);
+                            }
+                        }
+                        console.log(`[CMD] ✓ Cargado: ${command.nombre} (${fullPath})`);
+                    } else {
+                        console.warn(`[CMD] ⚠️ Ignorado (sin nombre): ${fullPath}`);
+                    }
+                } catch (error) {
+                    console.error(`[CMD] ❌ Error cargando ${fullPath}:`, error.message);
+                }
+            }
+        }
+    }
+
+    // Comenzar la carga recursiva desde la raíz de commands/
+    readCommands(COMMANDS_DIR);
+
+    console.log(`[CMD] ✅ Total de comandos cargados: ${commands.size}`);
+    return commands;
+}
