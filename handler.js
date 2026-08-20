@@ -13,7 +13,7 @@ export async function cargarComandosHandler() {
     return comandos;
 }
 
-export async function handleMessage(sock, msg) {
+export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []) {
     try {
         if (!comandos) {
             comandos = await loadCommands();
@@ -23,9 +23,9 @@ export async function handleMessage(sock, msg) {
                      msg.message?.extendedTextMessage?.text || 
                      '';
 
-        if (!texto.startsWith(PREFIJO)) return;
+        if (!texto.startsWith(prefijo)) return;
 
-        const args = texto.slice(PREFIJO.length).trim().split(/\s+/);
+        const args = texto.slice(prefijo.length).trim().split(/\s+/);
         const nombreComando = args.shift().toLowerCase();
         const argumento = args.join(' ').trim();
 
@@ -36,6 +36,8 @@ export async function handleMessage(sock, msg) {
             sock,
             msg,
             argumento,
+            listaComandos,
+            prefijo,
             responder: {
                 texto: async (text) => {
                     await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
