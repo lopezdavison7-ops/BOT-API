@@ -10,14 +10,9 @@ const __dirname = path.dirname(__filename);
 const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
-// Asegurar que la carpeta exista
 if (!fs.existsSync(GACHA_IMG_DIR)) {
     fs.mkdirSync(GACHA_IMG_DIR, { recursive: true });
 }
-
-// ============================================================
-// LISTA DE ANIMES POPULARES
-// ============================================================
 
 const ANIME_LIST = [
     'Naruto', 'Bleach', 'One Piece', 'Fate/stay night', 'Fate/Zero',
@@ -32,10 +27,6 @@ const ANIME_LIST = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ============================================================
-// CARGAR / GUARDAR JSON DE GACHA
-// ============================================================
-
 function cargarDatosGacha() {
     if (!fs.existsSync(GACHA_DATABASE)) return {};
     try {
@@ -49,10 +40,6 @@ function guardarDatosGacha(data) {
     fs.writeFileSync(GACHA_DATABASE, JSON.stringify(data, null, 2));
 }
 
-// ============================================================
-// DESCARGAR Y GUARDAR IMAGEN
-// ============================================================
-
 async function descargarImagen(url, nombreArchivo) {
     const response = await fetch(url);
     const buffer = await response.buffer();
@@ -61,29 +48,22 @@ async function descargarImagen(url, nombreArchivo) {
     return ruta;
 }
 
-// ============================================================
-// BUSCAR IMÁGENES EN KONACHAN Y AGREGARLAS AL GACHA
-// ============================================================
-
-async function procesarAnime(anime, cantidad = 3) {
+async function procesarAnime(anime, cantidad = 2) {
     try {
         const url = `https://konachan.net/post.json?limit=${cantidad}&tags=${encodeURIComponent(anime)}+rating:safe&order=random`;
         const response = await fetch(url);
         const data = await response.json();
 
-        if (!data || data.length === 0) return { anime, agregadas: 0, imagenes: [] };
+        if (!data || data.length === 0) return { anime, agregadas: 0 };
 
         const gachaData = cargarDatosGacha();
         let agregadas = 0;
 
         for (const img of data) {
             if (!img.file_url) continue;
-
             const nombreArchivo = `gacha_${Date.now()}_${anime.replace(/\s/g, '_')}.jpg`;
             try {
                 await descargarImagen(img.file_url, nombreArchivo);
-                
-                // Registrar en gacha.json
                 gachaData[nombreArchivo] = {
                     nombre: anime,
                     genero: 'Desconocido',
@@ -97,16 +77,12 @@ async function procesarAnime(anime, cantidad = 3) {
         }
 
         guardarDatosGacha(gachaData);
-        return { anime, agregadas, imagenes: data };
+        return { anime, agregadas };
     } catch (error) {
         console.error(`Error procesando ${anime}:`, error);
-        return { anime, agregadas: 0, imagenes: [] };
+        return { anime, agregadas: 0 };
     }
 }
-
-// ============================================================
-// COMANDO GENRANDOM
-// ============================================================
 
 export default {
     nombre: 'genrandom',
@@ -115,8 +91,8 @@ export default {
     descripcion: 'Descarga y agrega imágenes de animes al sistema de cartas .rw',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            const cantidadAnimes = 3; // Cuántos animes procesar
-            const imagenesPorAnime = 2; // Cuántas imágenes por anime
+            const cantidadAnimes = 3;
+            const imagenesPorAnime = 2;
 
             // 1. Mensaje inicial
             const mensajeInicial = `
@@ -144,14 +120,13 @@ export default {
                 copia.splice(index, 1);
             }
 
-            const resultados = [];
             let totalAgregadas = 0;
 
-            // 3. Procesar cada anime
+            // 3. Procesar cada anime con actualización en vivo
             for (let i = 0; i < animesSeleccionados.length; i++) {
                 const anime = animesSeleccionados[i];
 
-                // Mensaje de progreso: Buscando
+                // Actualizar mensaje: Buscando
                 const textoBuscando = `
 ╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣
 ┃
@@ -174,14 +149,11 @@ export default {
                     }
                 });
 
-                await sleep(1500);
-
-                // Procesar y descargar
+                // Procesar el anime (descarga y guarda)
                 const resultado = await procesarAnime(anime, imagenesPorAnime);
-                resultados.push(resultado);
                 totalAgregadas += resultado.agregadas;
 
-                // Mensaje de progreso: Analizando/Descargando
+                // Actualizar mensaje: Finalizado
                 const textoAnalizando = `
 ╭〔 🔍 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣
 ┃
@@ -205,20 +177,11 @@ export default {
                         }
                     }
                 });
-
-                await sleep(1000);
             }
 
             // 4. Mensaje final con resumen
-            let resumen = '';
-            resultados.forEach(r => {
-                resumen += `┃ ✅ *${r.anime}* — +${r.agregadas} cartas nuevas\n`;
-            });
-
             const mensajeFinal = `
 ╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣
-┃
-┃ ${resumen}
 ┃
 ┃ 📦 Total de cartas agregadas: ${totalAgregadas}
 ┃
