@@ -6,25 +6,21 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Ruta absoluta usando process.cwd() (funciona siempre en HidenCloud)
-const COMMANDS_DIR = path.join(process.cwd(), 'commands');
+const COMMANDS_DIR = path.join(__dirname, '../commands');
 
-export async function loadCommands() {
+export function loadCommands() {
     const commands = new Map();
 
-    async function readCommands(dir) {
+    function readCommands(dir) {
         const items = fs.readdirSync(dir, { withFileTypes: true });
-
         for (const item of items) {
             const fullPath = path.join(dir, item.name);
-
             if (item.isDirectory()) {
-                await readCommands(fullPath);
+                readCommands(fullPath);
             } else if (item.isFile() && item.name.endsWith('.js')) {
                 try {
-                    const module = await import(`file://${fullPath}`);
-                    const command = module.default;
-
+                    const module = require(fullPath);
+                    const command = module.default || module;
                     if (command && command.nombre) {
                         commands.set(command.nombre, command);
                         if (command.alias && Array.isArray(command.alias)) {
@@ -41,7 +37,7 @@ export async function loadCommands() {
         }
     }
 
-    await readCommands(COMMANDS_DIR);
+    readCommands(COMMANDS_DIR);
     console.log(`[CMD] ✅ Total comandos cargados: ${commands.size}`);
     return commands;
 }
