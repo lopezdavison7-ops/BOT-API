@@ -1,12 +1,20 @@
-// commands/downloads/play.js
 // ============================================================
+// BOT-API
 // COMANDO: PLAY
-// ALEX BOT
-// YouTube → búsqueda → información → MP3
-// Optimizado: envío directo desde URL
+// ============================================================
+// YouTube → búsqueda → portada → MP3
+//
+// Optimizado para:
+// - API propia /api/ytsearch
+// - API propia /api/youtube/v2
+// - Envío directo mediante URL
+// - Portada de la canción
+// - Sin guardar archivos en disco
+// - Baileys 7
 // ============================================================
 
-const API_BASE = 'https://apiyosoyyo-ofc.onrender.com';
+const API_BASE =
+    'https://apiyosoyyo-ofc.onrender.com';
 
 const API_KEY =
     process.env.YT_API_KEY ||
@@ -18,32 +26,43 @@ const API_SEARCH =
 const API_YOUTUBE =
     `${API_BASE}/api/youtube/v2`;
 
-const TIMEOUT_BUSQUEDA = 30000;
-const TIMEOUT_MP3 = 30000;
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+
+const TIMEOUT_SEARCH = 15000;
+const TIMEOUT_DOWNLOAD = 25000;
+const TIMEOUT_IMAGE = 10000;
 
 // ============================================================
 // FETCH CON TIMEOUT
 // ============================================================
 
-async function fetchConTimeout(
+async function fetchTimeout(
     url,
-    opciones = {},
-    timeout = 30000
+    options = {},
+    timeout = 15000
 ) {
-    const controller = new AbortController();
+    const controller =
+        new AbortController();
 
-    const temporizador = setTimeout(
-        () => controller.abort(),
-        timeout
-    );
+    const timer =
+        setTimeout(
+            () => controller.abort(),
+            timeout
+        );
 
     try {
-        return await fetch(url, {
-            ...opciones,
-            signal: controller.signal
-        });
+        return await fetch(
+            url,
+            {
+                ...options,
+                signal:
+                    controller.signal
+            }
+        );
     } finally {
-        clearTimeout(temporizador);
+        clearTimeout(timer);
     }
 }
 
@@ -51,8 +70,8 @@ async function fetchConTimeout(
 // LIMPIAR TEXTO
 // ============================================================
 
-function limpiarTexto(texto = '') {
-    return String(texto)
+function cleanText(text = '') {
+    return String(text)
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -61,45 +80,79 @@ function limpiarTexto(texto = '') {
 // LIMPIAR NOMBRE
 // ============================================================
 
-function limpiarNombre(nombre = 'Alex Bot') {
-    return String(nombre)
-        .replace(/[\\/:*?"<>|]/g, '')
-        .replace(/\s+/g, ' ')
+function cleanFileName(
+    name = 'Alex Bot'
+) {
+    return String(name)
+        .replace(
+            /[\\/:*?"<>|]/g,
+            ''
+        )
+        .replace(
+            /\s+/g,
+            ' '
+        )
         .trim()
-        .slice(0, 80) || 'Alex Bot';
+        .slice(0, 80) ||
+        'Alex Bot';
 }
 
 // ============================================================
 // FORMATEAR VISTAS
 // ============================================================
 
-function formatearVistas(vistas) {
-    const numero = Number(vistas);
+function formatViews(
+    views
+) {
+    const number =
+        Number(views);
 
-    if (!Number.isFinite(numero)) {
+    if (
+        !Number.isFinite(number)
+    ) {
         return 'No disponible';
     }
 
-    if (numero >= 1000000000) {
-        return `${(numero / 1000000000).toFixed(1)}B`;
+    if (
+        number >= 1000000000
+    ) {
+        return (
+            `${(
+                number / 1000000000
+            ).toFixed(1)}B`
+        );
     }
 
-    if (numero >= 1000000) {
-        return `${(numero / 1000000).toFixed(1)}M`;
+    if (
+        number >= 1000000
+    ) {
+        return (
+            `${(
+                number / 1000000
+            ).toFixed(1)}M`
+        );
     }
 
-    if (numero >= 1000) {
-        return `${(numero / 1000).toFixed(1)}K`;
+    if (
+        number >= 1000
+    ) {
+        return (
+            `${(
+                number / 1000
+            ).toFixed(1)}K`
+        );
     }
 
-    return numero.toLocaleString('es-ES');
+    return number.toLocaleString(
+        'es-ES'
+    );
 }
 
 // ============================================================
 // REACCIÓN
 // ============================================================
 
-async function reaccionar(
+async function react(
     sock,
     jid,
     key,
@@ -116,7 +169,7 @@ async function reaccionar(
             }
         );
     } catch {
-        // No detener PLAY por una reacción.
+        // Una reacción nunca debe detener PLAY.
     }
 }
 
@@ -124,245 +177,313 @@ async function reaccionar(
 // BUSCAR YOUTUBE
 // ============================================================
 
-async function buscarYouTube(consulta) {
-    const parametros = new URLSearchParams({
-        q: consulta,
-        apiKey: API_KEY
-    });
+async function searchYouTube(
+    query
+) {
+    const params =
+        new URLSearchParams({
+            q: query,
+            apiKey: API_KEY
+        });
 
-    const endpoint =
-        `${API_SEARCH}?${parametros.toString()}`;
+    const url =
+        `${API_SEARCH}?${params}`;
 
     console.log(
-        `[PLAY] Buscando: ${consulta}`
+        `[PLAY] 🔎 Buscando: ${query}`
     );
 
-    const respuesta =
-        await fetchConTimeout(
-            endpoint,
+    const response =
+        await fetchTimeout(
+            url,
             {
                 headers: {
-                    Accept: 'application/json',
-                    'User-Agent': 'AlexBot/1.0'
+                    Accept:
+                        'application/json',
+                    'User-Agent':
+                        'BOT-API/2.0'
                 }
             },
-            TIMEOUT_BUSQUEDA
+            TIMEOUT_SEARCH
         );
 
-    if (!respuesta.ok) {
+    if (!response.ok) {
         throw new Error(
-            `La búsqueda respondió HTTP ${respuesta.status}`
+            `Búsqueda HTTP ${response.status}`
         );
     }
 
-    const datos =
-        await respuesta.json();
+    const data =
+        await response.json();
 
-    if (!datos?.status) {
+    if (!data?.status) {
         throw new Error(
-            datos?.message ||
-            'La API de búsqueda rechazó la solicitud.'
+            data?.message ||
+            'La API rechazó la búsqueda.'
         );
     }
 
-    const resultados =
-        Array.isArray(datos.result)
-            ? datos.result
+    const results =
+        Array.isArray(
+            data.result
+        )
+            ? data.result
             : [];
 
-    if (!resultados.length) {
+    if (
+        !results.length
+    ) {
         throw new Error(
-            'No encontré resultados para esa búsqueda.'
+            'No encontré resultados.'
         );
     }
 
-    const primero =
-        resultados.find(
-            item => item?.videoUrl
+    const video =
+        results.find(
+            item =>
+                item?.videoUrl
         );
 
-    if (!primero?.videoUrl) {
+    if (!video?.videoUrl) {
         throw new Error(
-            'El resultado no contiene una URL de YouTube válida.'
+            'El resultado no contiene una URL válida.'
         );
     }
 
     console.log(
-        `[PLAY] Resultado: ${primero.title}`
-    );
-
-    console.log(
-        `[PLAY] URL: ${primero.videoUrl}`
+        `[PLAY] 🎵 ${video.title}`
     );
 
     return {
-        titulo:
-            limpiarTexto(
-                primero.title ||
+        title:
+            cleanText(
+                video.title ||
                 'Alex Bot'
             ),
 
         videoUrl:
-            primero.videoUrl,
+            video.videoUrl,
 
         thumbnail:
-            primero.thumbnailUrl ||
+            video.thumbnailUrl ||
+            video.thumbnail ||
             null,
 
-        canal:
-            limpiarTexto(
-                primero.channelName ||
+        channel:
+            cleanText(
+                video.channelName ||
                 'No disponible'
             ),
 
-        canalUrl:
-            primero.channelUrl ||
-            null,
-
-        duracion:
-            limpiarTexto(
-                primero.duration ||
+        duration:
+            cleanText(
+                video.duration ||
                 'No disponible'
             ),
 
-        vistas:
-            primero.views,
+        views:
+            video.views,
 
-        publicado:
-            limpiarTexto(
-                primero.publishedAgo ||
+        published:
+            cleanText(
+                video.publishedAgo ||
                 'No disponible'
             )
     };
 }
 
 // ============================================================
-// OBTENER ENLACE MP3
+// OBTENER MP3
 // ============================================================
 
-async function obtenerMP3(videoUrl) {
-    const parametros =
+async function getMP3(
+    videoUrl
+) {
+    const params =
         new URLSearchParams({
             url: videoUrl,
             format: 'mp3',
             apiKey: API_KEY
         });
 
-    const endpoint =
-        `${API_YOUTUBE}?${parametros.toString()}`;
+    const url =
+        `${API_YOUTUBE}?${params}`;
 
     console.log(
-        '[PLAY] Solicitando MP3...'
+        '[PLAY] ⚡ Solicitando MP3...'
     );
 
-    const respuesta =
-        await fetchConTimeout(
-            endpoint,
+    const response =
+        await fetchTimeout(
+            url,
             {
                 headers: {
-                    Accept: 'application/json',
-                    'User-Agent': 'AlexBot/1.0'
+                    Accept:
+                        'application/json',
+                    'User-Agent':
+                        'BOT-API/2.0'
                 }
             },
-            TIMEOUT_MP3
+            TIMEOUT_DOWNLOAD
         );
 
-    if (!respuesta.ok) {
+    if (!response.ok) {
         throw new Error(
-            `La API de MP3 respondió HTTP ${respuesta.status}`
+            `Descarga HTTP ${response.status}`
         );
     }
 
-    const datos =
-        await respuesta.json();
+    const data =
+        await response.json();
 
-    if (!datos?.status) {
+    if (!data?.status) {
         throw new Error(
-            datos?.message ||
+            data?.message ||
             'La API no pudo generar el MP3.'
         );
     }
 
-    const resultados =
-        datos?.result?.results;
+    const results =
+        data?.result?.results;
 
     if (
-        !Array.isArray(resultados) ||
-        !resultados.length
+        !Array.isArray(results) ||
+        !results.length
     ) {
         throw new Error(
-            'La API no devolvió archivos MP3.'
+            'La API no devolvió formatos.'
         );
     }
 
+    // --------------------------------------------------------
+    // BUSCAR AUDIO
+    // --------------------------------------------------------
+
     const audio =
-        resultados.find(
+        results.find(
             item =>
+                item?.status !== false &&
                 item?.type === 'audio' &&
+                item?.extension === 'mp3' &&
                 item?.download
         );
 
     if (!audio?.download) {
         throw new Error(
-            'No encontré el enlace de descarga del MP3.'
+            'No encontré un MP3 disponible.'
         );
     }
 
     console.log(
-        `[PLAY] MP3 listo: ${
-            audio.title ||
-            datos?.result?.title ||
-            'Audio'
-        }`
+        `[PLAY] ✅ MP3: ${audio.quality || 'Audio'}`
     );
 
     return {
-        download: audio.download,
+        download:
+            audio.download,
 
-        titulo:
-            audio.title ||
-            datos?.result?.title ||
-            'Alex Bot',
+        title:
+            cleanText(
+                audio.title ||
+                data?.result?.title ||
+                'Alex Bot'
+            ),
 
-        calidad:
+        quality:
             audio.quality ||
-            'Audio'
+            'Audio',
+
+        thumbnail:
+            audio.thumbnail ||
+            data?.result?.thumbnail ||
+            null
     };
+}
+
+// ============================================================
+// ENVIAR PORTADA
+// ============================================================
+
+async function sendThumbnail(
+    sock,
+    jid,
+    thumbnail,
+    title,
+    msg
+) {
+    if (!thumbnail) {
+        return false;
+    }
+
+    try {
+        console.log(
+            '[PLAY] 🖼️ Enviando portada...'
+        );
+
+        await sock.sendMessage(
+            jid,
+            {
+                image: {
+                    url: thumbnail
+                },
+
+                caption:
+                    `🎵 *${title}*\n` +
+                    `⚡ Calidad: MP3`
+            },
+            {
+                quoted: msg
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.warn(
+            '[PLAY] ⚠️ No se pudo enviar la portada:',
+            error?.message ||
+            error
+        );
+
+        return false;
+    }
 }
 
 // ============================================================
 // INFORMACIÓN
 // ============================================================
 
-function crearInformacion(resultado) {
+function createInfo(
+    result
+) {
     return (
         '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
         '┃\n' +
-        `┃ 🎵 *${resultado.titulo}*\n` +
+        `┃ 🎵 *${result.title}*\n` +
         '┃\n' +
-        `┃ 👤 Canal: ${resultado.canal}\n` +
-        `┃ 👁️ Vistas: ${formatearVistas(resultado.vistas)}\n` +
-        `┃ ⏱️ Duración: ${resultado.duracion}\n` +
-        `┃ 📅 Publicado: ${resultado.publicado}\n` +
+        `┃ 👤 ${result.channel}\n` +
+        `┃ 👁️ ${formatViews(result.views)} vistas\n` +
+        `┃ ⏱️ ${result.duration}\n` +
+        `┃ 📅 ${result.published}\n` +
         '┃\n' +
-        '┃ 🔗 *YouTube:*\n' +
-        `┃ ${resultado.videoUrl}\n` +
-        '┃\n' +
-        '┃ 🎧 *Preparando MP3...*\n' +
+        '┃ ⚡ *Preparando audio...*\n' +
         '┃\n' +
         '╰━━━━━━━━━━━━━━━━⬣'
     );
 }
 
 // ============================================================
-// COMANDO
+// COMANDO PLAY
 // ============================================================
 
 export default {
 
-    nombre: 'play',
+    nombre:
+        'play',
 
-    categoria: 'Descargas',
+    categoria:
+        'Descargas',
 
     alias: [
         'yt',
@@ -372,174 +493,216 @@ export default {
     ],
 
     descripcion:
-        'Busca una canción y la envía como MP3.',
+        'Busca una canción, muestra su portada y la envía como MP3.',
 
-    ejecutar: async ({
-        sock,
-        msg,
-        responder,
-        argumento
-    }) => {
-
-        const consulta =
-            argumento?.trim();
-
-        if (!consulta) {
-            await responder.texto(
-                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe el nombre de una canción.\n' +
-                '┃\n' +
-                '┃ 📌 Ejemplos:\n' +
-                '┃ › .play Bad Bunny\n' +
-                '┃ › .play Hola Remix\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-
-            return;
-        }
-
-        const jid =
-            msg?.key?.remoteJid;
-
-        if (!jid) {
-            return;
-        }
-
-        console.log(
-            '================================================'
-        );
-
-        console.log(
-            `[PLAY] Consulta: ${consulta}`
-        );
-
-        await reaccionar(
+    ejecutar:
+        async ({
             sock,
-            jid,
-            msg.key,
-            '⏳'
-        );
+            msg,
+            responder,
+            argumento
+        }) => {
 
-        try {
+            const query =
+                argumento?.trim();
 
             // ------------------------------------------------
-            // 1. BUSCAR
+            // SIN CONSULTA
             // ------------------------------------------------
 
-            const resultado =
-                await buscarYouTube(
-                    consulta
+            if (!query) {
+
+                await responder.texto(
+                    '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ❌ Escribe una canción.\n' +
+                    '┃\n' +
+                    '┃ 💿 Ejemplo:\n' +
+                    '┃ › .play Hola Remix\n' +
+                    '┃ › .play Bad Bunny\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
                 );
 
-            // ------------------------------------------------
-            // 2. MOSTRAR INFORMACIÓN
-            // ------------------------------------------------
+                return;
+            }
 
-            await responder.texto(
-                crearInformacion(
-                    resultado
-                )
-            );
+            const jid =
+                msg?.key?.remoteJid;
 
-            // ------------------------------------------------
-            // 3. OBTENER URL MP3
-            // ------------------------------------------------
-
-            const mp3 =
-                await obtenerMP3(
-                    resultado.videoUrl
-                );
-
-            // ------------------------------------------------
-            // 4. PREPARAR NOMBRE
-            // ------------------------------------------------
-
-            const titulo =
-                limpiarNombre(
-                    mp3.titulo ||
-                    resultado.titulo
-                );
+            if (!jid) {
+                return;
+            }
 
             console.log(
-                `[PLAY] Enlace MP3 obtenido`
+                '================================================'
             );
 
             console.log(
-                `[PLAY] Enviando audio directamente desde URL`
+                `[PLAY] 🚀 Consulta: ${query}`
             );
 
-            // ------------------------------------------------
-            // 5. ENVIAR DIRECTAMENTE
-            // ------------------------------------------------
+            const start =
+                Date.now();
 
-            await sock.sendMessage(
+            await react(
+                sock,
                 jid,
-                {
-                    audio: {
-                        url: mp3.download
+                msg.key,
+                '⏳'
+            );
+
+            try {
+
+                // =================================================
+                // 1. BUSCAR
+                // =================================================
+
+                const youtube =
+                    await searchYouTube(
+                        query
+                    );
+
+                // =================================================
+                // 2. OBTENER MP3
+                // =================================================
+
+                const mp3 =
+                    await getMP3(
+                        youtube.videoUrl
+                    );
+
+                // =================================================
+                // 3. INFORMACIÓN
+                // =================================================
+
+                await responder.texto(
+                    createInfo(
+                        youtube
+                    )
+                );
+
+                // =================================================
+                // 4. PORTADA
+                // =================================================
+
+                const thumbnail =
+                    mp3.thumbnail ||
+                    youtube.thumbnail;
+
+                await sendThumbnail(
+                    sock,
+                    jid,
+                    thumbnail,
+                    mp3.title ||
+                    youtube.title,
+                    msg
+                );
+
+                // =================================================
+                // 5. NOMBRE
+                // =================================================
+
+                const filename =
+                    cleanFileName(
+                        mp3.title ||
+                        youtube.title
+                    );
+
+                // =================================================
+                // 6. AUDIO DIRECTO
+                // =================================================
+
+                console.log(
+                    '[PLAY] ⚡ Enviando MP3 directamente desde URL...'
+                );
+
+                await sock.sendMessage(
+                    jid,
+                    {
+                        audio: {
+                            url:
+                                mp3.download
+                        },
+
+                        mimetype:
+                            'audio/mpeg',
+
+                        fileName:
+                            `${filename}.mp3`,
+
+                        ptt: false
                     },
+                    {
+                        quoted:
+                            msg,
 
-                    mimetype:
-                        'audio/mpeg',
+                        mediaUploadTimeoutMs:
+                            180000
+                    }
+                );
 
-                    fileName:
-                        `${titulo}.mp3`,
+                // =================================================
+                // 7. ÉXITO
+                // =================================================
 
-                    ptt: false
-                },
-                {
-                    quoted: msg,
+                const elapsed =
+                    (
+                        Date.now() -
+                        start
+                    ) / 1000;
 
-                    mediaUploadTimeoutMs:
-                        180000
-                }
-            );
+                await react(
+                    sock,
+                    jid,
+                    msg.key,
+                    '✅'
+                );
 
-            // ------------------------------------------------
-            // 6. ÉXITO
-            // ------------------------------------------------
+                console.log(
+                    `[PLAY] ✅ Completado en ${elapsed.toFixed(2)}s`
+                );
 
-            await reaccionar(
-                sock,
-                jid,
-                msg.key,
-                '✅'
-            );
+                console.log(
+                    `[PLAY] 🎵 ${filename}`
+                );
 
-            console.log(
-                `[PLAY] Audio enviado correctamente: ${titulo}`
-            );
+                console.log(
+                    `[PLAY] 🔗 ${mp3.download}`
+                );
 
-        } catch (error) {
+                console.log(
+                    '================================================'
+                );
 
-            console.error(
-                '[PLAY] Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
+            } catch (error) {
 
-            await reaccionar(
-                sock,
-                jid,
-                msg.key,
-                '❌'
-            );
-
-            await responder.texto(
-                '╭━━〔 ❌ 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
-                '┃\n' +
-                '┃ No pude enviar el audio.\n' +
-                '┃\n' +
-                `┃ ⚠️ ${
+                console.error(
+                    '[PLAY] ❌ Error:',
+                    error?.stack ||
                     error?.message ||
-                    'Error desconocido.'
-                }\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+                    error
+                );
+
+                await react(
+                    sock,
+                    jid,
+                    msg.key,
+                    '❌'
+                );
+
+                await responder.texto(
+                    '╭━━〔 ❌ 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ No pude obtener el audio.\n' +
+                    '┃\n' +
+                    `┃ ⚠️ ${
+                        error?.message ||
+                        'Error desconocido.'
+                    }\n` +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+            }
         }
-    }
-};
+}; 
