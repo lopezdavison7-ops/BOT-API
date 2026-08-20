@@ -1,7 +1,7 @@
 // ============================================================
 // BOT-API
 // Conexión por código de emparejamiento o QR
-// Sistema de bienvenida com foto de perfil
+// Sistema de bienvenida con foto de perfil
 // ============================================================
 
 import * as baileysNS from 'baileys';
@@ -301,13 +301,14 @@ async function iniciarBot() {
         });
 
         // ============================================================
-        // MENSAJES
+        // MENSAJES (AHORA CON PREFIJO Y LISTA DE COMANDOS)
         // ============================================================
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
-            handleMessage(sock, m);
+            // ✅ Le pasamos el prefijo y la lista de comandos al handler
+            handleMessage(sock, m, '.', []);
         });
 
         if (!state.creds.registered && metodoConexion === '1') {
