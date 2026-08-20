@@ -12,7 +12,7 @@ import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
 
-import { handleMessage } from './handler.js';
+import { crearManejador as handleMessage } from './handler.js'; from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
 
 const baileys = baileysNS.default ?? baileysNS;
