@@ -1,17 +1,8 @@
 // commands/interaction/reaccion.js
-import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
 
-// ============================================================
-// LISTA DE ALIAS
-// ============================================================
-
-const TIPOS = [
-    'hug', 'kiss', 'pat', 'slap', 'poke', 'cuddle',
-    'wave', 'smile', 'dance', 'cry', 'happy', 'angry',
-    'love', 'bite', 'blush', 'highfive', 'handhold',
-    'feed', 'bonk', 'yeet', 'wink', 'stare', 'tickle',
-    'punch', 'kick'
-];
+const ANIME_FILE = path.join(process.cwd(), 'database', 'anime.json');
 
 // ============================================================
 // OBTENER TIPO
@@ -93,17 +84,25 @@ function textoSinObjetivo(tipo, autorTexto) {
 }
 
 // ============================================================
-// OBTENER GIF DESDE API
+// CARGAR JSON Y OBTENER URL
 // ============================================================
 
-async function obtenerGif(tipo) {
-    try {
-        const res = await fetch(`https://api.waifu.pics/sfw/${tipo}`);
-        const data = await res.json();
-        return data.url || null;
-    } catch {
+function cargarAnime() {
+    if (!fs.existsSync(ANIME_FILE)) {
+        throw new Error('El archivo anime.json no existe.');
+    }
+    const contenido = fs.readFileSync(ANIME_FILE, 'utf8');
+    return JSON.parse(contenido);
+}
+
+function obtenerUrl(tipo) {
+    const datos = cargarAnime();
+    const reaccion = datos[tipo];
+    if (!reaccion || !Array.isArray(reaccion.videos) || reaccion.videos.length === 0) {
         return null;
     }
+    const videos = reaccion.videos;
+    return videos[Math.floor(Math.random() * videos.length)];
 }
 
 // ============================================================
@@ -113,7 +112,7 @@ async function obtenerGif(tipo) {
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
-    alias: TIPOS,
+    alias: ['hug', 'kiss', 'pat', 'slap', 'poke', 'cuddle', 'wave', 'smile', 'dance', 'cry', 'happy', 'angry', 'love', 'bite', 'blush', 'highfive', 'handhold', 'feed', 'bonk', 'yeet', 'wink', 'stare', 'tickle', 'punch', 'kick'],
     descripcion: 'Reacciones GIF. Ejemplo: .hug, .kiss, .pat, etc.',
 
     async ejecutar({ sock, msg, responder }) {
@@ -122,9 +121,9 @@ export default {
         try {
             console.log(`[REACCION] Ejecutando: ${tipo}`);
 
-            const url = await obtenerGif(tipo);
+            const url = obtenerUrl(tipo);
             if (!url) {
-                return responder.texto(`❌ No se pudo obtener el GIF para *${tipo}*.`);
+                return responder.texto(`❌ No encontré un GIF para la reacción *${tipo}*.`);
             }
 
             const autor = obtenerAutor(msg);
@@ -166,7 +165,7 @@ export default {
 
         } catch (error) {
             console.error('[REACCION] Error:', error?.message || error);
-            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ Error de conexión con la API.`);
+            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ ${error?.message || 'Error desconocido.'}`);
         }
     }
 };
