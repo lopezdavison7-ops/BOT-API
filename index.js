@@ -12,7 +12,7 @@ import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
 
-import { crearManejador as handleMessage } from './handler.js';
+import { handleMessage, inicializarComandos } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
 
 const baileys = baileysNS.default ?? baileysNS;
@@ -35,6 +35,12 @@ let numeroTelefono = null;
 let ultimoQR = null;
 let intentos = 0;
 let iniciando = false;
+
+// ============================================================
+// VARIABLE GLOBAL PARA EL MAPA DE COMANDOS
+// ============================================================
+
+let mapaComandos = null;
 
 const app = Fastify({ logger: false });
 
@@ -114,7 +120,9 @@ function preguntarNumero() {
             resolve(numero.trim().replace(/\D/g, ''));
         });
     });
-}async function configurarConexion() {
+}
+
+async function configurarConexion() {
     metodoConexion = await preguntarOpcion();
     if (metodoConexion === '1') {
         numeroTelefono = await preguntarNumero();
@@ -168,8 +176,12 @@ async function iniciarBot() {
             console.warn('⚠️ No se pudo obtener la versión de Baileys.');
         }
 
-        const commands = loadCommands();
-        console.log(`📦 Comandos cargados: ${commands.size}`);
+        // ============================================================
+        // CARGAR COMANDOS (NUEVO)
+        // ============================================================
+
+        mapaComandos = await loadCommands();
+        console.log(`📦 Comandos cargados: ${mapaComandos.size}`);
 
         const logger = pino({ level: 'debug' });
         const opciones = {
@@ -194,7 +206,9 @@ async function iniciarBot() {
         if (version) opciones.version = version;
         const sock = makeWASocket(opciones);
 
-        sock.ev.on('creds.update', saveCreds);        sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+        sock.ev.on('creds.update', saveCreds);
+
+        sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
             try {
                 if (action !== 'add' || !Array.isArray(participants) || participants.length === 0) return;
                 let metadata;
@@ -298,6 +312,10 @@ async function iniciarBot() {
                 setTimeout(() => { iniciando = false; iniciarBot(); }, espera);
             }
         });
+
+        // ============================================================
+        // MENSAJES (CORREGIDO)
+        // ============================================================
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
