@@ -9,10 +9,6 @@ const __dirname = path.dirname(__filename);
 const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
-// ============================================================
-// FUNCIONES AUXILIARES
-// ============================================================
-
 function cargarDatosGacha() {
     if (!fs.existsSync(GACHA_DATABASE)) return {};
     try {
@@ -26,23 +22,22 @@ function guardarDatosGacha(data) {
     fs.writeFileSync(GACHA_DATABASE, JSON.stringify(data, null, 2));
 }
 
-// ============================================================
-// COMANDO GACHAADD
-// ============================================================
-
 export default {
     nombre: 'gachaadd',
     categoria: 'Diversión',
     alias: ['addgacha', 'agregar'],
-    descripcion: 'Agrega una foto al gacha respondiendo a un mensaje.',
-    ejecutar: async ({ msg, responder, sock }) => {
+    descripcion: 'Agrega una foto al gacha con nombre, género y precio.',
+    ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             // 1. Verificar que se haya respondido a un mensaje
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             if (!quotedMsg) {
                 await responder.texto(
                     `❌ *GACHAADD*\n\n` +
-                    `Responde a una foto con *.gachaadd* para agregarla al gacha.`
+                    `Responde a una foto con *.gachaadd nombre|género|precio*\n\n` +
+                    `📌 Ejemplo:\n` +
+                    `*.gachaadd Naruto|Masculino|5000*\n\n` +
+                    `💡 Si no pones nada, se asignarán valores automáticos.`
                 );
                 return;
             }
@@ -54,25 +49,28 @@ export default {
                 return;
             }
 
-            // 3. Obtener el buffer de la imagen
-            const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
-            
+            // 3. Obtener el buffer de la imagen (FORMA CORRECTA PARA BAILEYS)
             let buffer;
             try {
                 buffer = await sock.downloadMediaMessage({
                     key: {
                         remoteJid: msg.key.remoteJid,
-                        id: quotedId,
-                        participant: quotedParticipant,
+                        id: msg.message?.extendedTextMessage?.contextInfo?.stanzaId,
+                        participant: msg.message?.extendedTextMessage?.contextInfo?.participant,
                         fromMe: false
                     },
                     message: quotedMsg
                 });
             } catch (err) {
                 console.error('[GACHAADD] Error descargando:', err);
-                await responder.texto('❌ No se pudo descargar la foto del mensaje.');
-                return;
+                
+                // Intentar método alternativo (para algunas versiones de Baileys)
+                try {
+                    buffer = await sock.downloadMediaMessage(msg.message?.extendedTextMessage?.contextInfo?.quotedMessage);
+                } catch (err2) {
+                    await responder.texto('❌ No se pudo descargar la foto. Asegúrate de que sea una imagen válida.');
+                    return;
+                }
             }
 
             if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
@@ -85,28 +83,45 @@ export default {
             const filePath = path.join(GACHA_IMG_DIR, fileName);
             fs.writeFileSync(filePath, buffer);
 
-            // 5. Registrar en gacha.json
+            // 5. Procesar los datos ingresados (nombre, género, precio)
+            let nombre = `Carta ${Date.now()}`;
+            let genero = 'Desconocido';
+            let valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
+
+            const args = String(argumento || '').trim();
+            if (args) {
+                const partes = args.split('|').map(p => p.trim());
+                if (partes.length >= 1 && partes[0]) nombre = partes[0];
+                if (partes.length >= 2 && partes[1]) genero = partes[1];
+                if (partes.length >= 3 && partes[2]) {
+                    const precio = parseInt(partes[2]);
+                    if (!isNaN(precio) && precio > 0) valor = precio;
+                }
+            }
+
+            // 6. Registrar en gacha.json
             const gachaData = cargarDatosGacha();
-            const valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
             gachaData[fileName] = {
-                nombre: `Carta ${Date.now()}`,
-                genero: 'Desconocido',
+                nombre: nombre,
+                genero: genero,
                 serie: 'Manual',
                 valor: valor
             };
             guardarDatosGacha(gachaData);
 
-            // 6. Mensaje de confirmación
+            // 7. Mensaje de confirmación
             const respuesta = `
 ╭〔 ✅ 𝐆𝐀𝐂𝐇𝐀 𝐀𝐆𝐑𝐄𝐆𝐀𝐃Ａ 〕⬣
 ┃
-┃ 📁 Archivo: ${fileName}
+┃ 🖼️ Archivo: ${fileName}
 ┃
-┃ 💾 Guardado en media/gacha/
+┃ 📝 Nombre: ${nombre}
 ┃
-┃ 📝 Registrado en gacha.json
+┃ ⚥ Género: ${genero}
 ┃
-┃ 💴 Valor: ${valor} monedas
+┃ 💴 Precio: ${valor} monedas
+┃
+┃ 💾 Guardado en media/gacha/ y gacha.json
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
