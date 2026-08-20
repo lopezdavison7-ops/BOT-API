@@ -12,10 +12,12 @@ import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
 
-import {
-    cargarComandos,
-    crearManejador
-} from './handler.js';
+// ============================================================
+// NUEVOS IMPORTS PARA LA ESTRUCTURA
+// ============================================================
+
+import { handleMessage } from './handler.js';
+import { loadCommands } from './controllers/cmdManager.js';
 
 // ============================================================
 // BAILEYS
@@ -402,7 +404,6 @@ function preguntarNumero() {
         );
     });
 }
-
 // ============================================================
 // CONFIGURAR CONEXIÓN
 // ============================================================
@@ -618,20 +619,12 @@ async function iniciarBot() {
             );
         }
 
-        const {
-            mapaComandos,
-            listaComandos
-        } =
-            await cargarComandos();
+        // ============================================================
+        // CARGAR COMANDOS (NUEVO)
+        // ============================================================
 
-        console.log(
-            '🧩 Comandos:',
-            listaComandos
-                .map(
-                    c => c.nombre
-                )
-                .join(', ')
-        );
+        const commands = loadCommands();
+        console.log(`📦 Comandos cargados: ${commands.size}`);
 
         const logger =
             pino({
@@ -697,349 +690,352 @@ async function iniciarBot() {
 
         const sock =
             makeWASocket(opciones);
-// ============================================================
-// GUARDAR CREDENCIALES
-// ============================================================
 
-sock.ev.on(
-    'creds.update',
-    saveCreds
-);
+        // ============================================================
+        // GUARDAR CREDENCIALES
+        // ============================================================
 
-// ============================================================
-// BIENVENIDA AL GRUPO
-// ============================================================
+        sock.ev.on(
+            'creds.update',
+            saveCreds
+        );
 
-sock.ev.on(
-    'group-participants.update',
-    async ({ id, participants, action }) => {
+        // ============================================================
+        // BIENVENIDA AL GRUPO
+        // ============================================================
 
-        try {
-
-            // Solo cuando alguien entra
-            if (action !== 'add') {
-                return;
-            }
-
-            if (
-                !Array.isArray(participants) ||
-                participants.length === 0
-            ) {
-                return;
-            }
-
-            // ====================================================
-            // INFORMACIÓN DEL GRUPO
-            // ====================================================
-
-            let metadata;
-
-            try {
-
-                metadata =
-                    await sock.groupMetadata(id);
-
-            } catch (error) {
-
-                console.error(
-                    '[BIENVENIDA] Error obteniendo grupo:',
-                    error?.message || error
-                );
-
-                return;
-            }
-
-            const nombreGrupo =
-                metadata?.subject ||
-                'este grupo';
-
-            // ====================================================
-            // ====================================================
-            // PROCESAR CADA PARTICIPANTE
-            // ====================================================
-
-            for (const participante of participants) {
+        sock.ev.on(
+            'group-participants.update',
+            async ({ id, participants, action }) => {
 
                 try {
 
-                    // ------------------------------------------------
-                    // OBTENER IDENTIFICADOR Y NÚMERO REAL
-                    // ------------------------------------------------
-
-                    const participanteJid =
-                        typeof participante === 'string'
-                            ? participante
-                            : (
-                                participante?.phoneNumber ||
-                                participante?.jid ||
-                                participante?.id ||
-                                participante?.participant ||
-                                ''
-                            );
-
-                    if (!participanteJid) {
-                        console.log(
-                            '[BIENVENIDA] Participante sin JID válido.'
-                        );
-                        continue;
+                    // Solo cuando alguien entra
+                    if (action !== 'add') {
+                        return;
                     }
 
-                    // ------------------------------------------------
-                    // NÚMERO REAL
-                    // ------------------------------------------------
+                    if (
+                        !Array.isArray(participants) ||
+                        participants.length === 0
+                    ) {
+                        return;
+                    }
 
-                    const numeroLimpio =
-                        String(
-                            typeof participante === 'object'
-                                ? (
-                                    participante?.phoneNumber ||
-                                    participante?.jid ||
-                                    participante?.id ||
-                                    ''
-                                )
-                                : participante
-                        )
-                            .split('@')[0]
-                            .split(':')[0]
-                            .replace(/\D/g, '');
+                    // ====================================================
+                    // INFORMACIÓN DEL GRUPO
+                    // ====================================================
 
-                    const numeroMostrar =
-                        numeroLimpio
-                            ? `+${numeroLimpio}`
-                            : 'Usuario';
-
-                    // ------------------------------------------------
-                    // OBTENER NOMBRE REAL
-                    // ------------------------------------------------
-
-                    let nombreUsuario = '';
+                    let metadata;
 
                     try {
 
-                        // Buscar en metadata del grupo
-                        const participanteMetadata =
-                            metadata?.participants?.find(item => {
-
-                                const itemJid =
-                                    typeof item === 'string'
-                                        ? item
-                                        : (
-                                            item?.phoneNumber ||
-                                            item?.jid ||
-                                            item?.id ||
-                                            item?.participant ||
-                                            ''
-                                        );
-
-                                const limpioItem =
-                                    String(itemJid)
-                                        .split('@')[0]
-                                        .split(':')[0];
-
-                                const limpioParticipante =
-                                    String(participanteJid)
-                                        .split('@')[0]
-                                        .split(':')[0];
-
-                                return (
-                                    limpioItem === limpioParticipante
-                                );
-                            });
-
-                        // Buscar contacto usando el JID real
-                        const contactos = [
-                            sock?.store?.contacts?.[participanteJid],
-                            sock?.store?.contacts?.[participante?.id],
-                            sock?.store?.contacts?.[participante?.phoneNumber]
-                        ];
-
-                        const nombres = [
-                            participanteMetadata?.name,
-                            participanteMetadata?.notify,
-                            participanteMetadata?.verifiedName
-                        ];
-
-                        for (const contacto of contactos) {
-
-                            if (!contacto) continue;
-
-                            nombres.push(
-                                contacto.name,
-                                contacto.notify,
-                                contacto.verifiedName
-                            );
-                        }
-
-                        for (const nombre of nombres) {
-
-                            if (
-                                typeof nombre === 'string' &&
-                                nombre.trim() &&
-                                nombre.trim() !== '[object Object]' &&
-                                !/^\+?\d+$/.test(nombre.trim())
-                            ) {
-                                nombreUsuario =
-                                    nombre.trim();
-                                break;
-                            }
-                        }
+                        metadata =
+                            await sock.groupMetadata(id);
 
                     } catch (error) {
 
                         console.error(
-                            '[BIENVENIDA] Error obteniendo nombre:',
+                            '[BIENVENIDA] Error obteniendo grupo:',
                             error?.message || error
                         );
+
+                        return;
                     }
 
-                    // ------------------------------------------------
-                    // RESPALDO: NÚMERO REAL
-                    // ------------------------------------------------
+                    const nombreGrupo =
+                        metadata?.subject ||
+                        'este grupo';
 
-                    if (
-                        !nombreUsuario ||
-                        nombreUsuario === '[object Object]'
-                    ) {
-                        nombreUsuario =
-                            numeroMostrar;
-                    }
+                    // ====================================================
+                    // PROCESAR CADA PARTICIPANTE
+                    // ====================================================
 
-                    // ------------------------------------------------
-                    // LIMITAR NOMBRE
-                    // ------------------------------------------------
-
-                    if (nombreUsuario.length > 35) {
-
-                        nombreUsuario =
-                            nombreUsuario.slice(0, 35) + '…';
-                    }
-
-                    // ------------------------------------------------
-                    // FOTO DE PERFIL
-                    // ------------------------------------------------
-
-                    let fotoPerfil = null;
-
-                    try {
-
-                        fotoPerfil =
-                            await sock.profilePictureUrl(
-                                participanteJid,
-                                'image'
-                            );
-
-                    } catch {
-                        fotoPerfil = null;
-                    }
-
-                    // ------------------------------------------------
-                    // MENSAJE
-                    // ------------------------------------------------
-
-                    const bienvenida =
-                        `╭━━━〔 ✨ *BIENVENIDO/A* 〕━━━╮\n` +
-                        `┃\n` +
-                        `┃ 👤 *${nombreUsuario}*\n` +
-                        `┃\n` +
-                        `┃ 🎉 ¡Bienvenido/a a\n` +
-                        `┃    *${nombreGrupo}*!\n` +
-                        `┃\n` +
-                        `┃ 🤝 Esperamos que disfrutes\n` +
-                        `┃    tu estancia con nosotros.\n` +
-                        `┃\n` +
-                        `┃ 📜 Escribe *.menu* para\n` +
-                        `┃    ver los comandos.\n` +
-                        `┃\n` +
-                        `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-                        `              🤖 *BOT-API*`;
-
-                    // ------------------------------------------------
-                    // ENVIAR CON FOTO
-                    // ------------------------------------------------
-
-                    if (fotoPerfil) {
+                    for (const participante of participants) {
 
                         try {
 
-                            const respuesta =
-                                await fetch(fotoPerfil);
+                            // ------------------------------------------------
+                            // OBTENER IDENTIFICADOR Y NÚMERO REAL
+                            // ------------------------------------------------
 
-                            if (respuesta.ok) {
-
-                                const datos =
-                                    await respuesta.arrayBuffer();
-
-                                const buffer =
-                                    Buffer.from(datos);
-
-                                if (buffer.length > 0) {
-
-                                    await sock.sendMessage(
-                                        id,
-                                        {
-                                            image: buffer,
-                                            caption: bienvenida
-                                        }
+                            const participanteJid =
+                                typeof participante === 'string'
+                                    ? participante
+                                    : (
+                                        participante?.phoneNumber ||
+                                        participante?.jid ||
+                                        participante?.id ||
+                                        participante?.participant ||
+                                        ''
                                     );
 
-                                    continue;
+                            if (!participanteJid) {
+                                console.log(
+                                    '[BIENVENIDA] Participante sin JID válido.'
+                                );
+                                continue;
+                            }
+
+                            // ------------------------------------------------
+                            // NÚMERO REAL
+                            // ------------------------------------------------
+
+                            const numeroLimpio =
+                                String(
+                                    typeof participante === 'object'
+                                        ? (
+                                            participante?.phoneNumber ||
+                                            participante?.jid ||
+                                            participante?.id ||
+                                            ''
+                                        )
+                                        : participante
+                                )
+                                    .split('@')[0]
+                                    .split(':')[0]
+                                    .replace(/\D/g, '');
+
+                            const numeroMostrar =
+                                numeroLimpio
+                                    ? `+${numeroLimpio}`
+                                    : 'Usuario';
+
+                            // ------------------------------------------------
+                            // OBTENER NOMBRE REAL
+                            // ------------------------------------------------
+
+                            let nombreUsuario = '';
+
+                            try {
+
+                                // Buscar en metadata del grupo
+                                const participanteMetadata =
+                                    metadata?.participants?.find(item => {
+
+                                        const itemJid =
+                                            typeof item === 'string'
+                                                ? item
+                                                : (
+                                                    item?.phoneNumber ||
+                                                    item?.jid ||
+                                                    item?.id ||
+                                                    item?.participant ||
+                                                    ''
+                                                );
+
+                                        const limpioItem =
+                                            String(itemJid)
+                                                .split('@')[0]
+                                                .split(':')[0];
+
+                                        const limpioParticipante =
+                                            String(participanteJid)
+                                                .split('@')[0]
+                                                .split(':')[0];
+
+                                        return (
+                                            limpioItem === limpioParticipante
+                                        );
+                                    });
+
+                                // Buscar contacto usando el JID real
+                                const contactos = [
+                                    sock?.store?.contacts?.[participanteJid],
+                                    sock?.store?.contacts?.[participante?.id],
+                                    sock?.store?.contacts?.[participante?.phoneNumber]
+                                ];
+
+                                const nombres = [
+                                    participanteMetadata?.name,
+                                    participanteMetadata?.notify,
+                                    participanteMetadata?.verifiedName
+                                ];
+
+                                for (const contacto of contactos) {
+
+                                    if (!contacto) continue;
+
+                                    nombres.push(
+                                        contacto.name,
+                                        contacto.notify,
+                                        contacto.verifiedName
+                                    );
+                                }
+
+                                for (const nombre of nombres) {
+
+                                    if (
+                                        typeof nombre === 'string' &&
+                                        nombre.trim() &&
+                                        nombre.trim() !== '[object Object]' &&
+                                        !/^\+?\d+$/.test(nombre.trim())
+                                    ) {
+                                        nombreUsuario =
+                                            nombre.trim();
+                                        break;
+                                    }
+                                }
+
+                            } catch (error) {
+
+                                console.error(
+                                    '[BIENVENIDA] Error obteniendo nombre:',
+                                    error?.message || error
+                                );
+                            }
+
+                            // ------------------------------------------------
+                            // RESPALDO: NÚMERO REAL
+                            // ------------------------------------------------
+
+                            if (
+                                !nombreUsuario ||
+                                nombreUsuario === '[object Object]'
+                            ) {
+                                nombreUsuario =
+                                    numeroMostrar;
+                            }
+
+                            // ------------------------------------------------
+                            // LIMITAR NOMBRE
+                            // ------------------------------------------------
+
+                            if (nombreUsuario.length > 35) {
+
+                                nombreUsuario =
+                                    nombreUsuario.slice(0, 35) + '…';
+                            }
+
+                            // ------------------------------------------------
+                            // FOTO DE PERFIL
+                            // ------------------------------------------------
+
+                            let fotoPerfil = null;
+
+                            try {
+
+                                fotoPerfil =
+                                    await sock.profilePictureUrl(
+                                        participanteJid,
+                                        'image'
+                                    );
+
+                            } catch {
+                                fotoPerfil = null;
+                            }
+
+                            // ------------------------------------------------
+                            // MENSAJE
+                            // ------------------------------------------------
+
+                            const bienvenida =
+                                `╭━━━〔 ✨ *BIENVENIDO/A* 〕━━━╮\n` +
+                                `┃\n` +
+                                `┃ 👤 *${nombreUsuario}*\n` +
+                                `┃\n` +
+                                `┃ 🎉 ¡Bienvenido/a a\n` +
+                                `┃    *${nombreGrupo}*!\n` +
+                                `┃\n` +
+                                `┃ 🤝 Esperamos que disfrutes\n` +
+                                `┃    tu estancia con nosotros.\n` +
+                                `┃\n` +
+                                `┃ 📜 Escribe *.menu* para\n` +
+                                `┃    ver los comandos.\n` +
+                                `┃\n` +
+                                `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+                                `              🤖 *BOT-API*`;
+
+                            // ------------------------------------------------
+                            // ENVIAR CON FOTO
+                            // ------------------------------------------------
+
+                            if (fotoPerfil) {
+
+                                try {
+
+                                    const respuesta =
+                                        await fetch(fotoPerfil);
+
+                                    if (respuesta.ok) {
+
+                                        const datos =
+                                            await respuesta.arrayBuffer();
+
+                                        const buffer =
+                                            Buffer.from(datos);
+
+                                        if (buffer.length > 0) {
+
+                                            await sock.sendMessage(
+                                                id,
+                                                {
+                                                    image: buffer,
+                                                    caption: bienvenida
+                                                }
+                                            );
+
+                                            continue;
+                                        }
+                                    }
+
+                                } catch (error) {
+
+                                    console.error(
+                                        '[BIENVENIDA] Error descargando foto:',
+                                        error?.message || error
+                                    );
                                 }
                             }
+
+                            // ------------------------------------------------
+                            // SIN FOTO
+                            // ------------------------------------------------
+
+                            await sock.sendMessage(
+                                id,
+                                {
+                                    text: bienvenida
+                                }
+                            );
 
                         } catch (error) {
 
                             console.error(
-                                '[BIENVENIDA] Error descargando foto:',
+                                '[BIENVENIDA] Error procesando usuario:',
                                 error?.message || error
                             );
                         }
                     }
 
-                    // ------------------------------------------------
-                    // SIN FOTO
-                    // ------------------------------------------------
-
-                    await sock.sendMessage(
-                        id,
-                        {
-                            text: bienvenida
-                        }
-                    );
-
                 } catch (error) {
 
                     console.error(
-                        '[BIENVENIDA] Error procesando usuario:',
+                        '[BIENVENIDA] Error general:',
                         error?.message || error
                     );
                 }
             }
+        );
 
-        } catch (error) {
+        // ============================================================
+        // EVENTO DE CONEXIÓN
+        // ============================================================
 
-            console.error(
-                '[BIENVENIDA] Error general:',
-                error?.message || error
-            );
-        }
-    }
-);
+        sock.ev.on(
+            'connection.update',
+            async update => {
 
-// ============================================================
-// EVENTO DE CONEXIÓN
-// ============================================================
+                const {
+                    connection,
+                    lastDisconnect,
+                    qr
+                } = update;
 
-sock.ev.on(
-    'connection.update',
-    async update => {
+                
+     
 
-        const {
-            connection,
-            lastDisconnect,
-            qr
-        } = update;
-
-        // ====================================================
+       // ====================================================
         // QR
         // ====================================================
 
@@ -1199,11 +1195,12 @@ sock.ev.on(
 
 sock.ev.on(
     'messages.upsert',
-    crearManejador(
-        sock,
-        mapaComandos,
-        listaComandos
-    )
+    async ({ messages }) => {
+        const m = messages[0];
+        if (!m.message || m.key.remoteJid === 'status@broadcast') return;
+        // Usar el nuevo handler
+        handleMessage(sock, m);
+    }
 );
 
 // ============================================================
@@ -1263,6 +1260,362 @@ console.log(
         iniciarBot,
         espera
     );
+}
+
+// ============================================================
+// INICIAR
+// ============================================================
+
+}
+
+iniciarBot();
+        // ============================================================
+        // BIENVENIDA AL GRUPO
+        // ============================================================
+
+        sock.ev.on(
+            'group-participants.update',
+            async ({ id, participants, action }) => {
+
+                try {
+
+                    // Solo cuando alguien entra
+                    if (action !== 'add') {
+                        return;
+                    }
+
+                    if (
+                        !Array.isArray(participants) ||
+                        participants.length === 0
+                    ) {
+                        return;
+                    }
+
+                    // ====================================================
+                    // INFORMACIÓN DEL GRUPO
+                    // ====================================================
+
+                    let metadata;
+
+                    try {
+
+                        metadata =
+                            await sock.groupMetadata(id);
+
+                    } catch (error) {
+
+                        console.error(
+                            '[BIENVENIDA] Error obteniendo grupo:',
+                            error?.message || error
+                        );
+
+                        return;
+                    }
+
+                    const nombreGrupo =
+                        metadata?.subject ||
+                        'este grupo';
+
+                    // ====================================================
+                    // PROCESAR CADA PARTICIPANTE
+                    // ====================================================
+
+                    for (const participante of participants) {
+
+                        try {
+
+                            // ------------------------------------------------
+                            // OBTENER IDENTIFICADOR Y NÚMERO REAL
+                            // ------------------------------------------------
+
+                            const participanteJid =
+                                typeof participante === 'string'
+                                    ? participante
+                                    : (
+                                        participante?.phoneNumber ||
+                                        participante?.jid ||
+                                        participante?.id ||
+                                        participante?.participant ||
+                                        ''
+                                    );
+
+                            if (!participanteJid) {
+                                console.log(
+                                    '[BIENVENIDA] Participante sin JID válido.'
+                                );
+                                continue;
+                            }
+
+                            // ------------------------------------------------
+                            // NÚMERO REAL
+                            // ------------------------------------------------
+
+                            const numeroLimpio =
+                                String(
+                                    typeof participante === 'object'
+                                        ? (
+                                            participante?.phoneNumber ||
+                                            participante?.jid ||
+                                            participante?.id ||
+                                            ''
+                                        )
+                                        : participante
+                                )
+                                    .split('@')[0]
+                                    .split(':')[0]
+                                    .replace(/\D/g, '');
+
+                            const numeroMostrar =
+                                numeroLimpio
+                                    ? `+${numeroLimpio}`
+                                    : 'Usuario';
+
+                            // ------------------------------------------------
+                            // OBTENER NOMBRE REAL
+                            // ------------------------------------------------
+
+                            let nombreUsuario = '';
+
+                            try {
+
+                                // Buscar en metadata del grupo
+                                const participanteMetadata =
+                                    metadata?.participants?.find(item => {
+
+                                        const itemJid =
+                                            typeof item === 'string'
+                                                ? item
+                                                : (
+                                                    item?.phoneNumber ||
+                                                    item?.jid ||
+                                                    item?.id ||
+                                                    item?.participant ||
+                                                    ''
+                                                );
+
+                                        const limpioItem =
+                                            String(itemJid)
+                                                .split('@')[0]
+                                                .split(':')[0];
+
+                                        const limpioParticipante =
+                                            String(participanteJid)
+                                                .split('@')[0]
+                                                .split(':')[0];
+
+                                        return (
+                                            limpioItem === limpioParticipante
+                                        );
+                                    });
+
+                                // Buscar contacto usando el JID real
+                                const contactos = [
+                                    sock?.store?.contacts?.[participanteJid],
+                                    sock?.store?.contacts?.[participante?.id],
+                                    sock?.store?.contacts?.[participante?.phoneNumber]
+                                ];
+
+                                const nombres = [
+                                    participanteMetadata?.name,
+                                    participanteMetadata?.notify,
+                                    participanteMetadata?.verifiedName
+                                ];
+
+                                for (const contacto of contactos) {
+
+                                    if (!contacto) continue;
+
+                                    nombres.push(
+                                        contacto.name,
+                                        contacto.notify,
+                                        contacto.verifiedName
+                                    );
+                                }
+
+                                for (const nombre of nombres) {
+
+                                    if (
+                                        typeof nombre === 'string' &&
+                                        nombre.trim() &&
+                                        nombre.trim() !== '[object Object]' &&
+                                        !/^\+?\d+$/.test(nombre.trim())
+                                    ) {
+                                        nombreUsuario =
+                                            nombre.trim();
+                                        break;
+                                    }
+                                }
+
+                            } catch (error) {
+
+                                console.error(
+                                    '[BIENVENIDA] Error obteniendo nombre:',
+                                    error?.message || error
+                                );
+                            }
+
+                            // ------------------------------------------------
+                            // RESPALDO: NÚMERO REAL
+                            // ------------------------------------------------
+
+                            if (
+                                !nombreUsuario ||
+                                nombreUsuario === '[object Object]'
+                            ) {
+                                nombreUsuario =
+                                    numeroMostrar;
+                            }
+
+                            // ------------------------------------------------
+                            // LIMITAR NOMBRE
+                            // ------------------------------------------------
+
+                            if (nombreUsuario.length > 35) {
+
+                                nombreUsuario =
+                                    nombreUsuario.slice(0, 35) + '…';
+                            }
+
+                            // ------------------------------------------------
+                            // FOTO DE PERFIL
+                            // ------------------------------------------------
+
+                            let fotoPerfil = null;
+
+                            try {
+
+                                fotoPerfil =
+                                    await sock.profilePictureUrl(
+                                        participanteJid,
+                                        'image'
+                                    );
+
+                            } catch {
+                                fotoPerfil = null;
+                            }
+
+                            // ------------------------------------------------
+                            // MENSAJE
+                            // ------------------------------------------------
+
+                            const bienvenida =
+                                `╭━━━〔 ✨ *BIENVENIDO/A* 〕━━━╮\n` +
+                                `┃\n` +
+                                `┃ 👤 *${nombreUsuario}*\n` +
+                                `┃\n` +
+                                `┃ 🎉 ¡Bienvenido/a a\n` +
+                                `┃    *${nombreGrupo}*!\n` +
+                                `┃\n` +
+                                `┃ 🤝 Esperamos que disfrutes\n` +
+                                `┃    tu estancia con nosotros.\n` +
+                                `┃\n` +
+                                `┃ 📜 Escribe *.menu* para\n` +
+                                `┃    ver los comandos.\n` +
+                                `┃\n` +
+                                `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+                                `              🤖 *BOT-API*`;
+
+                            // ------------------------------------------------
+                            // ENVIAR CON FOTO
+                            // ------------------------------------------------
+
+                            if (fotoPerfil) {
+
+                                try {
+
+                                    const respuesta =
+                                        await fetch(fotoPerfil);
+
+                                    if (respuesta.ok) {
+
+                                        const datos =
+                                            await respuesta.arrayBuffer();
+
+                                        const buffer =
+                                            Buffer.from(datos);
+
+                                        if (buffer.length > 0) {
+
+                                            await sock.sendMessage(
+                                                id,
+                                                {
+                                                    image: buffer,
+                                                    caption: bienvenida
+                                                }
+                                            );
+
+                                            continue;
+                                        }
+                                    }
+
+                                } catch (error) {
+
+                                    console.error(
+                                        '[BIENVENIDA] Error descargando foto:',
+                                        error?.message || error
+                                    );
+                                }
+                            }
+
+                            // ------------------------------------------------
+                            // SIN FOTO
+                            // ------------------------------------------------
+
+                            await sock.sendMessage(
+                                id,
+                                {
+                                    text: bienvenida
+                                }
+                            );
+
+                        } catch (error) {
+
+                            console.error(
+                                '[BIENVENIDA] Error procesando usuario:',
+                                error?.message || error
+                            );
+                        }
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '[BIENVENIDA] Error general:',
+                        error?.message || error
+                    );
+                }
+            }
+        );
+
+    } catch (error) {
+
+        iniciando = false;
+
+        console.error(
+            '\n❌ Error iniciando BOT-API:'
+        );
+
+        console.error(
+            error?.message || error
+        );
+
+        intentos++;
+
+        const espera =
+            Math.min(
+                5000 * intentos,
+                60000
+            );
+
+        console.log(
+            `🔄 Reintentando en ${espera / 1000}s...`
+        );
+
+        setTimeout(
+            iniciarBot,
+            espera
+        );
+    }
 }
 
 // ============================================================
