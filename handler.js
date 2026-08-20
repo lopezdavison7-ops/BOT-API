@@ -1,3 +1,4 @@
+// handler.js
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -5,50 +6,27 @@ import { crearRespondedor } from './lib/responder.js';
 import { registrarUso } from './lib/estadisticas.js';
 import { esOwner } from './lib/owner.js';
 
+// ============================================================
+// NUEVO IMPORT: Cargador recursivo
+// ============================================================
+
+import { loadCommands } from './controllers/cmdManager.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PREFIJO = '.';
 
 // ============================================================
-// CARGAR COMANDOS
+// CARGAR COMANDOS (Usa el nuevo sistema)
 // ============================================================
 
 export async function cargarComandos() {
-    const carpeta = path.join(__dirname, 'commands');
-
-    const archivos = fs
-        .readdirSync(carpeta)
-        .filter(f => f.endsWith('.js'));
-
-    const mapaComandos = new Map();
-    const listaComandos = [];
-
-    for (const archivo of archivos) {
-        try {
-            const modulo = await import(`./commands/${archivo}`);
-            const cmd = modulo.default;
-
-            if (!cmd || !cmd.nombre || typeof cmd.ejecutar !== 'function') {
-                console.warn(
-                    `⚠️ Comando ignorado: ${archivo} (formato inválido)`
-                );
-                continue;
-            }
-
-            mapaComandos.set(cmd.nombre.toLowerCase(), cmd);
-
-            for (const alias of cmd.alias || []) {
-                mapaComandos.set(alias.toLowerCase(), cmd);
-            }
-
-            listaComandos.push(cmd);
-
-        } catch (error) {
-            console.error(
-                `❌ No se pudo cargar ${archivo}:`,
-                error.message
-            );
-        }
-    }
+    // Simplemente llamamos al nuevo cargador recursivo
+    const commands = loadCommands();
+    
+    // Convertir el Map a arrays para mantener compatibilidad
+    const mapaComandos = commands;
+    const listaComandos = Array.from(commands.values())
+        .filter((v, i, self) => self.indexOf(v) === i); // Eliminar duplicados por alias
 
     return {
         mapaComandos,
