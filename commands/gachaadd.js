@@ -2,12 +2,17 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
+
+// ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
 
 function cargarDatosGacha() {
     if (!fs.existsSync(GACHA_DATABASE)) return {};
@@ -21,6 +26,37 @@ function cargarDatosGacha() {
 function guardarDatosGacha(data) {
     fs.writeFileSync(GACHA_DATABASE, JSON.stringify(data, null, 2));
 }
+
+// ============================================================
+// FUNCIÓN PARA DESCARGAR LA IMAGEN (INFALIBLE)
+// ============================================================
+
+async function descargarImagen(quotedMsg) {
+    try {
+        if (!quotedMsg?.imageMessage) return null;
+
+        // Obtener el stream de la imagen
+        const stream = await downloadContentFromMessage(quotedMsg.imageMessage, 'image');
+        if (!stream) return null;
+
+        // Convertir stream a buffer
+        const chunks = [];
+        for await (const chunk of stream) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+        
+        if (!buffer || buffer.length === 0) return null;
+        return buffer;
+    } catch (error) {
+        console.error('[GACHAADD] Error descargando imagen:', error);
+        return null;
+    }
+}
+
+// ============================================================
+// COMANDO GACHAADD
+// ============================================================
 
 export default {
     nombre: 'gachaadd',
@@ -49,32 +85,10 @@ export default {
                 return;
             }
 
-            // 3. Obtener el buffer de la imagen (FORMA CORRECTA PARA BAILEYS)
-            let buffer;
-            try {
-                buffer = await sock.downloadMediaMessage({
-                    key: {
-                        remoteJid: msg.key.remoteJid,
-                        id: msg.message?.extendedTextMessage?.contextInfo?.stanzaId,
-                        participant: msg.message?.extendedTextMessage?.contextInfo?.participant,
-                        fromMe: false
-                    },
-                    message: quotedMsg
-                });
-            } catch (err) {
-                console.error('[GACHAADD] Error descargando:', err);
-                
-                // Intentar método alternativo (para algunas versiones de Baileys)
-                try {
-                    buffer = await sock.downloadMediaMessage(msg.message?.extendedTextMessage?.contextInfo?.quotedMessage);
-                } catch (err2) {
-                    await responder.texto('❌ No se pudo descargar la foto. Asegúrate de que sea una imagen válida.');
-                    return;
-                }
-            }
-
-            if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-                await responder.texto('❌ La imagen está vacía o es inválida.');
+            // 3. Descargar la imagen usando el método infalible
+            const buffer = await descargarImagen(quotedMsg);
+            if (!buffer) {
+                await responder.texto('❌ No se pudo descargar la foto. Asegúrate de que sea una imagen válida.');
                 return;
             }
 
