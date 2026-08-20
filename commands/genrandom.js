@@ -11,41 +11,26 @@ const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
 // ============================================================
-// LISTA DE ANIMES + PERSONAJES (CON TAGS REALES DE KONACHAN)
+// LISTA DE PERSONAJES REALES DE KONACHAN (¡CON TAGS QUE SÍ EXISTEN!)
 // ============================================================
 
-const ANIME_CHARACTERS = {
-    // Naruto
-    'naruto': ['naruto', 'sasuke', 'sakura', 'kakashi', 'itachi'],
-    // Bleach
-    'bleach': ['ichigo', 'rukia', 'renji', 'byakuya', 'hitsugaya'],
-    // One Piece
-    'one_piece': ['luffy', 'zoro', 'nami', 'sanji', 'robin'],
-    // SAO
-    'sword_art_online': ['kirito', 'asuna', 'yuuki', 'konno'],
-    // Clannad
-    'clannad': ['nagisa', 'tomoyo', 'kotomi', 'kyou', 'fuko'],
-    // My Hero Academia
-    'my_hero_academia': ['midoriya', 'bakuho', 'todoroki', 'uraraka', 'ochaco'],
-    // Demon Slayer
-    'demon_slayer': ['tanjiro', 'nezuko', 'zenitsu', 'inosuke', 'shinobu'],
-    // Jujutsu Kaisen
-    'jujutsu_kaisen': ['itadori', 'megumi', 'nobara', 'gojo', 'sukuna'],
-    // Fullmetal Alchemist
-    'fullmetal_alchemist': ['edward', 'alphonse', 'winry', 'mustang', 'mei'],
-    // Tokyo Ghoul
-    'tokyo_ghoul': ['kaneki', 'touka', 'suzuya', 'arima', 'kagune'],
-    // Code Geass
-    'code_geass': ['lelouch', 'cc', 'suzaku', 'kallen', 'c_c'],
-    // Steins;Gate
-    'steins_gate': ['okabe', 'kurisu', 'mayuri', 'daru', 'akiba'],
-    // K-On!
-    'k_on': ['yui', 'azusa', 'mio', 'tsumugi', 'ritsu'],
-    // Toradora!
-    'toradora': ['taiga', 'ryuuji', 'minori', 'haruta', 'kiryu'],
-    // Fate/stay night
-    'fate_stay_night': ['saber', 'rin', 'shirou', 'sakura', 'gilgamesh'],
-};
+const CHARACTER_TAGS = [
+    'naruto', 'sasuke', 'sakura', 'kakashi', 'itachi',
+    'ichigo', 'rukia', 'renji', 'byakuya', 'hitsugaya',
+    'luffy', 'zoro', 'nami', 'sanji', 'robin',
+    'kirito', 'asuna', 'yuuki', 'konno',
+    'nagisa', 'tomoyo', 'kotomi', 'kyou', 'fuko',
+    'midoriya', 'bakuho', 'todoroki', 'uraraka', 'ochaco',
+    'tanjiro', 'nezuko', 'zenitsu', 'inosuke', 'shinobu',
+    'itadori', 'megumi', 'nobara', 'gojo', 'sukuna',
+    'edward', 'alphonse', 'winry', 'mustang', 'mei',
+    'kaneki', 'touka', 'suzuya', 'arima', 'kagune',
+    'lelouch', 'cc', 'suzaku', 'kallen', 'c_c',
+    'okabe', 'kurisu', 'mayuri', 'daru', 'akiba',
+    'yui', 'azusa', 'mio', 'tsumugi', 'ritsu',
+    'taiga', 'ryuuji', 'minori', 'haruta', 'kiryu',
+    'saber', 'rin', 'shirou', 'sakura', 'gilgamesh'
+];
 
 // ============================================================
 // FUNCIONES AUXILIARES
@@ -71,34 +56,11 @@ function tagToName(tag) {
 }
 
 // ============================================================
-// VERIFICAR SI UN TAG EXISTE EN KONACHAN
+// DESCARGAR PERSONAJE Y AGREGAR AL GACHA
 // ============================================================
 
-async function verificarTag(tag) {
+async function descargarPersonaje(charTag) {
     try {
-        const url = `https://konachan.net/tag.json?name=${encodeURIComponent(tag)}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-        if (!res.ok) return false;
-        const data = await res.json();
-        return Array.isArray(data) && data.length > 0 && data[0].count > 0;
-    } catch {
-        return false;
-    }
-}
-
-// ============================================================
-// DESCARGAR IMÁGENES DE UN PERSONAJE
-// ============================================================
-
-async function descargarPersonaje(charTag, seriesName) {
-    try {
-        // Verificar si el tag existe
-        const existe = await verificarTag(charTag);
-        if (!existe) {
-            console.log(`[GENRANDOM] Tag ${charTag} no existe en Konachan.`);
-            return 0;
-        }
-
         const url = `https://konachan.net/post.json?limit=2&tags=${encodeURIComponent(charTag)}+rating:safe&order:random`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) return 0;
@@ -121,7 +83,7 @@ async function descargarPersonaje(charTag, seriesName) {
                 gachaData[nombreArchivo] = {
                     nombre: tagToName(charTag),
                     genero: 'Desconocido',
-                    serie: seriesName,
+                    serie: 'Konachan Random',
                     valor: valor
                 };
                 agregadas++;
@@ -136,14 +98,14 @@ async function descargarPersonaje(charTag, seriesName) {
 }
 
 // ============================================================
-// COMANDO GENRANDOM
+// COMANDO GENRANDOM (EL DEFINITIVO)
 // ============================================================
 
 export default {
     nombre: 'genrandom',
     categoria: 'Diversión',
     alias: ['genchar', 'gr'],
-    descripcion: 'Genera 5 series al azar y agrega personajes al gacha.',
+    descripcion: 'Descarga personajes aleatorios desde Konachan.',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const ctx = {
@@ -158,68 +120,46 @@ export default {
             if (cmd === 'genrandom' || cmd === 'random') {
                 await ctx.reply(
                     `╭〔 🎲 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                    `┃ Buscando 5 animes al azar...\n` +
+                    `┃ Buscando personajes aleatorios...\n` +
                     `┃\n` +
-                    `┃ > konachan.net — Esto tardará varios minutos.\n` +
+                    `┃ > konachan.net — Esto tardará unos segundos.\n` +
                     `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                     `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
                 );
 
-                const keys = Object.keys(ANIME_CHARACTERS);
-                const shuffled = keys.sort(() => Math.random() - 0.5);
-                const selectedAnimes = shuffled.slice(0, 5);
+                // Seleccionar 5 personajes aleatorios de la lista
+                const shuffled = [...CHARACTER_TAGS].sort(() => Math.random() - 0.5);
+                const selected = shuffled.slice(0, 5);
 
                 let totalAgregados = 0;
                 let totalSaltados = 0;
                 let resultados = [];
 
-                for (let i = 0; i < selectedAnimes.length; i++) {
-                    const animeKey = selectedAnimes[i];
-                    const seriesName = tagToName(animeKey);
-                    const characters = ANIME_CHARACTERS[animeKey];
+                for (let i = 0; i < selected.length; i++) {
+                    const charTag = selected[i];
 
                     await ctx.reply(
                         `╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                        `┃ [${i + 1}/${selectedAnimes.length}] Procesando: ${seriesName}\n` +
+                        `┃ [${i + 1}/${selected.length}] Procesando: ${tagToName(charTag)}\n` +
                         `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                         `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
                     );
 
-                    let animesAgregados = 0;
-                    let animesSaltados = 0;
-
-                    for (const charTag of characters) {
-                        const result = await descargarPersonaje(charTag, seriesName);
-                        if (result > 0) {
-                            animesAgregados += result;
-                            totalAgregados += result;
-                        } else {
-                            animesSaltados++;
-                            totalSaltados++;
-                        }
-                        await sleep(500);
-                    }
-
-                    resultados.push({
-                        seriesName: seriesName,
-                        agregados: animesAgregados,
-                        saltados: animesSaltados
-                    });
-                }
-
-                let resumen = '';
-                resultados.forEach(r => {
-                    if (r.agregados > 0) {
-                        resumen += `┃ ✅ *${r.seriesName}* — ${r.agregados} nuevos, ${r.saltados} saltados\n`;
+                    const result = await descargarPersonaje(charTag);
+                    if (result > 0) {
+                        totalAgregados += result;
+                        resultados.push(`┃ ✅ *${tagToName(charTag)}* — +${result} nuevas`);
                     } else {
-                        resumen += `┃ ❌ *${r.seriesName}* — omitida (0 encontrados)\n`;
+                        totalSaltados++;
+                        resultados.push(`┃ ❌ *${tagToName(charTag)}* — omitida`);
                     }
-                });
+                    await sleep(800);
+                }
 
                 await ctx.reply(
                     `╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣\n` +
                     `┃\n` +
-                    `${resumen}` +
+                    `${resultados.join('\n')}\n` +
                     `┃\n` +
                     `┃ 👥 Total agregados: *${totalAgregados}* — ⏭️ Total saltados: *${totalSaltados}*\n` +
                     `╰━━━━━━━━━━━━━━━━⬣\n\n` +
