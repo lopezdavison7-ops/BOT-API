@@ -53,7 +53,7 @@ function tagToName(tag) {
 }
 
 // ============================================================
-// MOTOR DE SCRAPING DE KONACHAN (COPY PASTE DE TU AMIGO)
+// MOTOR DE SCRAPING DE KONACHAN (CON FILTRO BAJADO A 30%)
 // ============================================================
 
 async function fetchAllPosts(seriesTag, extraTags = [], pages = 3) {
@@ -146,7 +146,8 @@ async function filterCharacterTags(tagNames, seriesTag) {
                 if (valid.length === 0) return;
 
                 const seriesMatch = valid.filter((p) => p.tags?.includes(seriesTag)).length;
-                if (seriesMatch / valid.length >= 0.6) characters.push(tag);
+                // 🔥 FILTRO BAJADO A 30% (antes era 0.6)
+                if (seriesMatch / valid.length >= 0.3) characters.push(tag);
             } catch {
                 /* ignorar */
             }
@@ -258,7 +259,7 @@ async function runGeneration(ctx, seriesTag, extraTags = [], pages = 3) {
 }
 
 // ============================================================
-// COMANDO GENRANDOM (CON LA LÓGICA DE TU AMIGO)
+// COMANDO GENRANDOM (CON FILTRO BAJADO A 30%)
 // ============================================================
 
 export default {
@@ -291,7 +292,6 @@ export default {
                 try { seriesTags = await fetchRandomSeriesTags(5); } catch { /* ignorar */ }
 
                 if (seriesTags.length === 0) {
-                    // Fallback: usar anime list manual
                     const shuffled = [...ANIME_LIST].sort(() => Math.random() - 0.5);
                     seriesTags = shuffled.slice(0, 5).map(s => s.toLowerCase().replace(/\s/g, '_'));
                 }
