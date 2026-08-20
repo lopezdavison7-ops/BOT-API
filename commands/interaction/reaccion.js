@@ -3,12 +3,7 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 
-const execFileAsync = promisify(execFile);
-
-// Lista de reacciones
 const REACCIONES = {
     hug: ['https://media.tenor.com/_T1L0wQ0jWwAAAAC/anime-hug.gif'],
     kiss: ['https://media.tenor.com/Gf4G9Xj0x7YAAAAC/anime-kiss.gif'],
@@ -101,77 +96,21 @@ function textoSinObjetivo(t, a) {
     return m[t] || `${a} quiere hacer muchas reacciones 🎭`;
 }
 
-// ============================================================
-// CONVERTIR GIF A STICKER ANIMADO (USANDO FFMPEG)
-// ============================================================
-
-async function crearStickerAnimado(buffer) {
-    const carpeta = await fs.promises.mkdtemp(
-        path.join(os.tmpdir(), 'reaccion-sticker-')
-    );
-    const entrada = path.join(carpeta, 'entrada.gif');
-    const salida = path.join(carpeta, 'sticker.webp');
-
-    try {
-        await fs.promises.writeFile(entrada, buffer);
-
-        const filtro = [
-            'scale=384:384:force_original_aspect_ratio=decrease',
-            'pad=384:384:(ow-iw)/2:(oh-ih)/2:color=black@0',
-            'fps=10',
-            'format=yuva420p'
-        ].join(',');
-
-        await execFileAsync(
-            'ffmpeg',
-            [
-                '-y',
-                '-i',
-                entrada,
-                '-vf',
-                filtro,
-                '-an',
-                '-c:v',
-                'libwebp',
-                '-lossless',
-                '0',
-                '-q:v',
-                '75',
-                '-compression_level',
-                '6',
-                salida
-            ],
-            { maxBuffer: 20 * 1024 * 1024 }
-        );
-
-        const resultado = await fs.promises.readFile(salida);
-        if (!resultado.length) throw new Error('Sticker vacío.');
-        return resultado;
-
-    } finally {
-        await fs.promises.rm(carpeta, { recursive: true, force: true }).catch(() => {});
-    }
-}
-
-// ============================================================
-// DESCARGAR GIF
-// ============================================================
-
 async function descargarGif(url) {
     const res = await fetch(url);
     const buffer = await res.buffer();
-    return buffer;
+    const tempDir = os.tmpdir();
+    const fileName = `reaccion_${Date.now()}.gif`;
+    const filePath = path.join(tempDir, fileName);
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
 }
-
-// ============================================================
-// COMANDO PRINCIPAL
-// ============================================================
 
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: ['hug', 'kiss', 'pat', 'slap', 'poke', 'cuddle', 'wave', 'smile', 'dance', 'cry', 'happy', 'angry', 'love', 'bite', 'blush', 'highfive', 'handhold', 'feed', 'bonk', 'yeet', 'wink', 'stare', 'tickle', 'punch', 'kick'],
-    descripcion: 'Reacciones con stickers animados.',
+    descripcion: 'Envía un GIF de reacción.',
 
     async ejecutar({ sock, msg, responder }) {
         const tipo = obtenerTipo(msg);
@@ -184,11 +123,8 @@ export default {
 
             const url = urls[Math.floor(Math.random() * urls.length)];
 
-            // Descargar el GIF como buffer
-            const buffer = await descargarGif(url);
-
-            // Convertirlo a sticker animado WebP
-            const stickerBuffer = await crearStickerAnimado(buffer);
+            // Descargar y guardar localmente
+            const filePath = await descargarGif(url);
 
             // Obtener autor y objetivo
             const autor = obtenerAutor(msg);
@@ -216,20 +152,25 @@ export default {
                 if (autor) menciones.push(autor);
             }
 
-            // Enviar el sticker animado
+            // Leer el archivo y enviarlo como video con gifPlayback
+            const fileBuffer = fs.readFileSync(filePath);
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    sticker: stickerBuffer,
-                    packname: 'BOT-API',
-                    author: 'Reacciones'
+                    video: fileBuffer,
+                    gifPlayback: true,
+                    caption,
+                    mentions: menciones
                 },
                 { quoted: msg }
             );
 
+            // Limpiar el archivo temporal
+            fs.unlinkSync(filePath);
+
         } catch (error) {
             console.error('[REACCION] Error:', error?.message || error);
-            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ Error al procesar el sticker.`);
+            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ ${error?.message || 'Error desconocido'}`);
         }
     }
 };
