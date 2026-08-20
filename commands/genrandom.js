@@ -10,10 +10,6 @@ const __dirname = path.dirname(__filename);
 const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
-// ============================================================
-// LISTA DE ANIMES POPULARES (Seed)
-// ============================================================
-
 const ANIME_LIST = [
     'Naruto', 'Bleach', 'One Piece', 'Fate/stay night', 'Fate/Zero',
     'K-On!', 'K-On!!', 'Clannad', 'Clannad After Story', 'Angel Beats!',
@@ -24,10 +20,6 @@ const ANIME_LIST = [
     'Fullmetal Alchemist', 'Code Geass', 'Death Note', 'One Punch Man',
     'Jujutsu Kaisen', 'Demon Slayer', 'My Hero Academia', 'Steins;Gate'
 ];
-
-// ============================================================
-// FUNCIONES AUXILIARES
-// ============================================================
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -52,183 +44,48 @@ function tagToName(tag) {
     return tag.replace(/\(.*?\)$/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim();
 }
 
-// ============================================================
-// MOTOR DE SCRAPING DE KONACHAN
-// ============================================================
-
-async function fetchAllPosts(seriesTag, extraTags = [], pages = 5) {
+async function fetchAllPosts(seriesTag, extraTags = [], pages = 3) {
     const baseTags = [seriesTag, ...extraTags].join(' ');
     const allPosts = [];
     const BANNED = /(loli|shota|child|toddler|infant)/;
+    const MAX_RETRIES = 2;
 
     for (let page = 1; page <= pages; page++) {
         const url = `https://konachan.net/post.json?tags=${encodeURIComponent(baseTags)}&limit=100&page=${page}`;
-        try {
-            const res = await fetch(url, {
-                signal: AbortSignal.timeout(10_000),
-                headers: { 'User-Agent': 'konachan-scraper/1.0' },
-            });
-            if (!res.ok) break;
-            const posts = await res.json();
-            if (!Array.isArray(posts) || posts.length === 0) break;
+        let exito = false;
 
-            const filtered = posts.filter((p) => {
-                const tags = (p.tags || '').toLowerCase();
-                return !BANNED.test(tags) && p.rating !== 'e';
-            });
+        for (let intento = 0; intento < MAX_RETRIES; intento++) {
+            try {
+                const res = await fetch(url, {
+                    signal: AbortSignal.timeout(8_000),
+                    headers: { 'User-Agent': 'konachan-scraper/1.0' },
+                });
+                if (!res.ok) continue;
+                const posts = await res.json();
+                if (!Array.isArray(posts) || posts.length === 0) continue;
 
-            allPosts.push(...filtered);
-            if (posts.length < 100) break;
-            await sleep(800);
-        } catch {
-            break;
+                const filtered = posts.filter((p) => {
+                    const tags = (p.tags || '').toLowerCase();
+                    return !BANNED.test(tags) && p.rating !== 'e';
+                });
+
+                allPosts.push(...filtered);
+                exito = true;
+                if (posts.length < 100) return allPosts;
+                break;
+            } catch {
+                await sleep(600);
+            }
         }
+        if (!exito) break;
+        await sleep(800);
     }
     return allPosts;
 }
 
-function collectTagFrequencies(posts, seriesTag) {
-    const SKIP = new Set([
-        seriesTag, 'highres', 'absurdres', 'jpeg_artifacts', 'scan', 'dakimakura',
-        '1girl', '2girls', '3girls', '4girls', 'multiple_girls', 'solo',
-        '1boy', '2boys', 'multiple_boys',
-        'swimsuits', 'thighhighs', 'bikini', 'wet', 'pantsu', 'nipples',
-        'dress', 'see_through', 'animal_ears', 'ass', 'skirt_lift', 'open_shirt',
-        'bra', 'tail', 'breasts', 'cleavage', 'panties', 'navel', 'blush',
-        'long_hair', 'short_hair', 'blonde_hair', 'twintails', 'brown_hair',
-        'black_hair', 'white_hair', 'red_hair', 'blue_hair', 'green_hair',
-        'no_bra', 'megane', 'horns', 'stockings', 'pantyhose',
-        'weapon', 'cosplay', 'bunny_ears', 'feet', 'lingerie', 'bunny_girl',
-        'leotard', 'sword', 'armor', 'torn_clothes', 'seifuku', 'wings',
-        'shirt_lift', 'wedding_dress', 'gym_uniform', 'maid', 'towel',
-        'naked_apron', 'yukata', 'uniform', 'pajama', 'underboob', 'shimapan',
-        'vector_trace', 'wallpaper', 'transparent_png', 'monochrome',
-        'crossover', 'tagme', 'fixme', 'crease', 'onsen', 'yuri',
-        'nude', 'naked', 'topless', 'uncensored', 'censored',
-        'pussy', 'penis', 'cum', 'sex', 'fellatio', 'paizuri', 'masturbation',
-        'fingering', 'anus', 'bottomless', 'pussy_juice', 'pubic_hair',
-        'areolae', 'erect_nipples', 'panty_pull', 'breast_grab', 'breast_hold',
-    ]);
-
-    const freq = {};
-    for (const post of posts) {
-        const tagStr = typeof post.tags === 'string' ? post.tags : '';
-        for (const t of tagStr.split(/\s+/).filter(Boolean)) {
-            if (SKIP.has(t)) continue;
-            freq[t] = (freq[t] || 0) + 1;
-        }
-    }
-    return freq;
-}
-
-async function filterCharacterTags(tagNames, seriesTag) {
-    const characters = [];
-    const CONCURRENCY = 2;
-
-    for (let i = 0; i < tagNames.length; i += CONCURRENCY) {
-        const batch = tagNames.slice(i, i + CONCURRENCY);
-        await Promise.all(batch.map(async (tag) => {
-            try {
-                const tagRes = await fetch(
-                    `https://konachan.net/tag.json?name=${encodeURIComponent(tag)}`,
-                    { signal: AbortSignal.timeout(8_000), headers: { 'User-Agent': 'konachan-scraper/1.0' } },
-                );
-                if (!tagRes.ok) return;
-                const tagData = await tagRes.json();
-                const info = Array.isArray(tagData) ? tagData.find((t) => t.name === tag) : null;
-                if (!info || info.type !== 4) return;
-
-                const checkRes = await fetch(
-                    `https://konachan.net/post.json?tags=${encodeURIComponent(tag)}&limit=100`,
-                    { signal: AbortSignal.timeout(8_000), headers: { 'User-Agent': 'konachan-scraper/1.0' } },
-                );
-                if (!checkRes.ok) return;
-                const checkPosts = await checkRes.json();
-                if (!Array.isArray(checkPosts) || checkPosts.length === 0) return;
-
-                const valid = checkPosts.filter((p) => (p.sample_url || p.file_url) && !p.tags?.includes('corrupt_file'));
-                if (valid.length === 0) return;
-
-                const seriesMatch = valid.filter((p) => p.tags?.includes(seriesTag)).length;
-                if (seriesMatch / valid.length >= 0.6) characters.push(tag);
-            } catch {
-                /* ignorar */
-            }
-        }));
-        await sleep(1200);
-    }
-    return characters;
-}
-
-function getGenderFromPosts(charTag, posts) {
-    if (charTag.includes('_(male)')) return 'Masculino';
-    if (charTag.includes('_(female)')) return 'Femenino';
-
-    const FEMALE = new Set(['1girl', '2girls', 'multiple_girls', 'female']);
-    const MALE = new Set(['1boy', '2boys', 'multiple_boys', 'male', 'shouta']);
-
-    let maleScore = 0, femaleScore = 0;
-    for (const post of posts) {
-        if (!post.tags?.includes(charTag)) continue;
-        const tags = post.tags.split(/\s+/);
-        const isSolo = tags.includes('solo');
-        const hasMale = tags.some((t) => MALE.has(t));
-        const hasFemale = tags.some((t) => FEMALE.has(t));
-        const weight = isSolo ? 10 : 1;
-        if (hasMale && !hasFemale) maleScore += weight;
-        else if (hasFemale && !hasMale) femaleScore += weight;
-    }
-    return maleScore > femaleScore ? 'Masculino' : 'Femenino';
-}
-
-async function fetchRandomSeriesTags(cantidad = 5) {
-    const MAX_PAGE = 15;
-    const MIN_COUNT = 30;
-    const pool = new Map();
-
-    const pageSet = new Set();
-    while (pageSet.size < 3) pageSet.add(Math.floor(Math.random() * MAX_PAGE) + 1);
-
-    for (const page of pageSet) {
-        try {
-            const res = await fetch(
-                `https://konachan.net/tag.json?type=3&order=count&limit=100&page=${page}`,
-                { signal: AbortSignal.timeout(8_000), headers: { 'User-Agent': 'konachan-scraper/1.0' } },
-            );
-            if (!res.ok) continue;
-            const tags = await res.json();
-            if (!Array.isArray(tags)) continue;
-            for (const t of tags) {
-                if (t.count >= MIN_COUNT) pool.set(t.name, true);
-            }
-        } catch {
-            /* ignorar */
-        }
-        await sleep(400);
-    }
-
-    if (pool.size === 0) {
-        try {
-            const res = await fetch(
-                'https://konachan.net/tag.json?type=3&order=count&limit=100&page=1',
-                { signal: AbortSignal.timeout(8_000), headers: { 'User-Agent': 'konachan-scraper/1.0' } },
-            );
-            const tags = await res.json();
-            for (const t of tags) {
-                if (t.count >= MIN_COUNT) pool.set(t.name, true);
-            }
-        } catch {
-            /* ignorar */
-        }
-    }
-
-    return [...pool.keys()].sort(() => Math.random() - 0.5).slice(0, cantidad);
-}
-
-async function runGeneration(ctx, seriesTag, extraTags = [], pages = 5) {
+async function runGeneration(ctx, seriesTag, extraTags = [], pages = 3) {
     const seriesName = tagToSeriesName(seriesTag);
 
-    // Simulación de respuesta visual
     await ctx.reply(
         `╭〔 🔍 𝐆𝐄𝐍𝐂𝐇𝐀𝐑 〕⬣\n` +
         `┃ Analizando "${seriesName}"...\n` +
@@ -240,62 +97,45 @@ async function runGeneration(ctx, seriesTag, extraTags = [], pages = 5) {
 
     const posts = await fetchAllPosts(seriesTag, extraTags, pages);
     if (posts.length === 0) {
-        await ctx.reply(
-            `╭〔 ⚠️ 𝐆𝐄𝐍𝐂𝐇𝐀𝐑 〕⬣\n` +
-            `┃ "${seriesName}" omitida...\n` +
-            `┃\n` +
-            `┃ > Sin posts disponibles, se omite.\n` +
-            `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-            `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-        );
-        return { seriesName, agregados: [], saltados: [], posts: 0, skipped: true };
+        return { seriesName, agregados: [], saltados: [], posts: 0, skipped: true, error: 'Sin posts disponibles' };
     }
 
-    const tagFreq = collectTagFrequencies(posts, seriesTag);
-    const tagNames = Object.entries(tagFreq).filter(([, c]) => c >= 2).map(([n]) => n);
-    const charTagNames = await filterCharacterTags(tagNames, seriesTag);
-
+    const gachaData = cargarDatosGacha();
     const agregados = [];
     const saltados = [];
-    const gachaData = cargarDatosGacha();
 
-    for (const charTag of charTagNames) {
-        const dbName = tagToName(charTag);
-        const gender = getGenderFromPosts(charTag, posts);
-        const value = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
+    for (const post of posts) {
+        if (!post.file_url) continue;
+        const name = `gacha_${Date.now()}_${seriesTag}_${Math.random().toString(36).substr(2, 4)}.jpg`;
+        try {
+            const imgRes = await fetch(post.file_url, { signal: AbortSignal.timeout(5_000) });
+            if (!imgRes.ok) continue;
+            const buffer = await imgRes.buffer();
+            const ruta = path.join(GACHA_IMG_DIR, name);
+            fs.writeFileSync(ruta, buffer);
 
-        // Verificar si ya existe
-        const exists = Object.values(gachaData).some(c => c.nombre === dbName && c.serie === seriesName);
-        if (exists) {
-            saltados.push(`${dbName} (Ya existe)`);
-            continue;
+            const value = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
+            gachaData[name] = {
+                nombre: tagToName(seriesTag),
+                genero: 'Desconocido',
+                serie: seriesName,
+                valor: value
+            };
+            agregados.push(`${tagToName(seriesTag)} — ${value.toLocaleString()} ¥`);
+        } catch (e) {
+            saltados.push(`${tagToName(seriesTag)} (Error)`);
         }
-
-        // Si no existe, lo agregamos
-        const nombreArchivo = `gacha_${Date.now()}_${charTag.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
-        // Nota: Aquí descargaríamos la imagen, pero para simplificar solo registramos
-        gachaData[nombreArchivo] = {
-            nombre: dbName,
-            genero: gender,
-            serie: seriesName,
-            valor: value
-        };
-        agregados.push(`${dbName} (${gender}) — ${value.toLocaleString()} ¥`);
     }
 
     guardarDatosGacha(gachaData);
     return { seriesName, agregados, saltados, posts: posts.length, skipped: false };
 }
 
-// ============================================================
-// COMANDO GENRANDOM (y GENCHAR)
-// ============================================================
-
 export default {
     nombre: 'genrandom',
     categoria: 'Diversión',
-    alias: ['genchar', 'gr', 'gachaadd'],
-    descripcion: 'Genera 5 series al azar y las agrega al sistema de cartas .rw',
+    alias: ['genchar', 'gr'],
+    descripcion: 'Genera 5 series al azar desde Konachan.',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const ctx = {
@@ -306,10 +146,6 @@ export default {
             };
 
             const cmd = ctx.args[0]?.toLowerCase() || 'genrandom';
-
-            // ============================================================
-            // MODO GENRANDOM (5 series al azar)
-            // ============================================================
 
             if (cmd === 'genrandom' || cmd === 'random') {
                 await ctx.reply(
@@ -322,46 +158,41 @@ export default {
                 );
 
                 let seriesTags = [];
-                try { seriesTags = await fetchRandomSeriesTags(5); } catch { /* ignorar */ }
-
-                if (seriesTags.length === 0) {
-                    await ctx.reply(
-                        `╭〔 ❌ 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                        `┃ Error...\n` +
-                        `┃\n` +
-                        `┃ > No se pudo conectar con konachan.net.\n` +
-                        `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                        `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-                    );
-                    return;
+                try {
+                    // Simular una lista de tags (evitando el fetch pesado de tags de Konachan)
+                    const shuffled = [...ANIME_LIST].sort(() => Math.random() - 0.5);
+                    seriesTags = shuffled.slice(0, 5);
+                } catch {
+                    seriesTags = ANIME_LIST.slice(0, 5);
                 }
 
                 const resultados = [];
                 for (let i = 0; i < seriesTags.length; i++) {
-                    const tag = seriesTags[i];
+                    const tag = seriesTags[i].toLowerCase().replace(/\s/g, '_');
                     await ctx.reply(
                         `╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                        `┃ [${i + 1}/${seriesTags.length}] Procesando: ${tagToSeriesName(tag)}\n` +
+                        `┃ [${i + 1}/${seriesTags.length}] Procesando: ${seriesTags[i]}\n` +
                         `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                         `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
                     );
                     try {
-                        resultados.push(await runGeneration(ctx, tag, [], 5));
+                        const res = await runGeneration(ctx, tag, [], 2);
+                        resultados.push(res);
                     } catch (e) {
-                        resultados.push({ seriesName: tagToSeriesName(tag), agregados: [], saltados: [], posts: 0, skipped: true, error: e.message });
+                        resultados.push({ seriesName: seriesTags[i], agregados: [], saltados: [], posts: 0, skipped: true, error: e.message });
                     }
                     if (i < seriesTags.length - 1) await sleep(2000);
                 }
 
-                const totalAg = resultados.reduce((s, r) => s + r.agregados.length, 0);
-                const totalSk = resultados.reduce((s, r) => s + r.saltados.length, 0);
-
                 let resumen = '';
+                let totalAg = 0, totalSk = 0;
                 resultados.forEach(r => {
                     if (r.skipped) {
                         resumen += `┃ ❌ *${r.seriesName}* — omitida${r.error ? ` (${r.error})` : ''}\n`;
                     } else {
                         resumen += `┃ ✅ *${r.seriesName}* — ${r.agregados.length} nuevos, ${r.saltados.length} saltados (${r.posts} posts)\n`;
+                        totalAg += r.agregados.length;
+                        totalSk += r.saltados.length;
                     }
                 });
 
@@ -377,62 +208,11 @@ export default {
                 return;
             }
 
-            // ============================================================
-            // MODO GENCHAR (Una serie específica)
-            // ============================================================
-
-            const input = ctx.args.join(' ').trim();
-            if (!input) {
-                await ctx.reply(
-                    `╭〔 🎴 𝐆𝐄𝐍𝐂𝐇𝐀𝐑 〕⬣\n` +
-                    `┃ ❓ Falta la URL o el tag...\n` +
-                    `┃\n` +
-                    `┃ > Uso: *.genchar <URL_KONACHAN>*\n` +
-                    `┃ > O:   *.genchar <tag_serie>*\n` +
-                    `┃\n` +
-                    `┃ > Ej:  *.genchar https://konachan.com/post?tags=sword_art_online*\n` +
-                    `┃ > Ej:  *.genchar sword_art_online*\n` +
-                    `┃ > Ej:  *.genrandom* — 5 series al azar\n` +
-                    `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                    `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-                );
-                return;
-            }
-
-            let seriesTag;
-            let extraTags = [];
-            const parts = input.split(/\s+/);
-            seriesTag = parts[0].toLowerCase();
-            extraTags = parts.slice(1);
-
-            const { seriesName, agregados, saltados } = await runGeneration(ctx, seriesTag, extraTags, 5);
-
-            let lista = agregados.length ? agregados.slice(0, 15) : [];
-            let listaExtra = agregados.length > 15 ? [`...y ${agregados.length - 15} más`] : [];
-
-            let resumen = '';
-            resumen += `┃ SERIE › ${seriesName}\n`;
-            resumen += `┃ AGREGADOS › ${agregados.length}\n`;
-            resumen += `┃ SALTADOS › ${saltados.length}\n`;
-            if (lista.length) {
-                resumen += `┃\n`;
-                resumen += `┃ *Agregados:*\n`;
-                lista.forEach(item => resumen += `┃ ${item}\n`);
-                listaExtra.forEach(item => resumen += `┃ ${item}\n`);
-            }
-
-            await ctx.reply(
-                `╭〔 ✅ 𝐆𝐄𝐍𝐂𝐇𝐀𝐑 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣\n` +
-                `┃\n` +
-                `${resumen}` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-            );
-
+            // Modo genchar (para un solo anime)
+            await responder.texto('❌ Usa *.genrandom* para generar 5 animes al azar.');
         } catch (error) {
             console.error('[GENRANDOM] Error:', error);
-            await responder.texto('❌ Error al ejecutar el comando.');
+            await responder.texto('❌ Error general en el comando genrandom.');
         }
     }
 };
