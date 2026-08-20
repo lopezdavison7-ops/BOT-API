@@ -93,18 +93,15 @@ export default {
             // 1. Obtener el objetivo
             let target = null;
 
-            // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) target = quoted;
 
-            // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
                 if (quoted && mentioned.length > 0) target = mentioned[0];
             }
 
-            // FORMA 3: Número escrito
             if (!target && argumento) {
                 const texto = String(argumento).trim().replace(/[^0-9]/g, '');
                 if (texto.length >= 10) {
@@ -133,32 +130,30 @@ export default {
                 return;
             }
 
-            // 3. Leer y filtrar owners
+            // 3. Leer owners
             let owners = await leerOwners();
-            const ownersLimpios = owners.map(o => {
-                if (typeof o === 'object') {
-                    return o.lid || o.jid || o.id || o.number || o.numero || o.phone || '';
-                }
-                return String(o).trim();
-            }).filter(Boolean);
 
-            // Buscar coincidencia (puede ser LID o PN)
-            const index = ownersLimpios.findIndex(o => {
-                const oLimpio = o.replace(/[^0-9]/g, '');
-                const targetLimpio = jidReal.replace(/[^0-9]/g, '');
-                return oLimpio === targetLimpio || o === jidReal || o === target || o.includes(targetLimpio);
-            });
+            // 4. Buscar coincidencia (comparar número limpio)
+            const targetLimpio = jidReal.replace(/[^0-9]/g, '');
+            let index = -1;
+
+            for (let i = 0; i < owners.length; i++) {
+                const owner = owners[i];
+                const ownerLimpio = String(owner).replace(/[^0-9]/g, '');
+                if (ownerLimpio === targetLimpio) {
+                    index = i;
+                    break;
+                }
+            }
 
             if (index === -1) {
                 await responder.texto('❌ Ese usuario no es un propietario registrado.');
                 return;
             }
 
-            // 4. Eliminar del array original
+            // 5. Eliminar y guardar
             const eliminado = owners[index];
             owners.splice(index, 1);
-
-            // 5. Guardar cambios
             await guardarOwners(owners);
 
             const numeroMostrar = jidReal.split('@')[0];
