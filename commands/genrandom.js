@@ -11,25 +11,16 @@ const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
 // ============================================================
-// LISTA DE ANIMES + PERSONAJES (con tags reales para Konachan)
+// LISTA DE ANIMES PARA NEKOS.BEST
 // ============================================================
 
-const ANIME_CHARACTERS = {
-    'naruto': ['naruto', 'sasuke', 'sakura', 'kakashi', 'itachi'],
-    'bleach': ['ichigo', 'rukia', 'renji', 'byakuya', 'hitsugaya'],
-    'one_piece': ['luffy', 'zoro', 'nami', 'sanji', 'robin'],
-    'sword_art_online': ['kirito', 'asuna', 'yuuki'],
-    'clannad': ['nagisa', 'tomoyo', 'kotomi', 'kyou', 'fuko'],
-    'my_hero_academia': ['midoriya', 'bakuho', 'todoroki', 'uraraka', 'ochaco'],
-    'demon_slayer': ['tanjiro', 'nezuko', 'zenitsu', 'inosuke', 'shinobu'],
-    'jujutsu_kaisen': ['itadori', 'megumi', 'nobara', 'gojo', 'sukuna'],
-    'fullmetal_alchemist': ['edward', 'alphonse', 'winry', 'mustang'],
-    'tokyo_ghoul': ['kaneki', 'touka', 'suzuya', 'arima'],
-    'code_geass': ['lelouch', 'cc', 'suzaku', 'kallen'],
-    'steins_gate': ['okabe', 'kurisu', 'mayuri', 'daru'],
-    'k_on': ['yui', 'azusa', 'mio', 'tsumugi'],
-    'toradora': ['taiga', 'ryuuji', 'minori', 'haruta'],
-};
+const ANIME_LIST = [
+    'Naruto', 'Bleach', 'One Piece', 'Sword Art Online', 'Clannad',
+    'My Hero Academia', 'Demon Slayer', 'Jujutsu Kaisen', 'Fullmetal Alchemist',
+    'Tokyo Ghoul', 'Code Geass', 'Steins;Gate', 'K-On!', 'Toradora!',
+    'Fate/stay night', 'Angel Beats!', 'Madoka Magica', 'One Punch Man',
+    'Attack on Titan', 'Hunter x Hunter', 'Dragon Ball Z', 'Death Note'
+];
 
 // ============================================================
 // FUNCIONES AUXILIARES
@@ -55,45 +46,51 @@ function tagToName(tag) {
 }
 
 // ============================================================
-// DESCARGAR Y AGREGAR PERSONAJE AL GACHA
+// OBTENER IMAGEN DESDE NEKOS.BEST
 // ============================================================
 
-async function descargarYAgregar(animeKey, charTag) {
+async function obtenerImagenNekos() {
     try {
-        // 🔥 Usar el tag del personaje (NO el del anime)
-        const url = `https://konachan.net/post.json?limit=2&tags=${encodeURIComponent(charTag)}+rating:safe&order:random`;
+        // API que siempre funciona y devuelve imágenes de anime
+        const url = 'https://nekos.best/api/v2/neko';
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) return 0;
-        const posts = await res.json();
-        if (!posts || posts.length === 0) return 0;
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !data.results || data.results.length === 0) return null;
+        return data.results[0].url;
+    } catch {
+        return null;
+    }
+}
+
+// ============================================================
+// AGREGAR IMAGEN AL GACHA
+// ============================================================
+
+async function agregarImagenAlGacha(animeName) {
+    try {
+        const url = await obtenerImagenNekos();
+        if (!url) return false;
+
+        const imgRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!imgRes.ok) return false;
+        const buffer = await imgRes.buffer();
+        
+        const fileName = `gacha_${Date.now()}_${animeName.replace(/\s/g, '_')}.jpg`;
+        fs.writeFileSync(path.join(GACHA_IMG_DIR, fileName), buffer);
 
         const gachaData = cargarDatosGacha();
-        let agregadas = 0;
-
-        for (const post of posts) {
-            if (!post.file_url) continue;
-            const fileName = `gacha_${Date.now()}_${charTag}.jpg`;
-            try {
-                const imgRes = await fetch(post.file_url, { signal: AbortSignal.timeout(5000) });
-                if (!imgRes.ok) continue;
-                const buffer = await imgRes.buffer();
-                fs.writeFileSync(path.join(GACHA_IMG_DIR, fileName), buffer);
-
-                const valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
-                gachaData[fileName] = {
-                    nombre: tagToName(charTag),
-                    genero: 'Desconocido',
-                    serie: tagToName(animeKey),
-                    valor: valor
-                };
-                agregadas++;
-            } catch {}
-        }
-
+        const valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
+        gachaData[fileName] = {
+            nombre: tagToName(animeName),
+            genero: 'Desconocido',
+            serie: animeName,
+            valor: valor
+        };
         guardarDatosGacha(gachaData);
-        return agregadas;
+        return true;
     } catch {
-        return 0;
+        return false;
     }
 }
 
@@ -105,7 +102,7 @@ export default {
     nombre: 'genrandom',
     categoria: 'Diversión',
     alias: ['genchar', 'gr'],
-    descripcion: 'Genera personajes aleatorios desde Konachan y los agrega al gacha.',
+    descripcion: 'Genera cartas desde nekos.best (sin bloqueos)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
             const ctx = {
@@ -115,63 +112,51 @@ export default {
                 args: argumento ? argumento.trim().split(/\s+/) : []
             };
 
-            const cmd = ctx.args[0]?.toLowerCase() || 'genrandom';
+            await ctx.reply(
+                `╭〔 🎲 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
+                `┃ Buscando 5 animes al azar...\n` +
+                `┃\n` +
+                `┃ > nekos.best — Conexión estable.\n` +
+                `╰━━━━━━━━━━━━━━━━⬣\n\n` +
+                `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+            );
 
-            if (cmd === 'genrandom') {
+            const shuffled = ANIME_LIST.sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, 5);
+
+            let totalAgregados = 0;
+            let resultados = [];
+
+            for (let i = 0; i < selected.length; i++) {
+                const anime = selected[i];
+
                 await ctx.reply(
-                    `╭〔 🎲 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                    `┃ Buscando 5 animes al azar...\n` +
-                    `┃\n` +
-                    `┃ > konachan.net — Esto tardará varios minutos.\n` +
+                    `╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
+                    `┃ [${i + 1}/${selected.length}] Procesando: ${anime}\n` +
                     `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                     `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
                 );
 
-                const keys = Object.keys(ANIME_CHARACTERS);
-                const shuffled = keys.sort(() => Math.random() - 0.5);
-                const selected = shuffled.slice(0, 5);
-
-                let totalAgregados = 0;
-                let resultados = [];
-
-                for (let i = 0; i < selected.length; i++) {
-                    const anime = selected[i];
-                    const chars = ANIME_CHARACTERS[anime];
-
-                    await ctx.reply(
-                        `╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                        `┃ [${i + 1}/${selected.length}] Procesando: ${tagToName(anime)}\n` +
-                        `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                        `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-                    );
-
-                    let animeAgregados = 0;
-                    for (const charTag of chars) {
-                        const count = await descargarYAgregar(anime, charTag);
-                        animeAgregados += count;
-                        totalAgregados += count;
-                        await sleep(600);
-                    }
-
-                    resultados.push(animeAgregados > 0 
-                        ? `┃ ✅ *${tagToName(anime)}* — +${animeAgregados} nuevas` 
-                        : `┃ ❌ *${tagToName(anime)}* — omitida (sin imágenes)`
-                    );
+                const exito = await agregarImagenAlGacha(anime);
+                if (exito) {
+                    totalAgregados++;
+                    resultados.push(`┃ ✅ *${anime}* — +1 nueva`);
+                } else {
+                    resultados.push(`┃ ❌ *${anime}* — omitida`);
                 }
-
-                await ctx.reply(
-                    `╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣\n` +
-                    `┃\n` +
-                    `${resultados.join('\n')}\n` +
-                    `┃\n` +
-                    `┃ 📦 Total agregados: *${totalAgregados}*\n` +
-                    `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                    `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-                );
-                return;
+                await sleep(800);
             }
 
-            await responder.texto('❌ Usa *.genrandom* para generar cartas.');
+            await ctx.reply(
+                `╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣\n` +
+                `┃\n` +
+                `${resultados.join('\n')}\n` +
+                `┃\n` +
+                `┃ 📦 Total agregados: *${totalAgregados}*\n` +
+                `╰━━━━━━━━━━━━━━━━⬣\n\n` +
+                `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+            );
+
         } catch (error) {
             console.error('[GENRANDOM] Error:', error);
             await responder.texto('❌ Error en genrandom.');
