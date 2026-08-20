@@ -2,19 +2,23 @@
 import { loadCommands } from './controllers/cmdManager.js';
 
 const PREFIJO = '.';
-let mapaComandos = null;
 
-// Cargar comandos una sola vez al inicio
-export async function inicializarComandos() {
-    if (!mapaComandos) {
-        mapaComandos = await loadCommands();
-        console.log(`[HANDLER] ✅ Mapa de comandos cargado (${mapaComandos.size} comandos)`);
+let comandos = null;
+
+export async function cargarComandosHandler() {
+    if (!comandos) {
+        comandos = await loadCommands();
+        console.log(`[HANDLER] ✅ Comandos cargados: ${comandos.size}`);
     }
-    return mapaComandos;
+    return comandos;
 }
 
-export function handleMessage(sock, msg) {
+export async function handleMessage(sock, msg) {
     try {
+        if (!comandos) {
+            comandos = await loadCommands();
+        }
+
         const texto = msg.message?.conversation || 
                      msg.message?.extendedTextMessage?.text || 
                      '';
@@ -25,34 +29,27 @@ export function handleMessage(sock, msg) {
         const nombreComando = args.shift().toLowerCase();
         const argumento = args.join(' ').trim();
 
-        if (!mapaComandos) {
-            console.error('[HANDLER] ❌ Mapa de comandos no inicializado.');
-            return;
-        }
+        const cmd = comandos.get(nombreComando);
+        if (!cmd) return;
 
-        const cmd = mapaComandos.get(nombreComando);
-        if (!cmd) {
-            // Comando no encontrado (ignorar silenciosamente o responder)
-            // sock.sendMessage(msg.key.remoteJid, { text: `❌ Comando "${nombreComando}" no reconocido.` });
-            return;
-        }
-
-        // Ejecutar el comando
-        cmd.ejecutar({
+        await cmd.ejecutar({
             sock,
             msg,
+            argumento,
             responder: {
                 texto: async (text) => {
                     await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
                 },
                 imagen: async (img, caption) => {
                     await sock.sendMessage(msg.key.remoteJid, { image: img, caption }, { quoted: msg });
+                },
+                video: async (vid, caption) => {
+                    await sock.sendMessage(msg.key.remoteJid, { video: vid, caption }, { quoted: msg });
                 }
-            },
-            argumento
+            }
         });
 
     } catch (error) {
-        console.error('[HANDLER] Error:', error);
+        console.error('[HANDLER] Error al manejar mensaje:', error);
     }
 }
