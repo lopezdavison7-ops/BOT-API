@@ -36,6 +36,8 @@ let ultimoQR = null;
 let intentos = 0;
 let iniciando = false;
 
+let comandos = null;
+
 const app = Fastify({ logger: false });
 
 app.get('/', async () => ({ status: 'online', bot: 'BOT-API' }));
@@ -170,6 +172,9 @@ async function iniciarBot() {
             console.warn('⚠️ No se pudo obtener la versión de Baileys.');
         }
 
+        comandos = await loadCommands();
+        console.log(`📦 Comandos cargados: ${comandos.size}`);
+
         const logger = pino({ level: 'debug' });
         const opciones = {
             logger,
@@ -301,14 +306,19 @@ async function iniciarBot() {
         });
 
         // ============================================================
-        // MENSAJES (AHORA CON PREFIJO Y LISTA DE COMANDOS)
+        // MENSAJES (CON LISTA DE COMANDOS REAL)
         // ============================================================
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
-            // ✅ Le pasamos el prefijo y la lista de comandos al handler
-            handleMessage(sock, m, '.', []);
+
+            // Obtener lista de comandos real desde el mapa
+            const listaComandos = Array.from(comandos.values())
+                .filter((v, i, self) => self.indexOf(v) === i);
+            
+            // Le pasamos el prefijo y la lista de comandos real al handler
+            handleMessage(sock, m, '.', listaComandos);
         });
 
         if (!state.creds.registered && metodoConexion === '1') {
