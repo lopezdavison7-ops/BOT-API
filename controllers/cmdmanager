@@ -13,10 +13,10 @@ const COMMANDS_DIR = path.join(__dirname, '../commands');
  * y sus subcarpetas.
  * @returns {Map} Un mapa con los comandos cargados (nombre -> comando)
  */
-export function loadCommands() {
+export async function loadCommands() {
     const commands = new Map();
 
-    function readCommands(dir) {
+    async function readCommands(dir) {
         const items = fs.readdirSync(dir, { withFileTypes: true });
 
         for (const item of items) {
@@ -24,11 +24,10 @@ export function loadCommands() {
 
             if (item.isDirectory()) {
                 // Si es una carpeta, entramos recursivamente
-                readCommands(fullPath);
+                await readCommands(fullPath);
             } else if (item.isFile() && item.name.endsWith('.js')) {
                 // Si es un archivo .js, lo intentamos cargar
                 try {
-                    // Usamos import dinámico para ES Modules
                     const module = await import(`file://${fullPath}`);
                     const command = module.default;
 
@@ -54,7 +53,7 @@ export function loadCommands() {
     }
 
     // Comenzar la carga recursiva desde la raíz de commands/
-    readCommands(COMMANDS_DIR);
+    await readCommands(COMMANDS_DIR);
 
     console.log(`[CMD] ✅ Total de comandos cargados: ${commands.size}`);
     return commands;
