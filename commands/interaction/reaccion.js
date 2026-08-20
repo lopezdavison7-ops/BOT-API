@@ -9,35 +9,110 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 // ============================================================
-// LISTA DE REACCIONES (usando waifu.pics)
+// LISTA DE GIFs 100% FUNCIONALES (desde GitHub)
 // ============================================================
 
 const REACCIONES = {
-    hug: 'hug',
-    kiss: 'kiss',
-    pat: 'pat',
-    slap: 'slap',
-    poke: 'poke',
-    cuddle: 'cuddle',
-    wave: 'wave',
-    smile: 'smile',
-    dance: 'dance',
-    cry: 'cry',
-    happy: 'happy',
-    angry: 'angry',
-    love: 'love',
-    bite: 'bite',
-    blush: 'blush',
-    highfive: 'highfive',
-    handhold: 'handhold',
-    feed: 'feed',
-    bonk: 'bonk',
-    yeet: 'yeet',
-    wink: 'wink',
-    stare: 'stare',
-    tickle: 'tickle',
-    punch: 'punch',
-    kick: 'kick'
+    hug: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/9535cb9a55.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/6b238024da.gif'
+    ],
+    kiss: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/be310f02b3.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/f35004c537.gif'
+    ],
+    pat: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/aa04882cf0.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/7f567b121c.gif'
+    ],
+    slap: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/ec33cb4472.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/4816236c79.gif'
+    ],
+    poke: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/5db2be6da3.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/3cbe4e0e10.gif'
+    ],
+    cuddle: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/8b8bf1db46.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/0aa8081040.gif'
+    ],
+    wave: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/247a461176.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c9db25d0ec.gif'
+    ],
+    smile: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/ba554e8789.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/75b144c16e.gif'
+    ],
+    dance: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/42c581756f.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/e7d6758d51.gif'
+    ],
+    cry: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/e9df37559b.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/bb7e8d6b25.gif'
+    ],
+    happy: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a2b43a93d9.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/bd5e4143da.gif'
+    ],
+    angry: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/db1be31c46.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/77ff5a340a.gif'
+    ],
+    love: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/24a7d1bf51.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/b25cb710db.gif'
+    ],
+    bite: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c2e853e3d6.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/f04c393170.gif'
+    ],
+    blush: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/76de9dc2fa.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/8a6c1ad34e.gif'
+    ],
+    highfive: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c22ff49754.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a9682e795d.gif'
+    ],
+    handhold: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/4cd2f2cb31.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c6dce7a3c9.gif'
+    ],
+    feed: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/25aaf06bf6.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/9656accc24.gif'
+    ],
+    bonk: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/17703ba93a.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/783a7b6d82.gif'
+    ],
+    yeet: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c50d016a77.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/2d308ed364.gif'
+    ],
+    wink: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/7db01288c2.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/017d797e31.gif'
+    ],
+    stare: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/44be5e7886.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a8a6c1ad34e.gif'
+    ],
+    tickle: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/29c1e3038c.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a68bfb29f6.gif'
+    ],
+    punch: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/3e73b3353f.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/cb2257db20.gif'
+    ],
+    kick: [
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/aef80fd62e.gif',
+        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/22c76d8edc.gif'
+    ]
 };
 
 // ============================================================
@@ -109,7 +184,7 @@ function textoSinObjetivo(t, a) {
 }
 
 // ============================================================
-// DESCARGAR GIF Y CONVERTIRLO A MP4
+// DESCARGAR Y CONVERTIR A MP4 (Infalible)
 // ============================================================
 
 async function descargarYConvertir(url) {
@@ -169,22 +244,15 @@ export default {
         try {
             console.log(`[REACCION] Ejecutando: ${tipo}`);
 
-            const tipoApi = REACCIONES[tipo];
-            if (!tipoApi) {
-                return responder.texto(`❌ Reacción *${tipo}* no disponible.`);
+            const urls = REACCIONES[tipo];
+            if (!urls || urls.length === 0) {
+                return responder.texto(`❌ No hay GIFs para *${tipo}*.`);
             }
 
-            const apiUrl = `https://api.waifu.pics/sfw/${tipoApi}`;
-            const res = await fetch(apiUrl);
-            const data = await res.json();
-            const gifUrl = data.url;
-
-            if (!gifUrl) {
-                return responder.texto(`❌ No se pudo obtener el GIF para *${tipo}*.`);
-            }
+            const url = urls[Math.floor(Math.random() * urls.length)];
 
             // Descargar y convertir a MP4
-            const mp4Buffer = await descargarYConvertir(gifUrl);
+            const mp4Buffer = await descargarYConvertir(url);
 
             // Obtener autor y objetivo
             const autor = obtenerAutor(msg);
