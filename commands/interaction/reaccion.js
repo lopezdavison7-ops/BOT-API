@@ -3,34 +3,46 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+
+// ============================================================
+// LISTA DE REACCIONES (usando waifu.pics)
+// ============================================================
 
 const REACCIONES = {
-    hug: ['https://media.tenor.com/_T1L0wQ0jWwAAAAC/anime-hug.gif'],
-    kiss: ['https://media.tenor.com/Gf4G9Xj0x7YAAAAC/anime-kiss.gif'],
-    pat: ['https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-pat.gif'],
-    slap: ['https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-slap.gif'],
-    poke: ['https://media.tenor.com/3VtY8yE3O6AAAAAC/anime-poke.gif'],
-    cuddle: ['https://media.tenor.com/L0qP8e7g5gAAAAAC/anime-cuddle.gif'],
-    wave: ['https://media.tenor.com/f7i3VlG5ZqAAAAAC/anime-wave.gif'],
-    smile: ['https://media.tenor.com/1F6E9yS5R4AAAAAC/anime-smile.gif'],
-    dance: ['https://media.tenor.com/t5j4SxIeU4AAAAAC/anime-dance.gif'],
-    cry: ['https://media.tenor.com/5LwWmH1Pq8AAAAAC/anime-cry.gif'],
-    happy: ['https://media.tenor.com/1XmR5gC9xQAAAAAC/anime-happy.gif'],
-    angry: ['https://media.tenor.com/7n1aN7H7Oa0AAAAC/anime-angry.gif'],
-    love: ['https://media.tenor.com/7f9Xb3H2t8AAAAAC/anime-love.gif'],
-    bite: ['https://media.tenor.com/6K8H1rU5N4AAAAAC/anime-bite.gif'],
-    blush: ['https://media.tenor.com/0Vq5m5T7JYAAAAAC/anime-blush.gif'],
-    highfive: ['https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-highfive.gif'],
-    handhold: ['https://media.tenor.com/L0qP8e7g5gAAAAAC/anime-handhold.gif'],
-    feed: ['https://media.tenor.com/1F6E9yS5R4AAAAAC/anime-feed.gif'],
-    bonk: ['https://media.tenor.com/4tXy9aZ8r8AAAAAC/anime-bonk.gif'],
-    yeet: ['https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-yeet.gif'],
-    wink: ['https://media.tenor.com/f7i3VlG5ZqAAAAAC/anime-wink.gif'],
-    stare: ['https://media.tenor.com/7n1aN7H7Oa0AAAAC/anime-stare.gif'],
-    tickle: ['https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-tickle.gif'],
-    punch: ['https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-punch.gif'],
-    kick: ['https://media.tenor.com/2B4zV2jHbXAAAAAC/anime-kick.gif']
+    hug: 'hug',
+    kiss: 'kiss',
+    pat: 'pat',
+    slap: 'slap',
+    poke: 'poke',
+    cuddle: 'cuddle',
+    wave: 'wave',
+    smile: 'smile',
+    dance: 'dance',
+    cry: 'cry',
+    happy: 'happy',
+    angry: 'angry',
+    love: 'love',
+    bite: 'bite',
+    blush: 'blush',
+    highfive: 'highfive',
+    handhold: 'handhold',
+    feed: 'feed',
+    bonk: 'bonk',
+    yeet: 'yeet',
+    wink: 'wink',
+    stare: 'stare',
+    tickle: 'tickle',
+    punch: 'punch',
+    kick: 'kick'
 };
+
+// ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
 
 function obtenerTipo(msg) {
     const texto = msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '';
@@ -96,35 +108,83 @@ function textoSinObjetivo(t, a) {
     return m[t] || `${a} quiere hacer muchas reacciones 🎭`;
 }
 
-async function descargarGif(url) {
-    const res = await fetch(url);
-    const buffer = await res.buffer();
-    const tempDir = os.tmpdir();
-    const fileName = `reaccion_${Date.now()}.gif`;
-    const filePath = path.join(tempDir, fileName);
-    fs.writeFileSync(filePath, buffer);
-    return filePath;
+// ============================================================
+// DESCARGAR GIF Y CONVERTIRLO A MP4
+// ============================================================
+
+async function descargarYConvertir(url) {
+    const carpeta = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'reaccion-')
+    );
+
+    const gifPath = path.join(carpeta, 'original.gif');
+    const mp4Path = path.join(carpeta, 'convertido.mp4');
+
+    try {
+        // 1. Descargar el GIF
+        const res = await fetch(url);
+        const buffer = await res.buffer();
+        fs.writeFileSync(gifPath, buffer);
+
+        // 2. Convertir GIF a MP4 usando ffmpeg
+        await execFileAsync(
+            'ffmpeg',
+            [
+                '-y',
+                '-i', gifPath,
+                '-movflags', '+faststart',
+                '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-crf', '23',
+                '-an',
+                mp4Path
+            ],
+            { maxBuffer: 20 * 1024 * 1024 }
+        );
+
+        // 3. Leer el MP4 generado
+        const mp4Buffer = fs.readFileSync(mp4Path);
+        return mp4Buffer;
+
+    } finally {
+        // Limpiar carpeta temporal
+        await fs.promises.rm(carpeta, { recursive: true, force: true }).catch(() => {});
+    }
 }
+
+// ============================================================
+// COMANDO PRINCIPAL
+// ============================================================
 
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: ['hug', 'kiss', 'pat', 'slap', 'poke', 'cuddle', 'wave', 'smile', 'dance', 'cry', 'happy', 'angry', 'love', 'bite', 'blush', 'highfive', 'handhold', 'feed', 'bonk', 'yeet', 'wink', 'stare', 'tickle', 'punch', 'kick'],
-    descripcion: 'Envía un GIF de reacción.',
+    descripcion: 'Envía un GIF de reacción en formato MP4 (sin errores).',
 
     async ejecutar({ sock, msg, responder }) {
         const tipo = obtenerTipo(msg);
 
         try {
-            const urls = REACCIONES[tipo];
-            if (!urls || !urls.length) {
-                return responder.texto(`❌ No hay GIF para ${tipo}`);
+            console.log(`[REACCION] Ejecutando: ${tipo}`);
+
+            const tipoApi = REACCIONES[tipo];
+            if (!tipoApi) {
+                return responder.texto(`❌ Reacción *${tipo}* no disponible.`);
             }
 
-            const url = urls[Math.floor(Math.random() * urls.length)];
+            const apiUrl = `https://api.waifu.pics/sfw/${tipoApi}`;
+            const res = await fetch(apiUrl);
+            const data = await res.json();
+            const gifUrl = data.url;
 
-            // Descargar y guardar localmente
-            const filePath = await descargarGif(url);
+            if (!gifUrl) {
+                return responder.texto(`❌ No se pudo obtener el GIF para *${tipo}*.`);
+            }
+
+            // Descargar y convertir a MP4
+            const mp4Buffer = await descargarYConvertir(gifUrl);
 
             // Obtener autor y objetivo
             const autor = obtenerAutor(msg);
@@ -152,21 +212,17 @@ export default {
                 if (autor) menciones.push(autor);
             }
 
-            // Leer el archivo y enviarlo como video con gifPlayback
-            const fileBuffer = fs.readFileSync(filePath);
+            // Enviar el video MP4 (WhatsApp lo reproduce como GIF)
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    video: fileBuffer,
-                    gifPlayback: true,
+                    video: mp4Buffer,
+                    mimetype: 'video/mp4',
                     caption,
                     mentions: menciones
                 },
                 { quoted: msg }
             );
-
-            // Limpiar el archivo temporal
-            fs.unlinkSync(filePath);
 
         } catch (error) {
             console.error('[REACCION] Error:', error?.message || error);
