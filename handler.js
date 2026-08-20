@@ -1,63 +1,58 @@
 // handler.js
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { crearRespondedor } from './lib/responder.js';
-import { registrarUso } from './lib/estadisticas.js';
-import { esOwner } from './lib/owner.js';
 import { loadCommands } from './controllers/cmdManager.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PREFIJO = '.';
+let mapaComandos = null;
 
-export async function cargarComandos() {
-    const commands = loadCommands();
-    const mapaComandos = commands;
-    const listaComandos = Array.from(commands.values())
-        .filter((v, i, self) => self.indexOf(v) === i);
-
-    return { mapaComandos, listaComandos };
+// Cargar comandos una sola vez al inicio
+export async function inicializarComandos() {
+    if (!mapaComandos) {
+        mapaComandos = await loadCommands();
+        console.log(`[HANDLER] ✅ Mapa de comandos cargado (${mapaComandos.size} comandos)`);
+    }
+    return mapaComandos;
 }
 
-export function crearManejador(sock, mapaComandos, listaComandos) {
-    return async ({ messages }) => {
-        const msg = messages?.[0];
-        if (!msg?.message || msg.key?.fromMe) return;
+export function handleMessage(sock, msg) {
+    try {
+        const texto = msg.message?.conversation || 
+                     msg.message?.extendedTextMessage?.text || 
+                     '';
 
-        const marcaTiempo = (msg.messageTimestamp?.low ?? msg.messageTimestamp ?? 0) * 1000;
-        if (marcaTiempo && Date.now() - marcaTiempo > 10000) return;
-
-        const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
         if (!texto.startsWith(PREFIJO)) return;
 
-        const partes = texto.slice(PREFIJO.length).trim().split(/\s+/);
-        const comandoCrudo = partes.shift() || '';
-        const nombreComando = comandoCrudo.toLowerCase();
-        const argumento = partes.join(' ').trim();
-        const responder = crearRespondedor(sock, msg);
+        const args = texto.slice(PREFIJO.length).trim().split(/\s+/);
+        const nombreComando = args.shift().toLowerCase();
+        const argumento = args.join(' ').trim();
+
+        if (!mapaComandos) {
+            console.error('[HANDLER] ❌ Mapa de comandos no inicializado.');
+            return;
+        }
 
         const cmd = mapaComandos.get(nombreComando);
         if (!cmd) {
-            if (nombreComando) {
-                await responder.texto(`❌ Comando no reconocido.\n\nEscribe *${PREFIJO}menu* para ver los comandos.`);
-            }
+            // Comando no encontrado (ignorar silenciosamente o responder)
+            // sock.sendMessage(msg.key.remoteJid, { text: `❌ Comando "${nombreComando}" no reconocido.` });
             return;
         }
 
-        if (cmd.owner === true && !esOwner(msg)) {
-            await responder.texto('⛔ Este comando es exclusivo del Owner.');
-            return;
-        }
+        // Ejecutar el comando
+        cmd.ejecutar({
+            sock,
+            msg,
+            responder: {
+                texto: async (text) => {
+                    await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
+                },
+                imagen: async (img, caption) => {
+                    await sock.sendMessage(msg.key.remoteJid, { image: img, caption }, { quoted: msg });
+                }
+            },
+            argumento
+        });
 
-        try {
-            await cmd.ejecutar({ sock, msg, responder, argumento, listaComandos, prefijo: PREFIJO, esOwner: esOwner(msg) });
-            registrarUso(cmd.nombre);
-        } catch (error) {
-            console.error(`[COMANDO ${nombreComando}]`, error);
-            await responder.texto('⚠️ Ocurrió un error procesando tu solicitud.');
-        }
-    };
+    } catch (error) {
+        console.error('[HANDLER] Error:', error);
+    }
 }
-
-// 🔥 ESTO ES LO QUE FALTA: Exportación directa para el index.js
-export const handleMessage = crearManejador;
