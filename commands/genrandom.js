@@ -1,5 +1,4 @@
 // commands/genrandom.js
-import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,22 +10,8 @@ const GACHA_IMG_DIR = path.join(__dirname, '../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../database/gacha.json');
 
 // ============================================================
-// LISTA DE ANIMES PARA NEKOS.BEST
-// ============================================================
-
-const ANIME_LIST = [
-    'Naruto', 'Bleach', 'One Piece', 'Sword Art Online', 'Clannad',
-    'My Hero Academia', 'Demon Slayer', 'Jujutsu Kaisen', 'Fullmetal Alchemist',
-    'Tokyo Ghoul', 'Code Geass', 'Steins;Gate', 'K-On!', 'Toradora!',
-    'Fate/stay night', 'Angel Beats!', 'Madoka Magica', 'One Punch Man',
-    'Attack on Titan', 'Hunter x Hunter', 'Dragon Ball Z', 'Death Note'
-];
-
-// ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function cargarDatosGacha() {
     if (!fs.existsSync(GACHA_DATABASE)) return {};
@@ -46,106 +31,83 @@ function tagToName(tag) {
 }
 
 // ============================================================
-// OBTENER IMAGEN DESDE NEKOS.BEST
+// OBTENER IMÁGENES LOCALES
 // ============================================================
 
-async function obtenerImagenNekos() {
-    try {
-        // API que siempre funciona y devuelve imágenes de anime
-        const url = 'https://nekos.best/api/v2/neko';
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data || !data.results || data.results.length === 0) return null;
-        return data.results[0].url;
-    } catch {
-        return null;
-    }
+function obtenerImagenesLocales() {
+    const files = fs.readdirSync(GACHA_IMG_DIR).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    if (files.length === 0) return [];
+    return files;
 }
 
 // ============================================================
-// AGREGAR IMAGEN AL GACHA
-// ============================================================
-
-async function agregarImagenAlGacha(animeName) {
-    try {
-        const url = await obtenerImagenNekos();
-        if (!url) return false;
-
-        const imgRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!imgRes.ok) return false;
-        const buffer = await imgRes.buffer();
-        
-        const fileName = `gacha_${Date.now()}_${animeName.replace(/\s/g, '_')}.jpg`;
-        fs.writeFileSync(path.join(GACHA_IMG_DIR, fileName), buffer);
-
-        const gachaData = cargarDatosGacha();
-        const valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
-        gachaData[fileName] = {
-            nombre: tagToName(animeName),
-            genero: 'Desconocido',
-            serie: animeName,
-            valor: valor
-        };
-        guardarDatosGacha(gachaData);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-// ============================================================
-// COMANDO GENRANDOM
+// COMANDO GENRANDOM (SOLO LOCAL)
 // ============================================================
 
 export default {
     nombre: 'genrandom',
     categoria: 'Diversión',
-    alias: ['genchar', 'gr'],
-    descripcion: 'Genera cartas desde nekos.best (sin bloqueos)',
-    ejecutar: async ({ msg, responder, argumento, sock }) => {
+    alias: ['gr'],
+    descripcion: 'Registra imágenes locales en el gacha.',
+    ejecutar: async ({ msg, responder, sock }) => {
         try {
             const ctx = {
                 reply: async (text) => {
                     await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
-                },
-                args: argumento ? argumento.trim().split(/\s+/) : []
+                }
             };
 
             await ctx.reply(
                 `╭〔 🎲 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                `┃ Buscando 5 animes al azar...\n` +
+                `┃ Buscando imágenes locales...\n` +
                 `┃\n` +
-                `┃ > nekos.best — Conexión estable.\n` +
+                `┃ > Carpeta: media/gacha/\n` +
                 `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                 `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
             );
 
-            const shuffled = ANIME_LIST.sort(() => Math.random() - 0.5);
+            const imagenes = obtenerImagenesLocales();
+            if (imagenes.length === 0) {
+                await ctx.reply(
+                    `╭〔 ❌ 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
+                    `┃ No hay imágenes en media/gacha/\n` +
+                    `┃\n` +
+                    `┃ > Agrega imágenes manualmente.\n` +
+                    `╰━━━━━━━━━━━━━━━━⬣\n\n` +
+                    `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+                );
+                return;
+            }
+
+            // Elegir 5 imágenes aleatorias
+            const shuffled = imagenes.sort(() => Math.random() - 0.5);
             const selected = shuffled.slice(0, 5);
 
+            const gachaData = cargarDatosGacha();
             let totalAgregados = 0;
             let resultados = [];
 
             for (let i = 0; i < selected.length; i++) {
-                const anime = selected[i];
+                const img = selected[i];
+                const name = `Carta Local ${i + 1}`;
+                const valor = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
 
-                await ctx.reply(
-                    `╭〔 📦 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 〕⬣\n` +
-                    `┃ [${i + 1}/${selected.length}] Procesando: ${anime}\n` +
-                    `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                    `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
-                );
-
-                const exito = await agregarImagenAlGacha(anime);
-                if (exito) {
+                // Verificar si ya existe
+                if (!gachaData[img]) {
+                    gachaData[img] = {
+                        nombre: name,
+                        genero: 'Desconocido',
+                        serie: 'Local',
+                        valor: valor
+                    };
                     totalAgregados++;
-                    resultados.push(`┃ ✅ *${anime}* — +1 nueva`);
+                    resultados.push(`┃ ✅ *${name}* — registrada`);
                 } else {
-                    resultados.push(`┃ ❌ *${anime}* — omitida`);
+                    resultados.push(`┃ ⏭️ *${name}* — ya existía`);
                 }
-                await sleep(800);
             }
+
+            guardarDatosGacha(gachaData);
 
             await ctx.reply(
                 `╭〔 🏁 𝐆𝐄𝐍𝐑𝐀𝐍𝐃𝐎𝐌 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐀𝐃𝐎 〕⬣\n` +
