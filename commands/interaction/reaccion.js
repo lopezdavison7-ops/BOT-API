@@ -1,11 +1,130 @@
 // commands/interaction/reaccion.js
-import fs from 'fs';
-import path from 'path';
-
-const ANIME_FILE = path.join(process.cwd(), 'database', 'anime.json');
+import fetch from 'node-fetch';
 
 // ============================================================
-// OBTENER TIPO
+// LISTA DE REACCIONES CON MÚLTIPLES URLs (internas)
+// ============================================================
+
+const REACCIONES = {
+    hug: [
+        'https://media.tenor.com/_T1L0wQ0jWwAAAAC/anime-hug.gif',
+        'https://media.tenor.com/On7KV3VX1vAAAAAC/anime-hug.gif',
+        'https://media.tenor.com/7fKjKqH9pDkAAAAC/anime-hug.gif'
+    ],
+    kiss: [
+        'https://media.tenor.com/Gf4G9Xj0x7YAAAAC/anime-kiss.gif',
+        'https://media.tenor.com/8f9Ff1FjFZ4AAAAC/anime-kiss.gif',
+        'https://media.tenor.com/3bFzD8q4hYgAAAAC/anime-kiss.gif'
+    ],
+    pat: [
+        'https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-pat.gif',
+        'https://media.tenor.com/7v3X5Q2tYfAAAAAC/anime-pat.gif',
+        'https://media.tenor.com/9fX5Yf9qXfAAAAAC/anime-pat.gif'
+    ],
+    slap: [
+        'https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-slap.gif',
+        'https://media.tenor.com/8N6t0zZbJ0AAAAAC/anime-slap.gif',
+        'https://media.tenor.com/2sZ8z3T7t8AAAAAC/anime-slap.gif'
+    ],
+    poke: [
+        'https://media.tenor.com/3VtY8yE3O6AAAAAC/anime-poke.gif',
+        'https://media.tenor.com/2_89XZT_B7kAAAAC/anime-poke.gif',
+        'https://media.tenor.com/4tXy9aZ8r8AAAAAC/anime-poke.gif'
+    ],
+    cuddle: [
+        'https://media.tenor.com/L0qP8e7g5gAAAAAC/anime-cuddle.gif',
+        'https://media.tenor.com/N8Y5Qo1Mf2AAAAAC/anime-cuddle.gif',
+        'https://media.tenor.com/6rC9fQ2tYfAAAAAC/anime-cuddle.gif'
+    ],
+    wave: [
+        'https://media.tenor.com/f7i3VlG5ZqAAAAAC/anime-wave.gif',
+        'https://media.tenor.com/2D7uFbTt0oAAAAAC/anime-wave.gif',
+        'https://media.tenor.com/8f9Ff1FjFZ4AAAAC/anime-wave.gif'
+    ],
+    smile: [
+        'https://media.tenor.com/1F6E9yS5R4AAAAAC/anime-smile.gif',
+        'https://media.tenor.com/3bU8T1lLp6gAAAAC/anime-smile.gif',
+        'https://media.tenor.com/9fX5Yf9qXfAAAAAC/anime-smile.gif'
+    ],
+    dance: [
+        'https://media.tenor.com/t5j4SxIeU4AAAAAC/anime-dance.gif',
+        'https://media.tenor.com/PG5c7rVg3vAAAAAC/anime-dance.gif',
+        'https://media.tenor.com/7rC9fQ2tYfAAAAAC/anime-dance.gif'
+    ],
+    cry: [
+        'https://media.tenor.com/5LwWmH1Pq8AAAAAC/anime-cry.gif',
+        'https://media.tenor.com/2B4zV2jHbXAAAAAC/anime-cry.gif',
+        'https://media.tenor.com/4tXy9aZ8r8AAAAAC/anime-cry.gif'
+    ],
+    happy: [
+        'https://media.tenor.com/1XmR5gC9xQAAAAAC/anime-happy.gif',
+        'https://media.tenor.com/4SgJc8VpK3AAAAAC/anime-happy.gif',
+        'https://media.tenor.com/6rC9fQ2tYfAAAAAC/anime-happy.gif'
+    ],
+    angry: [
+        'https://media.tenor.com/7n1aN7H7Oa0AAAAC/anime-angry.gif',
+        'https://media.tenor.com/8Tp9Jm9f8oAAAAAC/anime-angry.gif',
+        'https://media.tenor.com/9fX5Yf9qXfAAAAAC/anime-angry.gif'
+    ],
+    love: [
+        'https://media.tenor.com/7f9Xb3H2t8AAAAAC/anime-love.gif',
+        'https://media.tenor.com/8PmS7rVhYAAAAAC/anime-love.gif',
+        'https://media.tenor.com/2sZ8z3T7t8AAAAAC/anime-love.gif'
+    ],
+    bite: [
+        'https://media.tenor.com/6K8H1rU5N4AAAAAC/anime-bite.gif',
+        'https://media.tenor.com/4aM9e2rH7kAAAAAC/anime-bite.gif',
+        'https://media.tenor.com/8N6t0zZbJ0AAAAAC/anime-bite.gif'
+    ],
+    blush: [
+        'https://media.tenor.com/0Vq5m5T7JYAAAAAC/anime-blush.gif',
+        'https://media.tenor.com/3bU8T1lLp6gAAAAC/anime-blush.gif',
+        'https://media.tenor.com/6rC9fQ2tYfAAAAAC/anime-blush.gif'
+    ],
+    highfive: [
+        'https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-highfive.gif',
+        'https://media.tenor.com/7v3X5Q2tYfAAAAAC/anime-highfive.gif'
+    ],
+    handhold: [
+        'https://media.tenor.com/L0qP8e7g5gAAAAAC/anime-handhold.gif',
+        'https://media.tenor.com/N8Y5Qo1Mf2AAAAAC/anime-handhold.gif'
+    ],
+    feed: [
+        'https://media.tenor.com/1F6E9yS5R4AAAAAC/anime-feed.gif',
+        'https://media.tenor.com/3bU8T1lLp6gAAAAC/anime-feed.gif'
+    ],
+    bonk: [
+        'https://media.tenor.com/4tXy9aZ8r8AAAAAC/anime-bonk.gif',
+        'https://media.tenor.com/8N6t0zZbJ0AAAAAC/anime-bonk.gif'
+    ],
+    yeet: [
+        'https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-yeet.gif',
+        'https://media.tenor.com/2sZ8z3T7t8AAAAAC/anime-yeet.gif'
+    ],
+    wink: [
+        'https://media.tenor.com/f7i3VlG5ZqAAAAAC/anime-wink.gif',
+        'https://media.tenor.com/9fX5Yf9qXfAAAAAC/anime-wink.gif'
+    ],
+    stare: [
+        'https://media.tenor.com/7n1aN7H7Oa0AAAAC/anime-stare.gif',
+        'https://media.tenor.com/8Tp9Jm9f8oAAAAAC/anime-stare.gif'
+    ],
+    tickle: [
+        'https://media.tenor.com/5lJg4kQgY2AAAAAC/anime-tickle.gif',
+        'https://media.tenor.com/7v3X5Q2tYfAAAAAC/anime-tickle.gif'
+    ],
+    punch: [
+        'https://media.tenor.com/oOqPz4xKvQAAAAAC/anime-punch.gif',
+        'https://media.tenor.com/8N6t0zZbJ0AAAAAC/anime-punch.gif'
+    ],
+    kick: [
+        'https://media.tenor.com/2B4zV2jHbXAAAAAC/anime-kick.gif',
+        'https://media.tenor.com/4tXy9aZ8r8AAAAAC/anime-kick.gif'
+    ]
+};
+
+// ============================================================
+// FUNCIONES AUXILIARES
 // ============================================================
 
 function obtenerTipo(msg) {
@@ -17,10 +136,6 @@ function obtenerTipo(msg) {
     const comando = partes[0]?.replace(/^\./, '').toLowerCase();
     return comando || 'hug';
 }
-
-// ============================================================
-// OBTENER AUTOR Y OBJETIVO
-// ============================================================
 
 function obtenerAutor(msg) {
     const key = msg?.key || {};
@@ -52,10 +167,6 @@ function crearMencion(jid) {
     return numero ? `@${numero}` : null;
 }
 
-// ============================================================
-// ACCIONES
-// ============================================================
-
 function obtenerAccion(tipo) {
     const acciones = {
         hug: 'abraza', kiss: 'besa', pat: 'acaricia', slap: 'da una bofetada a',
@@ -84,28 +195,6 @@ function textoSinObjetivo(tipo, autorTexto) {
 }
 
 // ============================================================
-// CARGAR JSON Y OBTENER URL
-// ============================================================
-
-function cargarAnime() {
-    if (!fs.existsSync(ANIME_FILE)) {
-        throw new Error('El archivo anime.json no existe.');
-    }
-    const contenido = fs.readFileSync(ANIME_FILE, 'utf8');
-    return JSON.parse(contenido);
-}
-
-function obtenerUrl(tipo) {
-    const datos = cargarAnime();
-    const reaccion = datos[tipo];
-    if (!reaccion || !Array.isArray(reaccion.videos) || reaccion.videos.length === 0) {
-        return null;
-    }
-    const videos = reaccion.videos;
-    return videos[Math.floor(Math.random() * videos.length)];
-}
-
-// ============================================================
 // COMANDO PRINCIPAL
 // ============================================================
 
@@ -121,10 +210,12 @@ export default {
         try {
             console.log(`[REACCION] Ejecutando: ${tipo}`);
 
-            const url = obtenerUrl(tipo);
-            if (!url) {
-                return responder.texto(`❌ No encontré un GIF para la reacción *${tipo}*.`);
+            // Obtener una URL aleatoria de la lista
+            const urls = REACCIONES[tipo];
+            if (!urls || urls.length === 0) {
+                return responder.texto(`❌ No encontré GIFs para la reacción *${tipo}*.`);
             }
+            const url = urls[Math.floor(Math.random() * urls.length)];
 
             const autor = obtenerAutor(msg);
             const mencionado = obtenerMencion(msg);
@@ -151,7 +242,7 @@ export default {
                 if (autor) menciones.push(autor);
             }
 
-            // Enviar GIF
+            // Intentar enviar la URL directamente
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
@@ -165,7 +256,7 @@ export default {
 
         } catch (error) {
             console.error('[REACCION] Error:', error?.message || error);
-            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ ${error?.message || 'Error desconocido.'}`);
+            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ El servidor bloqueó la descarga del GIF.`);
         }
     }
 };
