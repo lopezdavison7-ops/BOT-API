@@ -1,57 +1,42 @@
 // ============================================================
-// BOT-API
 // COMANDO: SETCANAL
-// ============================================================
-// Configura el enlace oficial del canal de WhatsApp.
-//
-// Uso:
-// .setcanal https://whatsapp.com/channel/XXXXXXXX
-//
-// Solo Owners pueden utilizarlo.
-// El enlace se guarda en:
-// database/canal.json
+// ALEX BOT / BOT-API
+// Configura el enlace del canal que aparecerá en el menú.
+// Solo Owners.
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { esOwner } from '../../lib/owner.js';
 
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const CANAL_FILE = path.join(
-    process.cwd(),
-    'database',
-    'canal.json'
+const ARCHIVO_CANAL = path.join(
+    __dirname,
+    '../../database/canal.json'
 );
 
 // ============================================================
-// ASEGURAR DATABASE
+// ASEGURAR ARCHIVO
 // ============================================================
 
 function asegurarArchivo() {
-
-    const carpeta =
-        path.dirname(CANAL_FILE);
+    const carpeta = path.dirname(ARCHIVO_CANAL);
 
     if (!fs.existsSync(carpeta)) {
-
-        fs.mkdirSync(
-            carpeta,
-            {
-                recursive: true
-            }
-        );
+        fs.mkdirSync(carpeta, {
+            recursive: true
+        });
     }
 
-    if (!fs.existsSync(CANAL_FILE)) {
-
+    if (!fs.existsSync(ARCHIVO_CANAL)) {
         fs.writeFileSync(
-            CANAL_FILE,
+            ARCHIVO_CANAL,
             JSON.stringify(
                 {
-                    url: ''
+                    canal: ''
                 },
                 null,
                 2
@@ -66,14 +51,13 @@ function asegurarArchivo() {
 // ============================================================
 
 function guardarCanal(url) {
-
     asegurarArchivo();
 
     fs.writeFileSync(
-        CANAL_FILE,
+        ARCHIVO_CANAL,
         JSON.stringify(
             {
-                url
+                canal: url
             },
             null,
             2
@@ -83,160 +67,94 @@ function guardarCanal(url) {
 }
 
 // ============================================================
-// VALIDAR URL
-// ============================================================
-
-function validarUrl(url) {
-
-    try {
-
-        const direccion =
-            new URL(url);
-
-        if (
-            direccion.protocol !==
-            'https:'
-        ) {
-            return false;
-        }
-
-        return true;
-
-    } catch {
-
-        return false;
-    }
-}
-
-// ============================================================
 // COMANDO
 // ============================================================
 
 export default {
-
     nombre: 'setcanal',
 
     categoria: 'Owner',
 
-    alias: [
-        'canal',
-        'setchannel'
-    ],
+    alias: [],
 
     descripcion:
-        'Configura el enlace del canal oficial del bot.',
+        'Configura el enlace del canal que aparecerá en el menú.',
 
-    ejecutar: async ({
+    async ejecutar({
         msg,
         responder,
         argumento
-    }) => {
+    }) {
 
-        try {
+        // ----------------------------------------------------
+        // COMPROBAR OWNER
+        // ----------------------------------------------------
 
-            // ------------------------------------------------
-            // COMPROBAR OWNER
-            // ------------------------------------------------
-
-            if (!esOwner(msg)) {
-
-                await responder.texto(
-                    '╭━━〔 🔐 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ ❌ Solo los propietarios\n' +
-                    '┃ pueden usar este comando.\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
-                );
-
-                return;
-            }
-
-            // ------------------------------------------------
-            // OBTENER ARGUMENTO
-            // ------------------------------------------------
-
-            const url =
-                String(
-                    argumento || ''
-                ).trim();
-
-            if (!url) {
-
-                await responder.texto(
-                    '╭━━〔 📢 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ ❌ Falta el enlace del canal.\n' +
-                    '┃\n' +
-                    '┃ 📌 Uso:\n' +
-                    '┃ .setcanal https://whatsapp.com/channel/...\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
-                );
-
-                return;
-            }
-
-            // ------------------------------------------------
-            // VALIDAR URL
-            // ------------------------------------------------
-
-            if (!validarUrl(url)) {
-
-                await responder.texto(
-                    '╭━━〔 ❌ 𝐄𝐍𝐋𝐀𝐂𝐄 𝐈𝐍𝐕Á𝐋𝐈𝐃𝐎 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ El enlace proporcionado\n' +
-                    '┃ no es una URL válida.\n' +
-                    '┃\n' +
-                    '┃ Ejemplo:\n' +
-                    '┃ https://whatsapp.com/channel/...\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
-                );
-
-                return;
-            }
-
-            // ------------------------------------------------
-            // GUARDAR
-            // ------------------------------------------------
-
-            guardarCanal(url);
-
-            // ------------------------------------------------
-            // CONFIRMACIÓN
-            // ------------------------------------------------
-
-            await responder.texto(
-                '╭━━〔 👑 𝐂𝐀𝐍𝐀𝐋 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐃𝐎 〕━━⬣\n' +
+        if (!esOwner(msg)) {
+            return responder.texto(
+                '╭━━〔 🔐 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ✅ Canal configurado correctamente.\n' +
-                '┃\n' +
-                `┃ 📢 ${url}\n` +
-                '┃\n' +
-                '┃ 💜 Ahora aparecerá en el menú\n' +
-                '┃ como opción para visitar el canal.\n' +
+                '┃ ❌ Solo los propietarios\n' +
+                '┃ pueden usar este comando.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
+        }
 
-            console.log(
-                `[SETCANAL] Canal actualizado: ${url}`
-            );
+        const enlace = argumento?.trim();
 
-        } catch (error) {
+        // ----------------------------------------------------
+        // SIN ENLACE
+        // ----------------------------------------------------
 
-            console.error(
-                '[SETCANAL] Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
-
-            await responder.texto(
-                '❌ No pude guardar el enlace del canal.'
+        if (!enlace) {
+            return responder.texto(
+                '╭━━〔 📢 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
+                '┃\n' +
+                '┃ Usa el comando así:\n' +
+                '┃\n' +
+                '┃ › .setcanal https://whatsapp.com/channel/...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
+
+        // ----------------------------------------------------
+        // VALIDAR ENLACE
+        // ----------------------------------------------------
+
+        let url;
+
+        try {
+            url = new URL(enlace);
+        } catch {
+            return responder.texto(
+                '╭━━〔 ❌ 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
+                '┃\n' +
+                '┃ El enlace no es válido.\n' +
+                '┃\n' +
+                '┃ Ejemplo:\n' +
+                '┃ https://whatsapp.com/channel/...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+        }
+
+        // ----------------------------------------------------
+        // GUARDAR
+        // ----------------------------------------------------
+
+        guardarCanal(url.toString());
+
+        return responder.texto(
+            '╭━━〔 📢 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
+            '┃\n' +
+            '┃ ✅ Canal configurado correctamente.\n' +
+            '┃\n' +
+            '┃ 📢 El enlace aparecerá\n' +
+            '┃ automáticamente en el menú.\n' +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
+        );
     }
 };
