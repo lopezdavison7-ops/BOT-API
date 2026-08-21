@@ -3,49 +3,44 @@ export default {
     nombre: 'lid',
     categoria: 'Diversión',
     alias: ['lo inocente de'],
-    descripcion: 'El bot se inocente de ti o de alguien más',
+    descripcion: 'Muestra cómo detecta el bot tu número',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            const inocentes = [
-                '¡Yo no fui! Yo solo soy un bot, no tengo capacidad de hacer travesuras 😇',
-                '¿Yo? ¡Jamás! Soy demasiado bueno para eso 🙏',
-                'No me metas en eso, yo solo respondo mensajes 😅',
-                '¡Inocente como un cordero! 🐑',
-                'Yo no hice nada, estaba dormido cuando pasó eso 💤',
-                '¡Que conste que yo no tuve nada que ver! 🙈',
-                'Soy un bot de paz, no conflicto ✌️',
-                'No fue mi culpa, fue el WiFi que se portó mal 📶',
-                '¡Yo solo soy el mensajero! No me disparén 🏳️',
-                'Inocente hasta que se demuestre lo contrario ⚖️',
-                '¿En serio creen que fui yo? ¡Soy más Responsable que eso! 😤',
-                'No me culpen a mí, yo solo ejecuto comandos 🤖'
-            ];
-
-            const random = inocentes[Math.floor(Math.random() * inocentes.length)];
+            const remoteJid = msg.key?.remoteJid || '';
+            const participant = msg.key?.participant || msg.key?.senderPn || '';
             
-            let respuesta = '';
+            const numeroRemitente = (participant || remoteJid)
+                .split('@')[0]
+                .split(':')[0]
+                .replace(/\D/g, '');
             
-            if (argumento) {
-                respuesta = `
-╭〔 😇 𝐋𝐎 𝐈𝐍𝐎𝐂𝐄𝐍𝐓𝐄 𝐃𝐄 〕⬣
+            const esGrupo = remoteJid.endsWith('@g.us');
+            const esPrivado = remoteJid.endsWith('@s.whatsapp.net');
+            
+            let tipoChat = 'Desconocido';
+            if (esGrupo) tipoChat = 'Grupo';
+            if (esPrivado) tipoChat = 'Chat Privado';
+            
+            const estadoNumero = numeroRemitente 
+                ? `@${numeroRemitente}` 
+                : 'No detectado';
+            
+            const esBot = numeroRemitente === sock.user?.id?.split(':')[0]?.split('@')[0];
+            
+            let estado = '✅ Activo';
+            if (esBot) estado = '🤖 Soy yo (el bot)';
+            
+            const respuesta = `
+╭〔 🔍 𝐋𝐈𝐃 - 𝐃𝐄𝐓𝐄𝐂𝐂𝐈𝐎́𝐍 〕⬣
 ┃
-┃ ${argumento}
-┃
-┃ ${random}
+┃ 📱 𝐍𝐔𝐌𝐄𝐑𝐎 › ${estadoNumero}
+┃ 💬 𝐓𝐈𝐏𝐎 𝐃𝐄 𝐂𝐇𝐀𝐓 › ${tipoChat}
+┃ 🟢 𝐄𝐒𝐓𝐀𝐃𝐎 › ${estado}
+┃ 🆔 𝐉𝐈𝐃 › ${remoteJid}
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`;
-            } else {
-                respuesta = `
-╭〔 😇 𝐋𝐎 𝐈𝐍𝐎𝐂𝐄𝐍𝐓𝐄 𝐃𝐄 〕⬣
-┃
-┃ ${random}
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`;
-            }
             
             await responder.texto(respuesta);
 
