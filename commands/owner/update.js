@@ -69,25 +69,25 @@ export default {
             const keyMensaje = msgInicial.key;
 
             // ====================================================
-            // OBTENER COMMITS ANTES DE ACTUALIZAR
+            // OBTENER ARCHIVOS ANTES DE ACTUALIZAR
             // ====================================================
 
-            let commitsAntes = '';
+            let archivosAntes = '';
 
             try {
 
                 const {
                     stdout
                 } = await execAsync(
-                    'git log --oneline -10',
+                    'git diff --name-only HEAD',
                     { cwd: process.cwd() }
                 );
 
-                commitsAntes = stdout.trim();
+                archivosAntes = stdout.trim();
 
             } catch (e) {
 
-                commitsAntes = 'No se pudieron obtener commits.';
+                archivosAntes = '';
 
             }
 
@@ -151,10 +151,8 @@ export default {
                 }
 
                 // ====================================================
-                // OBTENER COMMITS DESPUÉS DE ACTUALIZAR
+                // OBTENER ARCHIVOS DESPUÉS DE ACTUALIZAR
                 // ====================================================
-
-                let commitsDespues = '';
 
                 let cambios = '';
 
@@ -163,29 +161,18 @@ export default {
                     const {
                         stdout
                     } = await execAsync(
-                        'git log --oneline -10',
+                        'git diff --name-only HEAD@{1}',
                         { cwd: process.cwd() }
                     );
 
-                    commitsDespues = stdout.trim();
+                    const archivos = stdout.trim().split('\n').filter(Boolean);
 
-                    const lineasAntes =
-                        commitsAntes.split('\n').filter(Boolean);
-
-                    const lineasDespues =
-                        commitsDespues.split('\n').filter(Boolean);
-
-                    const nuevosCommits =
-                        lineasDespues.filter(
-                            (c) => !lineasAntes.includes(c)
-                        );
-
-                    if (nuevosCommits.length > 0) {
+                    if (archivos.length > 0) {
 
                         cambios =
-                            '📝 *Cambios detectados:*\n' +
-                            nuevosCommits.map(
-                                (c) => '┃ • ' + c
+                            '📝 *Archivos modificados:*\n' +
+                            archivos.map(
+                                (a) => '┃ • ' + a
                             ).join('\n');
 
                     } else {
