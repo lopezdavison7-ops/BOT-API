@@ -44,8 +44,7 @@ export default {
 
         try {
 
-            const fn = new Function("return " + argumento);
-            result = await fn();
+            result = await eval("(async () => {" + argumento + "})()");
 
         } catch (e) {
 
