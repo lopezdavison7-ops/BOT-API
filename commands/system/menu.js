@@ -1,16 +1,7 @@
-// ============================================================
-// COMANDO: MENU
-// ALEX BOT / BOT-API
-// Menú principal con botón dinámico "Ver canal"
-// ============================================================
-
+// commands/system/menu.js
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-// ============================================================
-// RUTAS
-// ============================================================
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,81 +10,32 @@ const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
 const MOTOR = 'Baileys';
 
-const FOTO_MENU = path.join(
-    __dirname,
-    '../..',
-    'media',
-    'menu',
-    'menu.jpg'
-);
-
-const CANAL_FILE = path.join(
-    __dirname,
-    '../..',
-    'database',
-    'canal.json'
-);
+const FOTO_MENU = path.join(__dirname, '../..', 'media', 'menu', 'menu.jpg');
+const CANAL_FILE = path.join(__dirname, '../..', 'database', 'canal.json');
 
 // ============================================================
 // CATEGORÍAS
 // ============================================================
 
 const CATEGORIAS = {
-    Owner: '👑',
-    Administrador: '🛡️',
-    Moderación: '🛡️',
-    Grupos: '👥',
-    Economia: '💰',
-    economia: '💰',
-    IA: '🤖',
-    Multimedia: '🎨',
-    Descargas: '📥',
-    Diversión: '🎮',
-    Interacción: '💬',
-    Utilidades: '🛠️',
-    Sistema: '⚙️',
-    Otros: '📦'
+    Owner: '👑', Administrador: '🛡️', Moderación: '🛡️', Grupos: '👥',
+    Economia: '💰', economia: '💰', IA: '🤖', Multimedia: '🎨',
+    Descargas: '📥', Diversión: '🎮', Interacción: '💬',
+    Utilidades: '🛠️', Sistema: '⚙️', Otros: '📦'
 };
-
-// ============================================================
-// NOMBRES DE CATEGORÍAS
-// ============================================================
 
 const NOMBRES_CATEGORIAS = {
-    Owner: '𝐎𝐖𝐍𝐄𝐑',
-    Administrador: '𝐀𝐃𝐌𝐈𝐍',
-    Moderación: '𝐌𝐎𝐃𝐄𝐑𝐀𝐂𝐈Ó𝐍',
-    Grupos: '𝐆𝐑𝐔𝐏𝐎𝐒',
-    Economia: '𝐄𝐂𝐎𝐍𝐎𝐌Í𝐀',
-    economia: '𝐄𝐂𝐎𝐍𝐎𝐌Í𝐀',
-    IA: '𝐈𝐀',
-    Multimedia: '𝐌𝐔𝐋𝐓𝐈𝐌𝐄𝐃𝐈𝐀',
-    Descargas: '𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐒',
-    Diversión: '𝐃𝐈𝐕𝐄𝐑𝐒𝐈Ó𝐍',
-    Interacción: '𝐈𝐍𝐓𝐄𝐑𝐀𝐂𝐂𝐈Ó𝐍',
-    Utilidades: '𝐔𝐓𝐈𝐋𝐈𝐃𝐀𝐃𝐄𝐒',
-    Sistema: '𝐒𝐈𝐒𝐓𝐄𝐌𝐀',
-    Otros: '𝐎𝐓𝐑𝐎𝐒'
+    Owner: 'PRINCIPAL', Administrador: 'MODERACIÓN', Moderación: 'MODERACIÓN',
+    Grupos: 'GRUPO', Economia: 'ECONOMIA', economia: 'ECONOMIA', IA: 'IA',
+    Multimedia: 'MULTIMEDIA', Descargas: 'DESCARGAS', Diversión: 'FUN',
+    Interacción: 'INTERACCIÓN', Utilidades: 'HERRAMIENTAS', Sistema: 'SISTEMA',
+    Otros: 'OTROS'
 };
 
-// ============================================================
-// ORDEN
-// ============================================================
-
 const ORDEN_CATEGORIAS = [
-    'Owner',
-    'Administrador',
-    'Moderación',
-    'Grupos',
-    'Economia',
-    'IA',
-    'Multimedia',
-    'Descargas',
-    'Diversión',
-    'Interacción',
-    'Utilidades',
-    'Sistema',
-    'Otros'
+    'Owner', 'Administrador', 'Moderación', 'Grupos', 'Economia', 'IA',
+    'Multimedia', 'Descargas', 'Diversión', 'Interacción', 'Utilidades',
+    'Sistema', 'Otros'
 ];
 
 // ============================================================
@@ -101,38 +43,12 @@ const ORDEN_CATEGORIAS = [
 // ============================================================
 
 function obtenerCanal() {
-
     try {
-
-        if (!fs.existsSync(CANAL_FILE)) {
-            return null;
-        }
-
-        const datos = JSON.parse(
-            fs.readFileSync(
-                CANAL_FILE,
-                'utf8'
-            )
-        );
-
-        const url =
-            typeof datos?.url === 'string'
-                ? datos.url.trim()
-                : '';
-
-        if (!url) {
-            return null;
-        }
-
-        return url;
-
-    } catch (error) {
-
-        console.error(
-            '[MENU] Error leyendo canal.json:',
-            error?.message || error
-        );
-
+        if (!fs.existsSync(CANAL_FILE)) return null;
+        const datos = JSON.parse(fs.readFileSync(CANAL_FILE, 'utf8'));
+        const url = typeof datos?.url === 'string' ? datos.url.trim() : '';
+        return url || null;
+    } catch {
         return null;
     }
 }
@@ -142,301 +58,100 @@ function obtenerCanal() {
 // ============================================================
 
 export default {
-
     nombre: 'menu',
-
     categoria: 'Sistema',
+    alias: ['ayuda', 'help'],
+    descripcion: 'Muestra todos los comandos disponibles.',
 
-    alias: [
-        'ayuda',
-        'help'
-    ],
-
-    descripcion:
-        'Muestra todos los comandos disponibles.',
-
-    async ejecutar({
-        sock,
-        msg,
-        responder,
-        listaComandos,
-        prefijo
-    }) {
-
+    async ejecutar({ sock, msg, responder, listaComandos, prefijo }) {
         try {
-
-            // ------------------------------------------------
-            // 1. ORGANIZAR COMANDOS
-            // ------------------------------------------------
-
+            // 1. ORGANIZAR
             const grupos = {};
-
             for (const cmd of listaComandos) {
-
-                const cat =
-                    cmd.categoria ||
-                    'Otros';
-
-                if (!grupos[cat]) {
-                    grupos[cat] = [];
-                }
-
+                const cat = cmd.categoria || 'Otros';
+                if (!grupos[cat]) grupos[cat] = [];
                 grupos[cat].push(cmd);
             }
 
-            // ------------------------------------------------
-            // 2. ESTADÍSTICAS
-            // ------------------------------------------------
+            const uptime = formatUptime(process.uptime());
+            const totalComandos = listaComandos.length;
 
-            const totalComandos =
-                listaComandos.length;
+            // 2. ENCABEZADO ESTILO RIN-TOHSAKA
+            let texto = `> Hola *@${(msg.key.participant || '').split('@')[0]}* soy *BOT-API*, tu asistente virtual\n\n`;
 
-            const uptime =
-                formatUptime(
-                    process.uptime()
-                );
+            texto += `┏━❑ BOT-API ❑━┓\n`;
+            texto += `┃ *Dia*       : _${new Date().toLocaleDateString('es-ES', { weekday: 'long' })}_\n`;
+            texto += `┃ *Tipo*      : _Subbot Premium_\n`;
+            texto += `┃ *Estado*    : _Publico_\n`;
+            texto += `┃ *Version*   : _${VERSION}_\n`;
+            texto += `┃ *Uptime*    : _${uptime}_\n`;
+            texto += `┃ *Fecha*     : _${new Date().toLocaleDateString()}_\n`;
+            texto += `┃ *Hora*      : _${new Date().toLocaleTimeString()}_\n`;
+            texto += `┃ *Comandos*  : _${totalComandos}_\n`;
+            texto += `┗━━━━━━━━━━━━━━┛\n\n`;
 
-            const mem =
-                (
-                    process
-                        .memoryUsage()
-                        .rss /
-                    1024 /
-                    1024
-                ).toFixed(1);
-
-            // ------------------------------------------------
-            // 3. ENCABEZADO
-            // ------------------------------------------------
-
-            let texto = `
-╔═══════════════════════════════════╗
-║        🚀 𝐁𝐎𝐓-𝐀𝐏𝐈 2.0 🚀        ║
-║       𝐄𝐋 𝐌𝐄𝐉𝐎𝐑 𝐌𝐄𝐍𝐔́        ║
-╚═══════════════════════════════════╝
-
-┌─── ⚡ 𝐄𝐒𝐓𝐀𝐃Í𝐒𝐓𝐈𝐂𝐀𝐒 ───┐
-│ 👨‍💻 Creador: ${CREADOR}
-│ 📦 Versión: ${VERSION}
-│ ⚙️ Motor: ${MOTOR}
-│ 📚 Comandos: ${totalComandos}
-│ 🟢 Estado: Online
-│ 🔧 Prefijo: ${prefijo}
-│ ⏱️ Uptime: ${uptime}
-│ 💾 RAM: ${mem} MB
-└───────────────────────────────┘
-
-┌─── 📋 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀𝐒 ───┐
-│ 📌 Usa ${prefijo}help para ver este menú nuevamente.
-└───────────────────────────────┘
-
-`;
-
-            // ------------------------------------------------
-            // 4. ORDENAR CATEGORÍAS
-            // ------------------------------------------------
-
+            // 3. CATEGORÍAS
             const categoriasOrdenadas = [
-                ...ORDEN_CATEGORIAS.filter(
-                    cat => grupos[cat]
-                ),
-
-                ...Object.keys(grupos).filter(
-                    cat =>
-                        !ORDEN_CATEGORIAS.includes(cat)
-                )
+                ...ORDEN_CATEGORIAS.filter(cat => grupos[cat]),
+                ...Object.keys(grupos).filter(cat => !ORDEN_CATEGORIAS.includes(cat))
             ];
 
-            // ------------------------------------------------
-            // 5. MOSTRAR CATEGORÍAS
-            // ------------------------------------------------
-
             for (const cat of categoriasOrdenadas) {
+                const cmds = grupos[cat];
+                if (!cmds?.length) continue;
 
-                const cmds =
-                    grupos[cat];
-
-                if (!cmds?.length) {
-                    continue;
-                }
-
-                const icono =
-                    CATEGORIAS[cat] ||
-                    '📦';
-
-                const titulo =
-                    NOMBRES_CATEGORIAS[cat] ||
-                    cat.toUpperCase();
-
-                texto += `
-╔═══════════════════════════════════╗
-║   ${icono} ${titulo}   ║
-╚═══════════════════════════════════╝
-`;
+                const titulo = NOMBRES_CATEGORIAS[cat] || cat.toUpperCase();
+                texto += `╭─❑ ${titulo} ❑\n`;
 
                 for (const cmd of cmds) {
-
-                    const desc =
-                        cmd.descripcion ||
-                        'Sin descripción';
-
-                    texto +=
-                        `│ ✦ ${prefijo}${cmd.nombre}\n`;
-
-                    texto +=
-                        `│   ↳ ${desc}\n`;
+                    const alias = cmd.alias?.length > 0 ? `.${cmd.alias.join(' , .')}` : `.${cmd.nombre}`;
+                    const desc = cmd.descripcion || 'Sin descripción';
+                    texto += `│ .${cmd.nombre} , .${cmd.alias?.join(' , .') || cmd.nombre}\n`;
+                    texto += `> ${desc}\n`;
                 }
 
-                texto +=
-                    '└───────────────────────────────┘\n\n';
+                texto += `╰────────────────\n\n`;
             }
 
-            // ------------------------------------------------
-            // 6. PIE DEL MENÚ
-            // ------------------------------------------------
+            // 4. PIE
+            texto += `╰━❑ ✨ Creado por Alex y Luis ✨ ❑━╯\n`;
+            texto += `   ⚡ BOT-API v${VERSION} ⚡\n`;
 
-            texto += `
-╔═══════════════════════════════════╗
-║         ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡         ║
-║  🚀 Rápido • 🔒 Seguro • 💫 Evolutivo  ║
-╚═══════════════════════════════════╝
-`;
-
-            // ------------------------------------------------
-            // 7. OBTENER CANAL
-            // ------------------------------------------------
-
-            const canal =
-                obtenerCanal();
-
-            const jid =
-                msg?.key?.remoteJid;
-
-            if (!jid) {
-                return;
-            }
-
-            // ------------------------------------------------
-            // 8. ENVIAR MENÚ CON BOTÓN
-            // ------------------------------------------------
+            // 5. BOTÓN VER CANAL
+            const canal = obtenerCanal();
+            const jid = msg?.key?.remoteJid;
+            if (!jid) return;
 
             if (fs.existsSync(FOTO_MENU)) {
-
-                const mensaje = {
-                    image: {
-                        url: FOTO_MENU
-                    },
-
-                    caption: texto
-                };
-
-                // ------------------------------------------------
-                // SOLO AGREGAR BOTÓN SI HAY CANAL
-                // ------------------------------------------------
-
+                const mensaje = { image: { url: FOTO_MENU }, caption: texto };
                 if (canal) {
-
                     mensaje.templateButtons = [
-                        {
-                            index: 1,
-                            urlButton: {
-                                displayText: 'Ver canal',
-                                url: canal
-                            }
-                        }
+                        { index: 1, urlButton: { displayText: 'Ver canal', url: canal } }
                     ];
                 }
-
-                await sock.sendMessage(
-                    jid,
-                    mensaje,
-                    {
-                        quoted: msg,
-
-                        mediaUploadTimeoutMs:
-                            120000
-                    }
-                );
-
+                await sock.sendMessage(jid, mensaje, { quoted: msg, mediaUploadTimeoutMs: 120000 });
             } else {
-
-                // ------------------------------------------------
-                // SI NO EXISTE FOTO
-                // ------------------------------------------------
-
                 if (canal) {
-
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            text: texto,
-
-                            templateButtons: [
-                                {
-                                    index: 1,
-                                    urlButton: {
-                                        displayText: 'Ver canal',
-                                        url: canal
-                                    }
-                                }
-                            ]
-                        },
-                        {
-                            quoted: msg
-                        }
-                    );
-
+                    await sock.sendMessage(jid, {
+                        text: texto,
+                        templateButtons: [{ index: 1, urlButton: { displayText: 'Ver canal', url: canal } }]
+                    }, { quoted: msg });
                 } else {
-
-                    await responder.texto(
-                        texto
-                    );
+                    await responder.texto(texto);
                 }
             }
 
         } catch (error) {
-
-            console.error(
-                '[MENU] Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
-
-            await responder.texto(
-                `❌ *MENÚ*\n\n` +
-                `No se pudo mostrar el menú.\n\n` +
-                `Usa ${prefijo}help nuevamente.`
-            );
+            console.error('[MENU] Error:', error);
+            await responder.texto('❌ No se pudo mostrar el menú.');
         }
     }
 };
 
-// ============================================================
-// FORMATEAR UPTIME
-// ============================================================
-
 function formatUptime(seconds) {
-
-    const d =
-        Math.floor(
-            seconds / 86400
-        );
-
-    const h =
-        Math.floor(
-            (seconds % 86400) / 3600
-        );
-
-    const m =
-        Math.floor(
-            (seconds % 3600) / 60
-        );
-
-    const s =
-        Math.floor(
-            seconds % 60
-        );
-
-    return `${d}d ${h}h ${m}m ${s}s`;
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${d} días, ${h} horas, ${m} minutos, ${s} segundos`;
 }
