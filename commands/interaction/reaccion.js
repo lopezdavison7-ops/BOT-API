@@ -1,300 +1,729 @@
-// commands/interaction/reaccion.js
-import fetch from 'node-fetch';
+// ============================================================
+// BOT-API
+// COMANDO: REACCION
+// ============================================================
+// Reacciones GIF usando database/anime.json.
+//
+// Ejemplos:
+// .hug
+// .hug @usuario
+// .hug respondiendo un mensaje
+// .kiss @usuario
+// .pat @usuario
+//
+// Compatible con:
+// - Nueva estructura recursiva de comandos
+// - Baileys 7
+// - Node.js moderno
+// ============================================================
+
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
 
 // ============================================================
-// LISTA DE GIFs 100% FUNCIONALES (desde GitHub)
+// CONFIGURACIÓN
 // ============================================================
 
-const REACCIONES = {
-    hug: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/9535cb9a55.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/6b238024da.gif'
-    ],
-    kiss: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/be310f02b3.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/f35004c537.gif'
-    ],
-    pat: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/aa04882cf0.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/7f567b121c.gif'
-    ],
-    slap: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/ec33cb4472.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/4816236c79.gif'
-    ],
-    poke: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/5db2be6da3.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/3cbe4e0e10.gif'
-    ],
-    cuddle: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/8b8bf1db46.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/0aa8081040.gif'
-    ],
-    wave: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/247a461176.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c9db25d0ec.gif'
-    ],
-    smile: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/ba554e8789.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/75b144c16e.gif'
-    ],
-    dance: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/42c581756f.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/e7d6758d51.gif'
-    ],
-    cry: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/e9df37559b.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/bb7e8d6b25.gif'
-    ],
-    happy: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a2b43a93d9.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/bd5e4143da.gif'
-    ],
-    angry: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/db1be31c46.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/77ff5a340a.gif'
-    ],
-    love: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/24a7d1bf51.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/b25cb710db.gif'
-    ],
-    bite: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c2e853e3d6.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/f04c393170.gif'
-    ],
-    blush: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/76de9dc2fa.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/8a6c1ad34e.gif'
-    ],
-    highfive: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c22ff49754.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a9682e795d.gif'
-    ],
-    handhold: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/4cd2f2cb31.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c6dce7a3c9.gif'
-    ],
-    feed: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/25aaf06bf6.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/9656accc24.gif'
-    ],
-    bonk: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/17703ba93a.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/783a7b6d82.gif'
-    ],
-    yeet: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/c50d016a77.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/2d308ed364.gif'
-    ],
-    wink: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/7db01288c2.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/017d797e31.gif'
-    ],
-    stare: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/44be5e7886.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a8a6c1ad34e.gif'
-    ],
-    tickle: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/29c1e3038c.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/a68bfb29f6.gif'
-    ],
-    punch: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/3e73b3353f.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/cb2257db20.gif'
-    ],
-    kick: [
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/aef80fd62e.gif',
-        'https://raw.githubusercontent.com/Kone457/Nexus/main/Anime/22c76d8edc.gif'
-    ]
-};
+const ANIME_FILE = path.join(
+    process.cwd(),
+    'database',
+    'anime.json'
+);
 
 // ============================================================
-// FUNCIONES AUXILIARES
+// COMANDOS DISPONIBLES
+// ============================================================
+
+const REACCIONES = [
+    'hug',
+    'kiss',
+    'pat',
+    'slap',
+    'poke',
+    'cuddle',
+    'wave',
+    'smile',
+    'dance',
+    'cry',
+    'happy',
+    'angry',
+    'love',
+    'bite',
+    'blush',
+    'highfive',
+    'handhold',
+    'feed',
+    'bonk',
+    'yeet',
+    'wink',
+    'stare',
+    'tickle',
+    'punch',
+    'kick'
+];
+
+// ============================================================
+// OBTENER COMANDO REAL
 // ============================================================
 
 function obtenerTipo(msg) {
-    const texto = msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || '';
-    if (!texto) return 'hug';
-    const partes = texto.trim().split(/\s+/);
-    const comando = partes[0]?.replace(/^\./, '').toLowerCase();
+    const texto =
+        msg?.message?.conversation ||
+        msg?.message?.extendedTextMessage?.text ||
+        '';
+
+    if (!texto) {
+        return 'hug';
+    }
+
+    const partes =
+        texto
+            .trim()
+            .split(/\s+/);
+
+    const comando =
+        partes[0]
+            ?.replace(/^\./, '')
+            .toLowerCase();
+
     return comando || 'hug';
 }
 
+// ============================================================
+// OBTENER AUTOR
+// ============================================================
+
 function obtenerAutor(msg) {
-    const key = msg?.key || {};
-    const candidatos = [key.participant, key.senderPn, key.participantAlt, key.remoteJid];
-    for (const c of candidatos) {
-        if (!c) continue;
-        if (String(c).endsWith('@g.us')) continue;
-        return c;
+    const key =
+        msg?.key || {};
+
+    const candidatos = [
+        key.participant,
+        key.senderPn,
+        key.participantAlt,
+        key.remoteJid
+    ];
+
+    for (const candidato of candidatos) {
+        if (!candidato) {
+            continue;
+        }
+
+        const jid =
+            String(candidato);
+
+        if (jid.endsWith('@g.us')) {
+            continue;
+        }
+
+        return jid;
     }
+
     return null;
 }
 
+// ============================================================
+// OBTENER MENCIÓN
+// ============================================================
+
 function obtenerMencion(msg) {
-    const ctx = msg?.message?.extendedTextMessage?.contextInfo;
-    const m = ctx?.mentionedJid || [];
-    return m.length > 0 ? m[0] : null;
+    const contexto =
+        msg?.message
+            ?.extendedTextMessage
+            ?.contextInfo;
+
+    const mencionados =
+        contexto?.mentionedJid || [];
+
+    if (
+        Array.isArray(mencionados) &&
+        mencionados.length > 0
+    ) {
+        return mencionados[0];
+    }
+
+    return null;
 }
 
-function obtenerRespondido(msg) {
-    const ctx = msg?.message?.extendedTextMessage?.contextInfo;
-    if (!ctx?.quotedMessage) return null;
-    return ctx.participant || ctx.participantAlt || null;
+// ============================================================
+// OBTENER USUARIO RESPONDIDO
+// ============================================================
+
+function obtenerPersonaRespondida(msg) {
+    const contexto =
+        msg?.message
+            ?.extendedTextMessage
+            ?.contextInfo;
+
+    if (!contexto?.quotedMessage) {
+        return null;
+    }
+
+    return (
+        contexto.participant ||
+        contexto.participantAlt ||
+        null
+    );
 }
+
+// ============================================================
+// NORMALIZAR JID
+// ============================================================
+
+function normalizarJid(jid) {
+    if (!jid) {
+        return null;
+    }
+
+    const texto =
+        String(jid).trim();
+
+    if (!texto) {
+        return null;
+    }
+
+    return texto;
+}
+
+// ============================================================
+// CREAR TEXTO DE MENCIÓN
+// ============================================================
 
 function crearMencion(jid) {
-    if (!jid) return null;
-    const num = String(jid).split('@')[0].split(':')[0];
-    return num ? `@${num}` : null;
-}
+    const normalizado =
+        normalizarJid(jid);
 
-function obtenerAccion(t) {
-    const a = {
-        hug: 'abraza', kiss: 'besa', pat: 'acaricia', slap: 'da una bofetada a',
-        poke: 'molesta a', cuddle: 'se acurruca con', wave: 'saluda a',
-        smile: 'sonríe a', dance: 'baila con', cry: 'llora con',
-        happy: 'se alegra con', angry: 'se enoja con', love: 'ama a',
-        bite: 'muerde a', blush: 'se sonroja con', highfive: 'choca la mano con',
-        handhold: 'toma de la mano a', feed: 'alimenta a', bonk: 'golpea suavemente a',
-        yeet: 'lanza a', wink: 'le guiña el ojo a', stare: 'mira a',
-        tickle: 'hace cosquillas a', punch: 'golpea a', kick: 'patea a'
-    };
-    return a[t] || t;
-}
+    if (!normalizado) {
+        return null;
+    }
 
-function textoSinObjetivo(t, a) {
-    const m = {
-        hug: `${a} quiere dar muchos abrazos 🤗`,
-        kiss: `${a} quiere dar muchos besos 😘`,
-        pat: `${a} quiere dar muchas caricias 🥰`,
-        wave: `${a} quiere saludar a todos 👋`,
-        dance: `${a} quiere bailar 💃`,
-        smile: `${a} está sonriendo 😄`,
-        love: `${a} está repartiendo amor ❤️`
-    };
-    return m[t] || `${a} quiere hacer muchas reacciones 🎭`;
+    const numero =
+        normalizado
+            .split('@')[0]
+            .split(':')[0]
+            .replace(/[^0-9]/g, '');
+
+    if (!numero) {
+        return null;
+    }
+
+    return `@${numero}`;
 }
 
 // ============================================================
-// DESCARGAR Y CONVERTIR A MP4 (Infalible)
+// NOMBRE BONITO DE LA ACCIÓN
 // ============================================================
 
-async function descargarYConvertir(url) {
-    const carpeta = await fs.promises.mkdtemp(
-        path.join(os.tmpdir(), 'reaccion-')
+function obtenerAccion(tipo) {
+    const acciones = {
+
+        hug:
+            'abraza a',
+
+        kiss:
+            'besa a',
+
+        pat:
+            'acaricia a',
+
+        slap:
+            'da una bofetada a',
+
+        poke:
+            'molesta a',
+
+        cuddle:
+            'se acurruca con',
+
+        wave:
+            'saluda a',
+
+        smile:
+            'sonríe a',
+
+        dance:
+            'baila con',
+
+        cry:
+            'llora con',
+
+        happy:
+            'se alegra con',
+
+        angry:
+            'se enoja con',
+
+        love:
+            'ama a',
+
+        bite:
+            'muerde a',
+
+        blush:
+            'se sonroja con',
+
+        highfive:
+            'choca la mano con',
+
+        handhold:
+            'toma de la mano a',
+
+        feed:
+            'alimenta a',
+
+        bonk:
+            'golpea suavemente a',
+
+        yeet:
+            'lanza a',
+
+        wink:
+            'le guiña el ojo a',
+
+        stare:
+            'mira a',
+
+        tickle:
+            'hace cosquillas a',
+
+        punch:
+            'golpea a',
+
+        kick:
+            'patea a'
+    };
+
+    return (
+        acciones[tipo] ||
+        'interactúa con'
     );
+}
 
-    const gifPath = path.join(carpeta, 'original.gif');
-    const mp4Path = path.join(carpeta, 'convertido.mp4');
+// ============================================================
+// TEXTO SIN OBJETIVO
+// ============================================================
 
-    try {
-        // 1. Descargar el GIF
-        const res = await fetch(url);
-        const buffer = await res.buffer();
-        fs.writeFileSync(gifPath, buffer);
+function textoSinObjetivo(
+    tipo,
+    autorTexto
+) {
+    const mensajes = {
 
-        // 2. Convertir GIF a MP4 usando ffmpeg
-        await execFileAsync(
-            'ffmpeg',
-            [
-                '-y',
-                '-i', gifPath,
-                '-movflags', '+faststart',
-                '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-crf', '23',
-                '-an',
-                mp4Path
-            ],
-            { maxBuffer: 20 * 1024 * 1024 }
+        hug:
+            `${autorTexto} quiere dar muchos abrazos 🤗`,
+
+        kiss:
+            `${autorTexto} quiere dar muchos besos 😘`,
+
+        pat:
+            `${autorTexto} quiere dar muchas caricias 🥰`,
+
+        wave:
+            `${autorTexto} quiere saludar a todos 👋`,
+
+        dance:
+            `${autorTexto} quiere bailar 💃`,
+
+        smile:
+            `${autorTexto} está sonriendo 😄`,
+
+        love:
+            `${autorTexto} está repartiendo amor ❤️`
+    };
+
+    return (
+        mensajes[tipo] ||
+        `${autorTexto} quiere hacer una reacción 🎭`
+    );
+}
+
+// ============================================================
+// CARGAR ANIME.JSON
+// ============================================================
+
+function cargarAnime() {
+
+    if (!fs.existsSync(ANIME_FILE)) {
+        throw new Error(
+            'El archivo database/anime.json no existe.'
+        );
+    }
+
+    const contenido =
+        fs.readFileSync(
+            ANIME_FILE,
+            'utf8'
         );
 
-        // 3. Leer el MP4 generado
-        const mp4Buffer = fs.readFileSync(mp4Path);
-        return mp4Buffer;
+    if (!contenido.trim()) {
+        throw new Error(
+            'database/anime.json está vacío.'
+        );
+    }
 
-    } finally {
-        // Limpiar carpeta temporal
-        await fs.promises.rm(carpeta, { recursive: true, force: true }).catch(() => {});
+    try {
+
+        return JSON.parse(
+            contenido
+        );
+
+    } catch {
+        throw new Error(
+            'database/anime.json contiene JSON inválido.'
+        );
     }
 }
 
 // ============================================================
-// COMANDO PRINCIPAL
+// OBTENER URL ALEATORIA
+// ============================================================
+
+function obtenerUrl(tipo) {
+
+    const datos =
+        cargarAnime();
+
+    const reaccion =
+        datos?.[tipo];
+
+    if (
+        !reaccion ||
+        !Array.isArray(
+            reaccion.videos
+        ) ||
+        reaccion.videos.length === 0
+    ) {
+        return null;
+    }
+
+    const videos =
+        reaccion.videos.filter(
+            url =>
+                typeof url === 'string' &&
+                url.startsWith('http')
+        );
+
+    if (!videos.length) {
+        return null;
+    }
+
+    return (
+        videos[
+            Math.floor(
+                Math.random() *
+                videos.length
+            )
+        ]
+    );
+}
+
+// ============================================================
+// DESCARGAR GIF / VIDEO
+// ============================================================
+
+async function descargarGif(url) {
+
+    const controller =
+        new AbortController();
+
+    const timeout =
+        setTimeout(
+            () => controller.abort(),
+            30000
+        );
+
+    try {
+
+        const respuesta =
+            await fetch(
+                url,
+                {
+                    signal:
+                        controller.signal,
+
+                    headers: {
+                        'User-Agent':
+                            'BOT-API/1.0'
+                    }
+                }
+            );
+
+        if (!respuesta.ok) {
+            throw new Error(
+                `HTTP ${respuesta.status}`
+            );
+        }
+
+        const arrayBuffer =
+            await respuesta.arrayBuffer();
+
+        return Buffer.from(
+            arrayBuffer
+        );
+
+    } finally {
+
+        clearTimeout(
+            timeout
+        );
+    }
+}
+
+// ============================================================
+// VALIDAR REACCIÓN
+// ============================================================
+
+function reaccionValida(tipo) {
+    return REACCIONES.includes(
+        tipo
+    );
+}
+
+// ============================================================
+// COMANDO
 // ============================================================
 
 export default {
-    nombre: 'reaccion',
-    categoria: 'Interacción',
-    alias: ['hug', 'kiss', 'pat', 'slap', 'poke', 'cuddle', 'wave', 'smile', 'dance', 'cry', 'happy', 'angry', 'love', 'bite', 'blush', 'highfive', 'handhold', 'feed', 'bonk', 'yeet', 'wink', 'stare', 'tickle', 'punch', 'kick'],
-    descripcion: 'Envía un GIF de reacción en formato MP4 (sin errores).',
 
-    async ejecutar({ sock, msg, responder }) {
-        const tipo = obtenerTipo(msg);
+    nombre: 'reaccion',
+
+    categoria: 'Interacción',
+
+    alias: REACCIONES,
+
+    descripcion:
+        'Reacciones GIF. Ejemplo: .hug, .kiss, .pat, etc.',
+
+    ejecutar: async ({
+        sock,
+        msg,
+        responder
+    }) => {
+
+        const tipo =
+            obtenerTipo(msg);
+
+        // ----------------------------------------------------
+        // VALIDAR COMANDO
+        // ----------------------------------------------------
+
+        if (!reaccionValida(tipo)) {
+
+            await responder.texto(
+                '❌ Reacción no disponible.\n\n' +
+                '🎭 Reacciones disponibles:\n' +
+                REACCIONES
+                    .map(
+                        reaccion =>
+                            `› .${reaccion}`
+                    )
+                    .join('\n')
+            );
+
+            return;
+        }
 
         try {
-            console.log(`[REACCION] Ejecutando: ${tipo}`);
 
-            const urls = REACCIONES[tipo];
-            if (!urls || urls.length === 0) {
-                return responder.texto(`❌ No hay GIFs para *${tipo}*.`);
+            console.log(
+                `[REACCION] Ejecutando: .${tipo}`
+            );
+
+            // ------------------------------------------------
+            // OBTENER URL
+            // ------------------------------------------------
+
+            const url =
+                obtenerUrl(tipo);
+
+            if (!url) {
+
+                await responder.texto(
+                    `❌ No encontré un GIF para la reacción *${tipo}*.`
+                );
+
+                return;
             }
 
-            const url = urls[Math.floor(Math.random() * urls.length)];
+            console.log(
+                `[REACCION] URL: ${url}`
+            );
 
-            // Descargar y convertir a MP4
-            const mp4Buffer = await descargarYConvertir(url);
+            // ------------------------------------------------
+            // DESCARGAR GIF
+            // ------------------------------------------------
 
-            // Obtener autor y objetivo
-            const autor = obtenerAutor(msg);
-            const mencionado = obtenerMencion(msg);
-            const respondido = obtenerRespondido(msg);
-            const objetivo = mencionado || respondido || null;
+            const buffer =
+                await descargarGif(
+                    url
+                );
 
-            const textoAutor = crearMencion(autor) || '@usuario';
+            if (
+                !buffer ||
+                !buffer.length
+            ) {
+                throw new Error(
+                    'El GIF descargado está vacío.'
+                );
+            }
+
+            console.log(
+                `[REACCION] Archivo descargado: ${buffer.length} bytes`
+            );
+
+            // ------------------------------------------------
+            // OBTENER USUARIOS
+            // ------------------------------------------------
+
+            const autor =
+                obtenerAutor(
+                    msg
+                );
+
+            const mencionado =
+                obtenerMencion(
+                    msg
+                );
+
+            const respondido =
+                obtenerPersonaRespondida(
+                    msg
+                );
+
+            const objetivo =
+                mencionado ||
+                respondido ||
+                null;
+
+            // ------------------------------------------------
+            // CREAR MENCIÓN DEL AUTOR
+            // ------------------------------------------------
+
+            const textoAutor =
+                crearMencion(
+                    autor
+                ) ||
+                '@usuario';
+
+            // ------------------------------------------------
+            // ARRAY DE MENCIONES
+            // ------------------------------------------------
+
             const menciones = [];
 
-            let caption = `🎭 *${tipo.toUpperCase()}*\n\n`;
-
-            if (objetivo) {
-                const textoObjetivo = crearMencion(objetivo);
-                if (textoObjetivo) {
-                    const accion = obtenerAccion(tipo);
-                    caption += `💫 ${textoAutor} ${accion} ${textoObjetivo}`;
-                    if (autor) menciones.push(autor);
-                    if (objetivo && !menciones.includes(objetivo)) menciones.push(objetivo);
-                } else {
-                    caption += `💫 ${textoSinObjetivo(tipo, textoAutor)}`;
-                }
-            } else {
-                caption += `💫 ${textoSinObjetivo(tipo, textoAutor)}`;
-                if (autor) menciones.push(autor);
+            if (autor) {
+                menciones.push(
+                    autor
+                );
             }
 
-            // Enviar el video MP4 (WhatsApp lo reproduce como GIF)
+            if (
+                objetivo &&
+                !menciones.includes(
+                    objetivo
+                )
+            ) {
+                menciones.push(
+                    objetivo
+                );
+            }
+
+            // ------------------------------------------------
+            // CREAR CAPTION
+            // ------------------------------------------------
+
+            let caption =
+                `🎭 *${tipo.toUpperCase()}*\n\n`;
+
+            if (objetivo) {
+
+                const textoObjetivo =
+                    crearMencion(
+                        objetivo
+                    );
+
+                const accion =
+                    obtenerAccion(
+                        tipo
+                    );
+
+                if (
+                    textoObjetivo
+                ) {
+
+                    caption +=
+                        `💫 ${textoAutor} ${accion} ${textoObjetivo}`;
+
+                } else {
+
+                    caption +=
+                        `💫 ${textoSinObjetivo(
+                            tipo,
+                            textoAutor
+                        )}`;
+                }
+
+            } else {
+
+                caption +=
+                    `💫 ${textoSinObjetivo(
+                        tipo,
+                        textoAutor
+                    )}`;
+            }
+
+            // ------------------------------------------------
+            // ENVIAR GIF
+            // ------------------------------------------------
+
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    video: mp4Buffer,
-                    mimetype: 'video/mp4',
+                    video: buffer,
+
+                    gifPlayback:
+                        true,
+
                     caption,
-                    mentions: menciones
+
+                    mentions:
+                        menciones
                 },
-                { quoted: msg }
+                {
+                    quoted:
+                        msg
+                }
+            );
+
+            // ------------------------------------------------
+            // LOG
+            // ------------------------------------------------
+
+            console.log(
+                `[REACCION] .${tipo} enviado correctamente.`
             );
 
         } catch (error) {
-            console.error('[REACCION] Error:', error?.message || error);
-            await responder.texto(`❌ No pude enviar la reacción *${tipo}*.\n\n⚠️ ${error?.message || 'Error desconocido'}`);
+
+            console.error(
+                '[REACCION] Error:',
+                error?.stack ||
+                error?.message ||
+                error
+            );
+
+            await responder.texto(
+                '╭━━〔 ❌ 𝐑𝐄𝐀𝐂𝐂𝐈Ó𝐍 〕━━⬣\n' +
+                '┃\n' +
+                `┃ No pude enviar *${tipo}*.\n` +
+                '┃\n' +
+                `┃ ⚠️ ${
+                    error?.message ||
+                    'Error desconocido.'
+                }\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
         }
     }
 };
