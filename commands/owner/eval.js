@@ -44,7 +44,7 @@ export default {
 
         try {
 
-            result = await (new Function('return (async () => {' + argumento + '})()'))();
+            result = await eval("(async () => {" + argumento + "})()");
 
         } catch (e) {
 
