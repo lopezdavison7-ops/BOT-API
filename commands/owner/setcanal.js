@@ -1,39 +1,31 @@
-// ============================================================
-// COMANDO: SETCANAL
-// ALEX BOT / BOT-API
-// Configura el canal oficial que aparecerá como botón
-// "Ver canal" al final del menú.
-// ============================================================
-
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { esOwner } from '../../utils/owner.js';
-
-// ============================================================
-// RUTAS
-// ============================================================
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ============================================================
+// ARCHIVO DONDE SE GUARDA EL CANAL
+// ============================================================
+
+const DATA_DIR = path.join(
+    process.cwd(),
+    'database'
+);
+
 const CANAL_FILE = path.join(
-    __dirname,
-    '..',
-    '..',
-    'database',
+    DATA_DIR,
     'canal.json'
 );
 
 // ============================================================
-// ASEGURAR DATABASE
+// CREAR CARPETA / ARCHIVO SI NO EXISTEN
 // ============================================================
 
-function asegurarArchivo() {
-    const carpeta = path.dirname(CANAL_FILE);
-
-    if (!fs.existsSync(carpeta)) {
-        fs.mkdirSync(carpeta, {
+function prepararArchivo() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, {
             recursive: true
         });
     }
@@ -47,9 +39,31 @@ function asegurarArchivo() {
                 },
                 null,
                 2
-            ),
-            'utf8'
+            )
         );
+    }
+}
+
+// ============================================================
+// LEER CANAL
+// ============================================================
+
+export function obtenerCanal() {
+    try {
+        prepararArchivo();
+
+        const data = JSON.parse(
+            fs.readFileSync(
+                CANAL_FILE,
+                'utf8'
+            )
+        );
+
+        return typeof data.url === 'string'
+            ? data.url
+            : '';
+    } catch {
+        return '';
     }
 }
 
@@ -58,7 +72,7 @@ function asegurarArchivo() {
 // ============================================================
 
 function guardarCanal(url) {
-    asegurarArchivo();
+    prepararArchivo();
 
     fs.writeFileSync(
         CANAL_FILE,
@@ -68,56 +82,95 @@ function guardarCanal(url) {
             },
             null,
             2
-        ),
-        'utf8'
+        )
     );
 }
 
 // ============================================================
-// VALIDAR CANAL
+// COMPROBAR OWNER
 // ============================================================
 
-function validarCanal(url) {
+function limpiarNumero(numero) {
+    return String(numero || '')
+        .replace(/\D/g, '');
+}
+
+function obtenerNumeroJid(jid) {
+    return limpiarNumero(
+        String(jid || '').split('@')[0]
+    );
+}
+
+function esOwner(msg) {
+    const sender = obtenerNumeroJid(
+        msg?.key?.participant ||
+        msg?.participant ||
+        msg?.sender ||
+        ''
+    );
+
+    // Intentar usar el sistema de owners existente.
     try {
-        const parsed = new URL(url);
+        if (
+            typeof global.esOwner === 'function'
+        ) {
+            return Boolean(
+                global.esOwner(msg)
+            );
+        }
+    } catch {}
 
-        return (
-            parsed.protocol === 'https:' &&
-            (
-                parsed.hostname === 'whatsapp.com' ||
-                parsed.hostname === 'www.whatsapp.com'
-            ) &&
-            parsed.pathname.startsWith('/channel/')
-        );
+    // Owners dinámicos.
+    const owners = [];
 
-    } catch {
-        return false;
+    if (Array.isArray(global.owners)) {
+        owners.push(...global.owners);
     }
+
+    if (Array.isArray(global.owner)) {
+        owners.push(...global.owner);
+    }
+
+    if (typeof global.owner === 'string') {
+        owners.push(global.owner);
+    }
+
+    if (typeof global.OWNER_NUMBER === 'string') {
+        owners.push(global.OWNER_NUMBER);
+    }
+
+    if (typeof process.env.OWNER_NUMBER === 'string') {
+        owners.push(process.env.OWNER_NUMBER);
+    }
+
+    return owners.some(
+        owner =>
+            limpiarNumero(owner) === sender
+    );
 }
 
 // ============================================================
-// COMANDO
+// COMANDO .SETCANAL
 // ============================================================
 
 export default {
-
     nombre: 'setcanal',
 
     categoria: 'Owner',
 
     alias: [
-        'canal',
-        'setchannel'
+        'setchannel',
+        'canal'
     ],
 
     descripcion:
         'Configura el enlace del canal que aparecerá como botón en el menú.',
 
-    async ejecutar({
+    ejecutar: async ({
         msg,
-        responder,
-        argumento
-    }) {
+        text,
+        responder
+    }) => {
 
         try {
 
@@ -127,55 +180,68 @@ export default {
 
             if (!esOwner(msg)) {
 
-                return responder.texto(
-                    '╭━━〔 🔐 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ ❌ Solo los propietarios\n' +
-                    '┃ pueden usar este comando.\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
+                await responder.texto(
+                    '🔐 *ACCESO DENEGADO*\n\n' +
+                    'Este comando es exclusivo del Owner.'
                 );
+
+                return;
             }
 
             // ------------------------------------------------
-            // OBTENER ENLACE
+            // OBTENER TEXTO
             // ------------------------------------------------
 
-            const url =
-                argumento?.trim();
+            const url = String(
+                text || ''
+            ).trim();
+
+            // ------------------------------------------------
+            // MOSTRAR CANAL ACTUAL
+            // ------------------------------------------------
 
             if (!url) {
 
-                return responder.texto(
-                    '╭━━〔 📢 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ ❌ Debes enviar el enlace\n' +
-                    '┃ de tu canal de WhatsApp.\n' +
-                    '┃\n' +
-                    '┃ 📌 Ejemplo:\n' +
-                    '┃ .setcanal https://whatsapp.com/channel/XXXXXXXX\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
+                const actual =
+                    obtenerCanal();
+
+                if (!actual) {
+
+                    await responder.texto(
+                        '📢 *CANAL NO CONFIGURADO*\n\n' +
+                        'Usa:\n' +
+                        '*.setcanal https://whatsapp.com/channel/...*'
+                    );
+
+                    return;
+                }
+
+                await responder.texto(
+                    '📢 *CANAL ACTUAL*\n\n' +
+                    `${actual}`
                 );
+
+                return;
             }
 
             // ------------------------------------------------
-            // VALIDAR
+            // VALIDAR URL
             // ------------------------------------------------
 
-            if (!validarCanal(url)) {
+            if (
+                !/^https?:\/\/(www\.)?whatsapp\.com\/channel\//i.test(
+                    url
+                )
+            ) {
 
-                return responder.texto(
-                    '╭━━〔 ❌ 𝐄𝐍𝐋𝐀𝐂𝐄 𝐈𝐍𝐕Á𝐋𝐈𝐃𝐎 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ El enlace no parece ser\n' +
-                    '┃ un canal válido de WhatsApp.\n' +
-                    '┃\n' +
-                    '┃ 📌 Debe comenzar con:\n' +
-                    '┃ https://whatsapp.com/channel/\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
+                await responder.texto(
+                    '❌ *ENLACE INVÁLIDO*\n\n' +
+                    'Debes colocar un enlace de canal de WhatsApp.\n\n' +
+                    'Ejemplo:\n' +
+                    '*.setcanal https://whatsapp.com/channel/XXXXXXXX*'
                 );
+
+                return;
             }
 
             // ------------------------------------------------
@@ -185,42 +251,31 @@ export default {
             guardarCanal(url);
 
             console.log(
-                `[SETCANAL] Canal actualizado: ${url}`
+                `[SETCANAL] ✓ Canal actualizado: ${url}`
             );
 
-            // ------------------------------------------------
-            // RESPUESTA
-            // ------------------------------------------------
-
-            return responder.texto(
-                '╭━━〔 ✅ 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ✅ Canal configurado correctamente.\n' +
-                '┃\n' +
-                '┃ 📢 El menú ahora mostrará\n' +
-                '┃ el botón *Ver canal* al final.\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+            await responder.texto(
+                '✅ *CANAL ACTUALIZADO*\n\n' +
+                'El menú ahora utilizará el botón:\n' +
+                '▸ *VER CANAL*\n\n' +
+                '🔗 Enlace guardado correctamente.'
             );
 
         } catch (error) {
 
             console.error(
                 '[SETCANAL] Error:',
-                error?.stack ||
-                error?.message ||
                 error
             );
 
-            return responder.texto(
-                '╭━━〔 ❌ 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣\n' +
-                '┃\n' +
-                '┃ No pude guardar el canal.\n' +
-                '┃\n' +
-                `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            try {
+
+                await responder.texto(
+                    '❌ *ERROR*\n\n' +
+                    'No se pudo guardar el canal.'
+                );
+
+            } catch {}
         }
     }
 };
