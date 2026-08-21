@@ -2,6 +2,14 @@
 import {
     spawn
 } from 'child_process';
+import {
+    promisify
+} from 'util';
+import {
+    exec as execCallback
+} from 'child_process';
+
+const execAsync = promisify(execCallback);
 
 export default {
 
@@ -20,12 +28,36 @@ export default {
         'Actualiza el bot desde GitHub y reinicia.',
 
     ejecutar: async ({
+        sock,
+        msg,
         responder
     }) => {
 
+        const jid = msg.key?.remoteJid;
+
+        const enviar = async (texto) => {
+
+            return sock.sendMessage(
+                jid,
+                { text: texto },
+                { quoted: msg }
+            );
+
+        };
+
+        const editar = async (key, texto) => {
+
+            return sock.sendMessage(
+                jid,
+                { text: texto, edit: key },
+                { quoted: msg }
+            );
+
+        };
+
         try {
 
-            await responder.texto(
+            const msgInicial = await enviar(
                 '╭━━〔 🔄 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐑 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📥 Descargando actualizaciones...\n' +
@@ -33,6 +65,31 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
+
+            const keyMensaje = msgInicial.key;
+
+            // ====================================================
+            // OBTENER COMMITS ANTES DE ACTUALIZAR
+            // ====================================================
+
+            let commitsAntes = '';
+
+            try {
+
+                const {
+                    stdout
+                } = await execAsync(
+                    'git log --oneline -10',
+                    { cwd: process.cwd() }
+                );
+
+                commitsAntes = stdout.trim();
+
+            } catch (e) {
+
+                commitsAntes = 'No se pudieron obtener commits.';
+
+            }
 
             // ====================================================
             // EJECUTAR GIT PULL
@@ -58,7 +115,8 @@ export default {
 
                 if (codigo !== 0) {
 
-                    await responder.texto(
+                    await editar(
+                        keyMensaje,
                         '╭━━〔 ❌ 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐑 〕━━⬣\n' +
                         '┃\n' +
                         '┃ ⚠️ Error al descargar actualizaciones.\n' +
@@ -69,6 +127,7 @@ export default {
                     );
 
                     return;
+
                 }
 
                 const actualizado =
@@ -77,7 +136,8 @@ export default {
 
                 if (actualizado) {
 
-                    await responder.texto(
+                    await editar(
+                        keyMensaje,
                         '╭━━〔 ✅ 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐑 〕━━⬣\n' +
                         '┃\n' +
                         '┃ 🎉 El bot ya está actualizado.\n' +
@@ -90,11 +150,71 @@ export default {
 
                 }
 
-                await responder.texto(
+                // ====================================================
+                // OBTENER COMMITS DESPUÉS DE ACTUALIZAR
+                // ====================================================
+
+                let commitsDespues = '';
+
+                let cambios = '';
+
+                try {
+
+                    const {
+                        stdout
+                    } = await execAsync(
+                        'git log --oneline -10',
+                        { cwd: process.cwd() }
+                    );
+
+                    commitsDespues = stdout.trim();
+
+                    const lineasAntes =
+                        commitsAntes.split('\n').filter(Boolean);
+
+                    const lineasDespues =
+                        commitsDespues.split('\n').filter(Boolean);
+
+                    const nuevosCommits =
+                        lineasDespues.filter(
+                            (c) => !lineasAntes.includes(c)
+                        );
+
+                    if (nuevosCommits.length > 0) {
+
+                        cambios =
+                            '📝 *Cambios detectados:*\n' +
+                            nuevosCommits.map(
+                                (c) => '┃ • ' + c
+                            ).join('\n');
+
+                    } else {
+
+                        cambios =
+                            '┃ 📦 Se actualizaron archivos.';
+
+                    }
+
+                } catch (e) {
+
+                    cambios =
+                        '┃ 📦 No se pudieron detectar cambios.';
+
+                }
+
+                // ====================================================
+                // MOSTRAR RESULTADO Y REINICIAR
+                // ====================================================
+
+                await editar(
+                    keyMensaje,
                     '╭━━〔 ✅ 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐑 〕━━⬣\n' +
                     '┃\n' +
                     '┃ 📦 Actualización completada.\n' +
-                    '┃ 🔄 Reiniciando bot...\n' +
+                    '┃\n' +
+                    `${cambios}\n` +
+                    '┃\n' +
+                    '┃ 🔄 Reiniciando bot en 3 segundos...\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -103,23 +223,25 @@ export default {
                 // REINICIAR PROCESO
                 // ====================================================
 
-                const hijo =
-                    spawn(
-                        process.execPath,
-                        process.argv.slice(1),
-                        {
-                            cwd: process.cwd(),
-                            detached: true,
-                            stdio: 'inherit',
-                            env: process.env
-                        }
-                    );
-
-                hijo.unref();
-
                 setTimeout(() => {
+
+                    const hijo =
+                        spawn(
+                            process.execPath,
+                            process.argv.slice(1),
+                            {
+                                cwd: process.cwd(),
+                                detached: true,
+                                stdio: 'inherit',
+                                env: process.env
+                            }
+                        );
+
+                    hijo.unref();
+
                     process.exit(0);
-                }, 1000);
+
+                }, 3000);
 
             });
 
