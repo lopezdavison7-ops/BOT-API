@@ -1,4 +1,6 @@
 // commands/owner/eval.js
+import util from "util";
+
 export default {
 
     nombre: 'eval',
@@ -16,6 +18,7 @@ export default {
         'Evalúa código JavaScript.',
 
     ejecutar: async ({
+        sock,
         msg,
         responder,
         argumento
@@ -24,54 +27,87 @@ export default {
         if (!argumento) {
 
             await responder.texto(
-                '╭━━〔 ⚠️ 𝐄𝐕𝐀𝐋 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe código para evaluar.\n' +
-                '┃\n' +
-                '┃ 📌 Uso: .eval 1 + 1\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '⚙️ *ᴇᴠᴀʟ*\n\n' +
+                '> Ingresa código JavaScript!\n\n' +
+                'Ejemplo:\n' +
+                '> .eval 1 + 1\n' +
+                '> .eval msg.key\n' +
+                '> .eval sock.user'
             );
 
             return;
 
         }
 
+        let result;
+        let isError = false;
+
         try {
 
-            const resultado = await eval(argumento);
+            result = await eval(`(async () => {
+                ${argumento}
+            })()`);
 
-            let respuesta = String(resultado);
+        } catch (e) {
 
-            if (respuesta.length > 3000) {
+            isError = true;
+            result = e;
 
-                respuesta = respuesta.substring(0, 3000) + '\n\n... (truncado)';
+        }
+
+        let output;
+
+        if (typeof result === "undefined") {
+
+            output = "undefined";
+
+        } else if (result === null) {
+
+            output = "null";
+
+        } else if (typeof result === "object") {
+
+            try {
+
+                output = util.inspect(result, {
+                    depth: 3,
+                    maxArrayLength: 50
+                });
+
+            } catch {
+
+                output = String(result);
 
             }
 
-            await responder.texto(
-                '╭〔 ✅ 𝐄𝐕𝐀𝐋 〕⬣\n' +
-                '┃\n' +
-                '┃ 📥 *Entrada:*\n' +
-                '┃ ```' + argumento + '```\n' +
-                '┃\n' +
-                '┃ 📤 *Resultado:*\n' +
-                '┃ ```' + respuesta + '```\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+        } else {
 
-        } catch (error) {
-
-            await responder.texto(
-                '╭〔 ❌ 𝐄𝐕𝐀𝐋 〕⬣\n' +
-                '┃\n' +
-                '┃ 🚨 *Error:*\n' +
-                '┃ ```' + (error.message || String(error)) + '```\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            output = String(result);
 
         }
+
+        if (output.length > 3000) {
+
+            output = output.slice(0, 3000) + "\n... truncado";
+
+        }
+
+        const status = isError
+            ? "❌ Error"
+            : "✅ Success";
+
+        const type = isError
+            ? result?.name || "Error"
+            : typeof result;
+
+        await responder.texto(
+            `⚙️ *ᴇᴠᴀʟ ʀᴇsᴜʟᴛ*\n\n` +
+            `╭┈┈⬡「 📋 *ɪɴғᴏ* 」\n` +
+            `┃ ${status}\n` +
+            `┃ Type: ${type}\n` +
+            `╰┈┈┈┈┈┈┈┈⬡\n\n` +
+            `\`\`\`\n${output}\n\`\`\``
+        );
+
     }
 };
