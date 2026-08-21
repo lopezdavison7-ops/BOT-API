@@ -1,19 +1,25 @@
 // ============================================================
-// MENÚ PRINCIPAL - ALEX BOT / BOT-API
-// ============================================================
-// Menú dinámico:
-// - Carga todos los comandos automáticamente.
-// - Muestra estadísticas.
-// - Usa imagen personalizada.
-// - Muestra canal configurado por el Owner.
+// COMANDO: MENU
+// ALEX BOT / BOT-API
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// ============================================================
+// RUTAS
+// ============================================================
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const ARCHIVO_CANAL = path.join(
+    __dirname,
+    '../..',
+    'database',
+    'canal.json'
+);
 
 // ============================================================
 // CONFIGURACIÓN
@@ -31,15 +37,8 @@ const FOTO_MENU = path.join(
     'menu.jpg'
 );
 
-const ARCHIVO_CANAL = path.join(
-    __dirname,
-    '../..',
-    'database',
-    'canal.json'
-);
-
 // ============================================================
-// ICONOS DE CATEGORÍAS
+// CATEGORÍAS
 // ============================================================
 
 const CATEGORIAS = {
@@ -101,34 +100,35 @@ const ORDEN_CATEGORIAS = [
 ];
 
 // ============================================================
-// LEER CANAL
+// CARGAR CANAL
 // ============================================================
 
-function obtenerCanal() {
+function cargarCanal() {
+
     try {
+
         if (!fs.existsSync(ARCHIVO_CANAL)) {
             return '';
         }
 
-        const datos = JSON.parse(
-            fs.readFileSync(
-                ARCHIVO_CANAL,
-                'utf8'
-            )
-        );
-
-        const canal = datos?.canal;
+        const datos =
+            JSON.parse(
+                fs.readFileSync(
+                    ARCHIVO_CANAL,
+                    'utf8'
+                )
+            );
 
         if (
-            typeof canal !== 'string' ||
-            !canal.trim()
+            typeof datos?.canal !== 'string'
         ) {
             return '';
         }
 
-        return canal.trim();
+        return datos.canal.trim();
 
     } catch (error) {
+
         console.error(
             '[MENU] Error leyendo canal.json:',
             error.message
@@ -139,7 +139,31 @@ function obtenerCanal() {
 }
 
 // ============================================================
-// MENÚ
+// CREAR BOTÓN DEL CANAL
+// ============================================================
+
+function crearBotonCanal(url) {
+
+    if (!url) {
+        return [];
+    }
+
+    return [
+        {
+            name: 'cta_url',
+
+            buttonParamsJson:
+                JSON.stringify({
+                    display_text: 'Ver canal',
+                    url,
+                    merchant_url: url
+                })
+        }
+    ];
+}
+
+// ============================================================
+// COMANDO
 // ============================================================
 
 export default {
@@ -166,9 +190,9 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // ORGANIZAR COMANDOS
-            // ------------------------------------------------
+            // =================================================
+            // 1. ORGANIZAR COMANDOS
+            // =================================================
 
             const grupos = {};
 
@@ -185,9 +209,9 @@ export default {
                 grupos[cat].push(cmd);
             }
 
-            // ------------------------------------------------
-            // ESTADÍSTICAS
-            // ------------------------------------------------
+            // =================================================
+            // 2. ESTADÍSTICAS
+            // =================================================
 
             const totalComandos =
                 listaComandos.length;
@@ -199,21 +223,23 @@ export default {
 
             const mem =
                 (
-                    process.memoryUsage().rss /
+                    process
+                        .memoryUsage()
+                        .rss /
                     1024 /
                     1024
                 ).toFixed(1);
 
-            // ------------------------------------------------
-            // CANAL
-            // ------------------------------------------------
+            // =================================================
+            // 3. CANAL CONFIGURADO
+            // =================================================
 
             const canal =
-                obtenerCanal();
+                cargarCanal();
 
-            // ------------------------------------------------
-            // ENCABEZADO
-            // ------------------------------------------------
+            // =================================================
+            // 4. ENCABEZADO
+            // =================================================
 
             let texto = `
 ╔═══════════════════════════════════╗
@@ -238,23 +264,27 @@ export default {
 
 `;
 
-            // ------------------------------------------------
-            // CATEGORÍAS
-            // ------------------------------------------------
+            // =================================================
+            // 5. CATEGORÍAS
+            // =================================================
 
             const categoriasOrdenadas = [
-                ...ORDEN_CATEGORIAS.filter(
-                    c => grupos[c]
-                ),
+                ...ORDEN_CATEGORIAS
+                    .filter(
+                        c => grupos[c]
+                    ),
 
-                ...Object.keys(grupos).filter(
-                    c =>
-                        !ORDEN_CATEGORIAS.includes(c)
-                )
+                ...Object.keys(grupos)
+                    .filter(
+                        c =>
+                            !ORDEN_CATEGORIAS
+                                .includes(c)
+                    )
             ];
 
             for (
-                const cat of categoriasOrdenadas
+                const cat
+                of categoriasOrdenadas
             ) {
 
                 const cmds =
@@ -278,7 +308,10 @@ export default {
 ╚═══════════════════════════════════╝
 `;
 
-                for (const cmd of cmds) {
+                for (
+                    const cmd
+                    of cmds
+                ) {
 
                     const desc =
                         cmd.descripcion ||
@@ -295,29 +328,9 @@ export default {
                     `└───────────────────────────────┘\n\n`;
             }
 
-            // ------------------------------------------------
-            // CANAL
-            // ------------------------------------------------
-
-            if (canal) {
-
-                texto += `
-╭━━〔 📢 𝐂𝐀𝐍𝐀𝐋 𝐎𝐅𝐈𝐂𝐈𝐀𝐋 〕━━⬣
-┃
-┃ 🚀 ¡Únete al canal oficial!
-┃
-┃ 🔗 ${canal}
-┃
-┃ 👇 𝐕𝐄𝐑 𝐂𝐀𝐍𝐀𝐋
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-`;
-            }
-
-            // ------------------------------------------------
-            // PIE
-            // ------------------------------------------------
+            // =================================================
+            // 6. PIE
+            // =================================================
 
             texto += `
 ╔═══════════════════════════════════╗
@@ -326,38 +339,52 @@ export default {
 ╚═══════════════════════════════════╝
 `;
 
-            // ------------------------------------------------
-            // ENVIAR MENÚ
-            // ------------------------------------------------
+            // =================================================
+            // 7. ENVIAR MENÚ
+            // =================================================
 
-            if (fs.existsSync(FOTO_MENU)) {
+            const jid =
+                msg?.key?.remoteJid;
+
+            if (!jid) {
+                return;
+            }
+
+            // =================================================
+            // 8. BOTÓN "VER CANAL"
+            // =================================================
+
+            const botonesCanal =
+                crearBotonCanal(canal);
+
+            // =================================================
+            // 9. CON IMAGEN
+            // =================================================
+
+            if (
+                fs.existsSync(FOTO_MENU)
+            ) {
+
+                const mensaje = {
+                    image: {
+                        url: FOTO_MENU
+                    },
+
+                    caption: texto,
+
+                    // Solo aparece si existe
+                    // un canal configurado.
+                    ...(botonesCanal.length
+                        ? {
+                            interactiveButtons:
+                                botonesCanal
+                        }
+                        : {})
+                };
 
                 await sock.sendMessage(
-                    msg.key.remoteJid,
-                    {
-                        image: {
-                            url: FOTO_MENU
-                        },
-
-                        caption: texto,
-
-                        // Botón nativo de URL.
-                        // WhatsApp puede mostrarlo como
-                        // "Ver canal" dependiendo del cliente.
-                        buttons: canal
-                            ? [
-                                {
-                                    name: 'cta_url',
-                                    buttonParamsJson:
-                                        JSON.stringify({
-                                            display_text:
-                                                '📢 VER CANAL',
-                                            url: canal
-                                        })
-                                }
-                            ]
-                            : undefined
-                    },
+                    jid,
+                    mensaje,
                     {
                         quoted: msg,
 
@@ -366,17 +393,47 @@ export default {
                     }
                 );
 
-            } else {
-
-                await responder.texto(
-                    texto
-                );
+                return;
             }
+
+            // =================================================
+            // 10. SIN IMAGEN
+            // =================================================
+
+            if (
+                botonesCanal.length
+            ) {
+
+                await sock.sendMessage(
+                    jid,
+                    {
+                        text: texto,
+
+                        interactiveButtons:
+                            botonesCanal
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
+
+                return;
+            }
+
+            // =================================================
+            // 11. SOLO TEXTO
+            // =================================================
+
+            await responder.texto(
+                texto
+            );
 
         } catch (error) {
 
             console.error(
                 '[MENU] Error:',
+                error?.stack ||
+                error?.message ||
                 error
             );
 
@@ -393,7 +450,9 @@ export default {
 // FORMATEAR UPTIME
 // ============================================================
 
-function formatUptime(seconds) {
+function formatUptime(
+    seconds
+) {
 
     const d =
         Math.floor(
@@ -402,12 +461,14 @@ function formatUptime(seconds) {
 
     const h =
         Math.floor(
-            (seconds % 86400) / 3600
+            (seconds % 86400) /
+            3600
         );
 
     const m =
         Math.floor(
-            (seconds % 3600) / 60
+            (seconds % 3600) /
+            60
         );
 
     const s =
