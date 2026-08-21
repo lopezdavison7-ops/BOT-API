@@ -10,11 +10,12 @@ const execAsync = promisify(exec);
 
 export default {
 
-    nombre: '$',
+    nombre: 'sh',
 
     categoria: 'Owner',
 
     alias: [
+        '$',
         'shell',
         'exec',
         'terminal'

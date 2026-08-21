@@ -29,6 +29,7 @@ auth_info/
 
 # Dependencias
 node_modules/
+package-lock.json
 
 # Archivos generados
 media/
