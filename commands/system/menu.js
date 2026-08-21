@@ -1,10 +1,27 @@
+// commands/system/menu.js
 // ============================================================
 // MENÚ PRINCIPAL - ALEX BOT
+// Diseño moderno estilo menú clásico
+// Incluye:
+// - Usuario
+// - Usuarios registrados
+// - Grupos
+// - Comandos
+// - Día y hora de ejecución
+// - Uptime
+// - Versión
+// - Categorías dinámicas
+// - Botón real para seguir el canal
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    generateWAMessageFromContent,
+    proto,
+    jidNormalizedUser
+} from '@whiskeysockets/baileys';
 
 // ============================================================
 // RUTAS
@@ -13,118 +30,91 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const VERSION = '2.0.0';
-const CREADOR = 'Luis González';
-const MOTOR = 'Baileys';
-
-const FOTO_MENU = path.join(
-    __dirname,
-    '../..',
-    'media',
-    'menu',
-    'menu.jpg'
-);
-
-const ARCHIVO_CANAL = path.join(
+const CANAL_FILE = path.join(
     __dirname,
     '../..',
     'database',
     'canal.json'
 );
 
+const PACKAGE_FILE = path.join(
+    __dirname,
+    '../..',
+    'package.json'
+);
+
 // ============================================================
-// CATEGORÍAS
+// CONFIGURACIÓN
 // ============================================================
 
-const CATEGORIAS = {
-    Owner: '👑',
-    Administrador: '🛡️',
-    Moderación: '🛡️',
-    Grupos: '👥',
-    Economia: '💰',
-    economia: '💰',
-    IA: '🤖',
-    Multimedia: '🎨',
-    Descargas: '📥',
-    Diversión: '🎮',
-    Interacción: '💬',
-    Utilidades: '🛠️',
-    Sistema: '⚙️',
-    Otros: '📦'
-};
+const CREADOR = 'Luis González';
+const NOMBRE_BOT = 'ALEX BOT';
 
-const NOMBRES_CATEGORIAS = {
-    Owner: '𝐎𝐖𝐍𝐄𝐑',
-    Administrador: '𝐀𝐃𝐌𝐈𝐍',
-    Moderación: '𝐌𝐎𝐃𝐄𝐑𝐀𝐂𝐈Ó𝐍',
-    Grupos: '𝐆𝐑𝐔𝐏𝐎𝐒',
-    Economia: '𝐄𝐂𝐎𝐍𝐎𝐌Í𝐀',
-    economia: '𝐄𝐂𝐎𝐍𝐎𝐌Í𝐀',
-    IA: '𝐈𝐀',
-    Multimedia: '𝐌𝐔𝐋𝐓𝐈𝐌𝐄𝐃𝐈𝐀',
-    Descargas: '𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐒',
-    Diversión: '𝐃𝐈𝐕𝐄𝐑𝐒𝐈Ó𝐍',
-    Interacción: '𝐈𝐍𝐓𝐄𝐑𝐀𝐂𝐂𝐈Ó𝐍',
-    Utilidades: '𝐔𝐓𝐈𝐋𝐈𝐃𝐀𝐃𝐄𝐒',
-    Sistema: '𝐒𝐈𝐒𝐓𝐄𝐌𝐀',
-    Otros: '𝐎𝐓𝐑𝐎𝐒'
-};
+// ============================================================
+// CARGAR PACKAGE.JSON
+// ============================================================
 
-const ORDEN_CATEGORIAS = [
-    'Owner',
-    'Administrador',
-    'Moderación',
-    'Grupos',
-    'Economia',
-    'IA',
-    'Multimedia',
-    'Descargas',
-    'Diversión',
-    'Interacción',
-    'Utilidades',
-    'Sistema',
-    'Otros'
-];
+function obtenerPackage() {
+    try {
+        if (!fs.existsSync(PACKAGE_FILE)) {
+            return {
+                version: '2.0.0'
+            };
+        }
+
+        return JSON.parse(
+            fs.readFileSync(
+                PACKAGE_FILE,
+                'utf8'
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[MENU] Error leyendo package.json:',
+            error.message
+        );
+
+        return {
+            version: '2.0.0'
+        };
+    }
+}
 
 // ============================================================
 // OBTENER CANAL
 // ============================================================
 
 function obtenerCanal() {
+
     try {
-        if (!fs.existsSync(ARCHIVO_CANAL)) {
+
+        if (!fs.existsSync(CANAL_FILE)) {
             return null;
         }
 
         const datos = JSON.parse(
-            fs.readFileSync(ARCHIVO_CANAL, 'utf8')
+            fs.readFileSync(
+                CANAL_FILE,
+                'utf8'
+            )
         );
 
-        if (!datos || typeof datos !== 'object') {
-            return null;
-        }
-
-        const enlace = String(
-            datos.url ||
-            datos.link ||
-            datos.enlace ||
-            ''
-        ).trim();
+        const enlace =
+            datos?.canal ||
+            datos?.url ||
+            datos?.link ||
+            '';
 
         if (!enlace) {
             return null;
         }
 
-        if (
-            !enlace.startsWith('https://whatsapp.com/channel/') &&
-            !enlace.startsWith('https://www.whatsapp.com/channel/')
-        ) {
-            return null;
-        }
-
-        return enlace;
+        return String(enlace).trim();
 
     } catch (error) {
+
         console.error(
             '[MENU] Error leyendo canal.json:',
             error.message
@@ -135,14 +125,581 @@ function obtenerCanal() {
 }
 
 // ============================================================
-// MENÚ
+// FORMATEAR UPTIME
+// ============================================================
+
+function formatUptime(seconds) {
+
+    const h = Math.floor(
+        seconds / 3600
+    );
+
+    const m = Math.floor(
+        (seconds % 3600) / 60
+    );
+
+    const s = Math.floor(
+        seconds % 60
+    );
+
+    return [
+        h,
+        m,
+        s
+    ]
+        .map(
+            valor =>
+                String(valor).padStart(2, '0')
+        )
+        .join(':');
+}
+
+// ============================================================
+// FECHA Y HORA DE NICARAGUA
+// ============================================================
+
+function obtenerFechaHora() {
+
+    const ahora = new Date();
+
+    const fecha = new Intl.DateTimeFormat(
+        'es-NI',
+        {
+            timeZone: 'America/Managua',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        }
+    ).format(ahora);
+
+    const hora = new Intl.DateTimeFormat(
+        'es-NI',
+        {
+            timeZone: 'America/Managua',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    ).format(ahora);
+
+    return {
+        fecha,
+        hora
+    };
+}
+
+// ============================================================
+// OBTENER NÚMERO DEL USUARIO
+// ============================================================
+
+function obtenerUsuario(msg) {
+
+    const key = msg?.key || {};
+
+    const candidatos = [
+        key.senderPn,
+        key.participantAlt,
+        key.remoteJidAlt,
+        key.participant,
+        key.remoteJid
+    ];
+
+    for (const candidato of candidatos) {
+
+        if (!candidato) continue;
+
+        const numero = String(candidato)
+            .split('@')[0]
+            .split(':')[0]
+            .replace(/\D/g, '');
+
+        if (numero) {
+            return {
+                jid: candidato,
+                numero
+            };
+        }
+    }
+
+    return {
+        jid: null,
+        numero: 'usuario'
+    };
+}
+
+// ============================================================
+// TOTAL DE COMANDOS
+// ============================================================
+
+function obtenerTotalComandos(listaComandos) {
+
+    if (
+        Array.isArray(listaComandos)
+    ) {
+        return listaComandos.length;
+    }
+
+    return 0;
+}
+
+// ============================================================
+// OBTENER ESTADÍSTICAS OPCIONALES
+// ============================================================
+
+async function obtenerEstadisticas() {
+
+    let usuarios = 0;
+    let grupos = 0;
+
+    try {
+
+        if (
+            global.User &&
+            typeof global.User.countDocuments === 'function'
+        ) {
+            usuarios =
+                await global.User.countDocuments();
+        }
+
+    } catch (error) {
+
+        usuarios = 0;
+    }
+
+    try {
+
+        if (
+            global.Chat &&
+            typeof global.Chat.countDocuments === 'function'
+        ) {
+            grupos =
+                await global.Chat.countDocuments();
+        }
+
+    } catch (error) {
+
+        grupos = 0;
+    }
+
+    return {
+        usuarios,
+        grupos
+    };
+}
+
+// ============================================================
+// OBTENER CATEGORÍA
+// ============================================================
+
+function normalizarCategoria(categoria) {
+
+    if (!categoria) {
+        return 'GENERAL';
+    }
+
+    const texto =
+        String(categoria).trim();
+
+    const equivalencias = {
+        owner: 'OWNER',
+        administrador: 'ADMINISTRADOR',
+        admin: 'ADMINISTRADOR',
+        moderacion: 'MODERACIÓN',
+        moderación: 'MODERACIÓN',
+        grupos: 'GRUPOS',
+        economia: 'ECONOMÍA',
+        economía: 'ECONOMÍA',
+        ia: 'IA',
+        multimedia: 'MULTIMEDIA',
+        descargas: 'DESCARGAS',
+        diversión: 'DIVERSIÓN',
+        diversion: 'DIVERSIÓN',
+        interacción: 'INTERACCIÓN',
+        interaccion: 'INTERACCIÓN',
+        utilidades: 'UTILIDADES',
+        sistema: 'SISTEMA',
+        stickers: 'STICKERS',
+        otros: 'OTROS',
+        general: 'GENERAL'
+    };
+
+    const clave =
+        texto.toLowerCase();
+
+    return equivalencias[clave] ||
+        texto.toUpperCase();
+}
+
+// ============================================================
+// ORDEN DE CATEGORÍAS
+// ============================================================
+
+const ORDEN_CATEGORIAS = [
+    'OWNER',
+    'ADMINISTRADOR',
+    'MODERACIÓN',
+    'GRUPOS',
+    'ECONOMÍA',
+    'IA',
+    'MULTIMEDIA',
+    'DESCARGAS',
+    'DIVERSIÓN',
+    'INTERACCIÓN',
+    'UTILIDADES',
+    'SISTEMA',
+    'STICKERS',
+    'OTROS',
+    'GENERAL'
+];
+
+// ============================================================
+// ICONOS
+// ============================================================
+
+const ICONOS = {
+
+    OWNER: '👑',
+
+    ADMINISTRADOR: '🛡️',
+
+    MODERACIÓN: '🛡️',
+
+    GRUPOS: '👥',
+
+    'ECONOMÍA': '💰',
+
+    IA: '🤖',
+
+    MULTIMEDIA: '🎨',
+
+    DESCARGAS: '📥',
+
+    'DIVERSIÓN': '🎮',
+
+    'INTERACCIÓN': '💬',
+
+    UTILIDADES: '🛠️',
+
+    SISTEMA: '⚙️',
+
+    STICKERS: '🎨',
+
+    OTROS: '📦',
+
+    GENERAL: '📦'
+};
+
+// ============================================================
+// CREAR TEXTO DEL MENÚ
+// ============================================================
+
+function construirMenu({
+    listaComandos,
+    usuario,
+    estadisticas,
+    prefijo,
+    version
+}) {
+
+    const {
+        fecha,
+        hora
+    } = obtenerFechaHora();
+
+    const totalComandos =
+        obtenerTotalComandos(
+            listaComandos
+        );
+
+    // --------------------------------------------------------
+    // AGRUPAR COMANDOS
+    // --------------------------------------------------------
+
+    const categorias = {};
+
+    for (const comando of listaComandos) {
+
+        if (!comando) continue;
+
+        const categoria =
+            normalizarCategoria(
+                comando.categoria
+            );
+
+        if (!categorias[categoria]) {
+            categorias[categoria] = [];
+        }
+
+        categorias[categoria].push(
+            comando
+        );
+    }
+
+    // --------------------------------------------------------
+    // CABECERA
+    // --------------------------------------------------------
+
+    let texto = `
+
+〔 Hello, my name is ${NOMBRE_BOT} 〕
+➥ ⋄ 𝚄𝚜𝚞𝚊𝚛𝚒𝚘 : @${usuario.numero}
+➥ ⋄ 𝚄𝚜𝚞𝚊𝚛𝚒𝚘𝚜: ${estadisticas.usuarios}
+➥ ⋄ 𝙶𝚛𝚞𝚙𝚘𝚜  : ${estadisticas.grupos}
+➥ ⋄ 𝙲𝚘𝚖𝚊𝚗𝚍𝚘𝚜: ${totalComandos}
+➥ ⋄ 𝙳í𝚊     : ${fecha}
+➥ ⋄ 𝙷𝚘𝚛𝚊    : ${hora}
+➥ ⋄ 𝚄𝚙𝚝𝚒𝚖𝚎  : ${formatUptime(process.uptime())}
+➥ ⋄ 𝚅𝚎𝚛𝚜𝚒ó𝚗  : ${version}
+
+Sʏsᴛᴇᴍ ALEX BOT
+
+`;
+
+    // --------------------------------------------------------
+    // CATEGORÍAS
+    // --------------------------------------------------------
+
+    const categoriasOrdenadas = [
+        ...ORDEN_CATEGORIAS.filter(
+            categoria =>
+                categorias[categoria]
+        ),
+
+        ...Object.keys(categorias).filter(
+            categoria =>
+                !ORDEN_CATEGORIAS.includes(
+                    categoria
+                )
+        )
+    ];
+
+    for (
+        const categoria of categoriasOrdenadas
+    ) {
+
+        const comandos =
+            categorias[categoria];
+
+        if (
+            !Array.isArray(comandos) ||
+            comandos.length === 0
+        ) {
+            continue;
+        }
+
+        const icono =
+            ICONOS[categoria] || '📦';
+
+        texto +=
+            `┌──「 *${icono} ${categoria}* 」──\n`;
+
+        for (
+            const comando of comandos
+        ) {
+
+            if (!comando.nombre) {
+                continue;
+            }
+
+            texto +=
+                `┃ ♛ *${prefijo}${comando.nombre}*`;
+
+            if (
+                Array.isArray(
+                    comando.alias
+                ) &&
+                comando.alias.length > 0
+            ) {
+
+                texto +=
+                    ` (${comando.alias.join(', ')})`;
+            }
+
+            texto += '\n';
+        }
+
+        texto +=
+            `└───────────────\n\n`;
+    }
+
+    // --------------------------------------------------------
+    // PIE
+    // --------------------------------------------------------
+
+    texto +=
+        `> © Powered by ${CREADOR}.`;
+
+    return {
+        texto,
+        usuario
+    };
+}
+
+// ============================================================
+// CREAR MENSAJE INTERACTIVO
+// ============================================================
+
+async function enviarMenuInteractivo({
+    sock,
+    msg,
+    texto,
+    canal,
+    usuarioJid
+}) {
+
+    const jid =
+        msg.key.remoteJid;
+
+    // --------------------------------------------------------
+    // SI NO HAY CANAL
+    // --------------------------------------------------------
+
+    if (!canal) {
+
+        await sock.sendMessage(
+            jid,
+            {
+                text: texto,
+                mentions: usuarioJid
+                    ? [usuarioJid]
+                    : []
+            },
+            {
+                quoted: msg
+            }
+        );
+
+        return;
+    }
+
+    // --------------------------------------------------------
+    // MENSAJE INTERACTIVO WHATSAPP
+    // --------------------------------------------------------
+
+    try {
+
+        const mensaje =
+            generateWAMessageFromContent(
+                jid,
+                {
+                    viewOnceMessage: {
+                        message: {
+                            interactiveMessage:
+                                proto.Message.InteractiveMessage.create(
+                                    {
+                                        body:
+                                            proto.Message.InteractiveMessage.Body.create(
+                                                {
+                                                    text: texto
+                                                }
+                                            ),
+
+                                        footer:
+                                            proto.Message.InteractiveMessage.Footer.create(
+                                                {
+                                                    text:
+                                                        'ALEX BOT • Bot-API'
+                                                }
+                                            ),
+
+                                        nativeFlowMessage:
+                                            proto.Message.InteractiveMessage.NativeFlowMessage.create(
+                                                {
+                                                    buttons: [
+                                                        {
+                                                            name:
+                                                                'cta_url',
+
+                                                            buttonParamsJson:
+                                                                JSON.stringify(
+                                                                    {
+                                                                        display_text:
+                                                                            'SEGUIR CANAL',
+
+                                                                        url:
+                                                                            canal,
+
+                                                                        merchant_url:
+                                                                            canal
+                                                                    }
+                                                                )
+                                                        }
+                                                    ]
+                                                }
+                                            ),
+
+                                        contextInfo: {
+                                            mentionedJid:
+                                                usuarioJid
+                                                    ? [usuarioJid]
+                                                    : []
+                                        }
+                                    }
+                                )
+                        }
+                    }
+                },
+                {
+                    userJid:
+                        sock.user?.id,
+                    quoted: msg
+                }
+            );
+
+        await sock.relayMessage(
+            jid,
+            mensaje.message,
+            {
+                messageId:
+                    mensaje.key.id
+            }
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[MENU] Error enviando botón:',
+            error?.message || error
+        );
+
+        // ----------------------------------------------------
+        // FALLBACK
+        // ----------------------------------------------------
+
+        await sock.sendMessage(
+            jid,
+            {
+                text:
+                    `${texto}\n\n🔗 Canal: ${canal}`,
+                mentions: usuarioJid
+                    ? [usuarioJid]
+                    : []
+            },
+            {
+                quoted: msg
+            }
+        );
+    }
+}
+
+// ============================================================
+// COMANDO MENU
 // ============================================================
 
 export default {
+
     nombre: 'menu',
+
     categoria: 'Sistema',
-    alias: ['ayuda', 'help'],
-    descripcion: 'Muestra todos los comandos disponibles.',
+
+    alias: [
+        'ayuda',
+        'help'
+    ],
+
+    descripcion:
+        'Muestra todos los comandos disponibles.',
 
     async ejecutar({
         sock,
@@ -154,211 +711,74 @@ export default {
 
         try {
 
-            // ====================================================
-            // ORGANIZAR COMANDOS
-            // ====================================================
+            console.log(
+                '[MENU] Ejecutando menú...'
+            );
 
-            const grupos = {};
+            // ------------------------------------------------
+            // DATOS
+            // ------------------------------------------------
 
-            for (const cmd of listaComandos) {
+            const usuario =
+                obtenerUsuario(msg);
 
-                const cat =
-                    cmd.categoria || 'Otros';
+            const packageData =
+                obtenerPackage();
 
-                if (!grupos[cat]) {
-                    grupos[cat] = [];
-                }
+            const version =
+                packageData.version ||
+                '2.0.0';
 
-                grupos[cat].push(cmd);
-            }
+            const estadisticas =
+                await obtenerEstadisticas();
 
-            // ====================================================
-            // ESTADÍSTICAS
-            // ====================================================
+            // ------------------------------------------------
+            // CONSTRUIR MENÚ
+            // ------------------------------------------------
 
-            const totalComandos =
-                listaComandos.length;
+            const resultado =
+                construirMenu({
+                    listaComandos:
+                        Array.isArray(
+                            listaComandos
+                        )
+                            ? listaComandos
+                            : [],
 
-            const uptime =
-                formatUptime(process.uptime());
+                    usuario,
 
-            const mem =
-                (
-                    process.memoryUsage().rss /
-                    1024 /
-                    1024
-                ).toFixed(1);
+                    estadisticas,
 
-            // ====================================================
-            // ENCABEZADO
-            // ====================================================
+                    prefijo:
+                        prefijo || '.',
 
-            let texto = `
-╔═══════════════════════════════════╗
-║        🚀 𝐁𝐎𝐓-𝐀𝐏𝐈 2.0 🚀        ║
-║       𝐄𝐋 𝐌𝐄𝐉𝐎𝐑 𝐌𝐄𝐍𝐔́        ║
-╚═══════════════════════════════════╝
+                    version
+                });
 
-┌─── ⚡ 𝐄𝐒𝐓𝐀𝐃Í𝐒𝐓𝐈𝐂𝐀𝐒 ───┐
-│ 👨‍💻 Creador: ${CREADOR}
-│ 📦 Versión: ${VERSION}
-│ ⚙️ Motor: ${MOTOR}
-│ 📚 Comandos: ${totalComandos}
-│ 🟢 Estado: Online
-│ 🔧 Prefijo: ${prefijo}
-│ ⏱️ Uptime: ${uptime}
-│ 💾 RAM: ${mem} MB
-└───────────────────────────────┘
-
-┌─── 📋 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀𝐒 ───┐
-│ 📌 Usa ${prefijo}help para ver este menú nuevamente.
-└───────────────────────────────┘
-
-`;
-
-            // ====================================================
-            // CATEGORÍAS
-            // ====================================================
-
-            const categoriasOrdenadas = [
-                ...ORDEN_CATEGORIAS.filter(
-                    c => grupos[c]
-                ),
-
-                ...Object.keys(grupos).filter(
-                    c => !ORDEN_CATEGORIAS.includes(c)
-                )
-            ];
-
-            for (const cat of categoriasOrdenadas) {
-
-                const cmds = grupos[cat];
-
-                if (!cmds?.length) {
-                    continue;
-                }
-
-                const icono =
-                    CATEGORIAS[cat] || '📦';
-
-                const titulo =
-                    NOMBRES_CATEGORIAS[cat] ||
-                    cat.toUpperCase();
-
-                texto += `
-╔═══════════════════════════════════╗
-║   ${icono} ${titulo}   ║
-╚═══════════════════════════════════╝
-`;
-
-                for (const cmd of cmds) {
-
-                    const desc =
-                        cmd.descripcion ||
-                        'Sin descripción';
-
-                    texto +=
-                        `│ ✦ ${prefijo}${cmd.nombre}\n`;
-
-                    texto +=
-                        `│   ↳ ${desc}\n`;
-                }
-
-                texto +=
-                    `└───────────────────────────────┘\n\n`;
-            }
-
-            // ====================================================
-            // PIE DEL MENÚ
-            // ====================================================
-
-            texto += `
-╔═══════════════════════════════════╗
-║         ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡         ║
-║  🚀 Rápido • 🔒 Seguro • 💫 Evolutivo  ║
-╚═══════════════════════════════════╝
-`;
-
-            // ====================================================
+            // ------------------------------------------------
             // CANAL
-            // ====================================================
+            // ------------------------------------------------
 
-            const canal = obtenerCanal();
+            const canal =
+                obtenerCanal();
 
-            // ====================================================
-            // SI HAY CANAL:
-            // ENVIAR BOTÓN REAL DE WHATSAPP
-            // ====================================================
+            // ------------------------------------------------
+            // ENVIAR
+            // ------------------------------------------------
 
-            if (canal) {
+            await enviarMenuInteractivo({
+                sock,
 
-                const mensaje = {
-                    caption: texto,
+                msg,
 
-                    // ------------------------------------------------
-                    // BOTÓN REAL
-                    // ------------------------------------------------
-                    templateButtons: [
-                        {
-                            index: 1,
-                            urlButton: {
-                                displayText: '𝐕𝐄𝐑 𝐂𝐀𝐍𝐀𝐋',
-                                url: canal
-                            }
-                        }
-                    ]
-                };
+                texto:
+                    resultado.texto,
 
-                // ------------------------------------------------
-                // IMAGEN DEL MENÚ
-                // ------------------------------------------------
+                canal,
 
-                if (fs.existsSync(FOTO_MENU)) {
-
-                    mensaje.image = {
-                        url: FOTO_MENU
-                    };
-
-                }
-
-                await sock.sendMessage(
-                    msg.key.remoteJid,
-                    mensaje,
-                    {
-                        quoted: msg,
-                        mediaUploadTimeoutMs: 120000
-                    }
-                );
-
-                return;
-            }
-
-            // ====================================================
-            // SI NO HAY CANAL
-            // MENÚ NORMAL SIN BOTÓN
-            // ====================================================
-
-            if (fs.existsSync(FOTO_MENU)) {
-
-                await sock.sendMessage(
-                    msg.key.remoteJid,
-                    {
-                        image: {
-                            url: FOTO_MENU
-                        },
-                        caption: texto
-                    },
-                    {
-                        quoted: msg,
-                        mediaUploadTimeoutMs: 120000
-                    }
-                );
-
-            } else {
-
-                await responder.texto(texto);
-
-            }
+                usuarioJid:
+                    usuario.jid
+            });
 
         } catch (error) {
 
@@ -367,36 +787,21 @@ export default {
                 error
             );
 
-            await responder.texto(
-                `❌ *MENÚ*\n\n` +
-                `No se pudo mostrar el menú.\n\n` +
-                `Usa ${prefijo}help nuevamente.`
-            );
+            try {
+
+                await responder.texto(
+                    `❌ *MENÚ*\n\n` +
+                    `No se pudo mostrar el menú.\n\n` +
+                    `⚠️ ${error?.message || 'Error desconocido'}`
+                );
+
+            } catch (errorResponder) {
+
+                console.error(
+                    '[MENU] Error enviando respuesta:',
+                    errorResponder
+                );
+            }
         }
     }
 };
-
-// ============================================================
-// FORMATEAR UPTIME
-// ============================================================
-
-function formatUptime(seconds) {
-
-    const d =
-        Math.floor(seconds / 86400);
-
-    const h =
-        Math.floor(
-            (seconds % 86400) / 3600
-        );
-
-    const m =
-        Math.floor(
-            (seconds % 3600) / 60
-        );
-
-    const s =
-        Math.floor(seconds % 60);
-
-    return `${d}d ${h}h ${m}m ${s}s`;
-}
