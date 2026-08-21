@@ -59,7 +59,7 @@ const REACCIONES = [
     'stare',
     'tickle',
     'punch',
-    'kick'
+    'kill'
 ];
 
 // ============================================================
@@ -289,7 +289,7 @@ function obtenerAccion(tipo) {
         punch:
             'golpea a',
 
-        kick:
+        kill:
             'patea a'
     };
 
