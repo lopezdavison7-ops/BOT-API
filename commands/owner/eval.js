@@ -2,9 +2,9 @@
 // BOT-API
 // COMANDO: EVAL
 // ============================================================
-// Ejecuta JavaScript únicamente para los Owners.
+// Owner-only.
+// Ejecuta y verifica JavaScript.
 // Compatible con el handler actual de BOT-API.
-// Lee los Owners desde database/owner.json.
 // ============================================================
 
 import fs from 'fs/promises';
@@ -12,7 +12,7 @@ import path from 'path';
 import util from 'util';
 
 // ============================================================
-// CONFIGURACIÓN
+// BASE DE DATOS DE OWNERS
 // ============================================================
 
 const OWNER_FILE = path.join(
@@ -22,7 +22,7 @@ const OWNER_FILE = path.join(
 );
 
 // ============================================================
-// OBTENER NÚMERO DESDE CUALQUIER FORMATO
+// NORMALIZAR NÚMERO
 // ============================================================
 
 function normalizarNumero(valor) {
@@ -35,27 +35,63 @@ function normalizarNumero(valor) {
             valor.phone ||
             valor.jid ||
             valor.id ||
+            valor.participant ||
             '';
     }
 
     return String(valor)
+        .trim()
         .split('@')[0]
         .split(':')[0]
         .replace(/\D/g, '');
 }
 
 // ============================================================
+// OBTENER REMITENTE REAL
+// ============================================================
+
+function obtenerRemitente(msg) {
+
+    // En grupos, el usuario viene aquí.
+    if (
+        msg?.key?.participant &&
+        msg.key.participant !== 'status@broadcast'
+    ) {
+        return msg.key.participant;
+    }
+
+    // En chat privado, remoteJid normalmente es el usuario.
+    if (
+        msg?.key?.remoteJid &&
+        msg.key.remoteJid !== 'status@broadcast'
+    ) {
+        return msg.key.remoteJid;
+    }
+
+    // Compatibilidad adicional.
+    return (
+        msg?.sender ||
+        msg?.participant ||
+        ''
+    );
+}
+
+// ============================================================
 // LEER OWNERS
 // ============================================================
 
-async function obtenerOwners() {
-    try {
-        const contenido = await fs.readFile(
-            OWNER_FILE,
-            'utf8'
-        );
+async function leerOwners() {
 
-        const data = JSON.parse(contenido);
+    try {
+
+        const contenido =
+            await fs.readFile(
+                OWNER_FILE,
+                'utf8'
+            );
+
+        const data =
+            JSON.parse(contenido);
 
         if (Array.isArray(data)) {
             return data;
@@ -68,8 +104,9 @@ async function obtenerOwners() {
         return [];
 
     } catch (error) {
+
         console.error(
-            '[EVAL] Error leyendo owner.json:',
+            '[EVAL] No se pudo leer owner.json:',
             error?.message || error
         );
 
@@ -81,29 +118,55 @@ async function obtenerOwners() {
 // COMPROBAR OWNER
 // ============================================================
 
-async function esOwner(msg) {
-    const sender = normalizarNumero(
-        msg?.key?.participant ||
-        msg?.participant ||
-        msg?.sender ||
-        ''
-    );
+async function verificarOwner(msg) {
 
-    if (!sender) {
-        return false;
-    }
+    const remitente =
+        obtenerRemitente(msg);
 
-    const owners = await obtenerOwners();
+    const numeroRemitente =
+        normalizarNumero(
+            remitente
+        );
 
-    const ownersNormalizados = owners
-        .map(normalizarNumero)
-        .filter(Boolean);
+    const owners =
+        await leerOwners();
+
+    const ownersNormalizados =
+        owners
+            .map(normalizarNumero)
+            .filter(Boolean);
 
     const autorizado =
-        ownersNormalizados.includes(sender);
+        ownersNormalizados.includes(
+            numeroRemitente
+        );
 
     console.log(
-        `[EVAL] Usuario: ${sender} | Owners: ${ownersNormalizados.join(', ')} | Autorizado: ${autorizado}`
+        '\n========== EVAL OWNER =========='
+    );
+
+    console.log(
+        '[EVAL] Remitente:',
+        remitente
+    );
+
+    console.log(
+        '[EVAL] Número:',
+        numeroRemitente
+    );
+
+    console.log(
+        '[EVAL] Owners:',
+        ownersNormalizados
+    );
+
+    console.log(
+        '[EVAL] Autorizado:',
+        autorizado
+    );
+
+    console.log(
+        '================================\n'
     );
 
     return autorizado;
@@ -114,6 +177,7 @@ async function esOwner(msg) {
 // ============================================================
 
 function formatearResultado(resultado) {
+
     if (resultado === undefined) {
         return 'undefined';
     }
@@ -127,18 +191,33 @@ function formatearResultado(resultado) {
     }
 
     try {
-        return util.inspect(resultado, {
-            depth: 6,
-            colors: false,
-            compact: false
-        });
+
+        return util.inspect(
+            resultado,
+            {
+                depth: 8,
+                colors: false,
+                compact: false
+            }
+        );
+
     } catch {
+
         return String(resultado);
     }
 }
 
 // ============================================================
-// COMANDO
+// FUNCIÓN ASÍNCRONA
+// ============================================================
+
+const AsyncFunction =
+    Object.getPrototypeOf(
+        async function () {}
+    ).constructor;
+
+// ============================================================
+// COMANDO EVAL
 // ============================================================
 
 export default {
@@ -153,7 +232,7 @@ export default {
     ],
 
     descripcion:
-        'Ejecuta código JavaScript para verificar y probar el bot. Solo Owner.',
+        'Ejecuta JavaScript para verificar y probar el bot. Solo Owner.',
 
     ejecutar: async ({
         msg,
@@ -164,14 +243,14 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // SEGURIDAD: OWNER
-            // ------------------------------------------------
+            // ==================================================
+            // VERIFICAR OWNER
+            // ==================================================
 
-            const autorizado =
-                await esOwner(msg);
+            const esOwner =
+                await verificarOwner(msg);
 
-            if (!autorizado) {
+            if (!esOwner) {
 
                 await responder.texto(
                     '🔐 *ᴇᴠᴀʟ*\n\n' +
@@ -181,11 +260,14 @@ export default {
                 return;
             }
 
-            // ------------------------------------------------
+            // ==================================================
             // SIN CÓDIGO
-            // ------------------------------------------------
+            // ==================================================
 
-            if (!argumento || !argumento.trim()) {
+            if (
+                !argumento ||
+                !argumento.trim()
+            ) {
 
                 await responder.texto(
                     '⚙️ *ᴇᴠᴀʟ*\n\n' +
@@ -199,54 +281,54 @@ export default {
                 return;
             }
 
-            // ------------------------------------------------
-            // PREPARAR CÓDIGO
-            // ------------------------------------------------
+            // ==================================================
+            // LIMPIAR CÓDIGO
+            // ==================================================
 
             let codigo =
                 argumento.trim();
 
-            // Permite:
-            // .eval => 1 + 1
-            // .eval 1 + 1
-            // .eval await sock.user
-            codigo =
-                codigo.replace(/^=>\s*/, '').trim();
+            if (
+                codigo.startsWith('=>')
+            ) {
+                codigo =
+                    codigo
+                        .slice(2)
+                        .trim();
+            }
 
-            // ------------------------------------------------
-            // CONTEXTO DISPONIBLE
-            // ------------------------------------------------
+            // ==================================================
+            // EJECUTAR
+            // ==================================================
 
             const resultado =
                 await AsyncFunction(
                     'sock',
                     'msg',
-                    'argumento',
                     'responder',
                     'util',
                     `
-                        "use strict";
+                    "use strict";
 
-                        return await (
-                            ${codigo}
-                        );
+                    return await (
+                        ${codigo}
+                    );
                     `
                 )(
                     sock,
                     msg,
-                    argumento,
                     responder,
                     util
                 );
+
+            // ==================================================
+            // RESULTADO
+            // ==================================================
 
             const salida =
                 formatearResultado(
                     resultado
                 );
-
-            // ------------------------------------------------
-            // RESULTADO
-            // ------------------------------------------------
 
             const respuesta =
                 '⚙️ *ᴇᴠᴀʟ ʀᴇsᴜʟᴛ*\n\n' +
@@ -266,11 +348,11 @@ export default {
 
         } catch (error) {
 
-            // ------------------------------------------------
-            // ERROR DE EVALUACIÓN
-            // ------------------------------------------------
+            // ==================================================
+            // ERROR
+            // ==================================================
 
-            const mensajeError =
+            const salidaError =
                 error?.stack ||
                 error?.message ||
                 String(error);
@@ -284,7 +366,7 @@ export default {
                 '╰┈┈┈┈┈┈┈┈⬡\n\n' +
 
                 '```' +
-                mensajeError +
+                salidaError +
                 '```';
 
             await responder.texto(
@@ -299,12 +381,3 @@ export default {
         }
     }
 };
-
-// ============================================================
-// ASYNC FUNCTION
-// ============================================================
-
-const AsyncFunction =
-    Object.getPrototypeOf(
-        async function () {}
-    ).constructor;
