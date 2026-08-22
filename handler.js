@@ -1,9 +1,22 @@
 // handler.js
 import { loadCommands } from './controllers/cmdManager.js';
+import fs from 'fs';
+import path from 'path';
 
 const PREFIJO = '.';
 
 let comandos = null;
+
+function getOwners() {
+    try {
+        const file = path.join(process.cwd(), 'database', 'owner.json');
+        if (!fs.existsSync(file)) return [];
+        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return data.owners || [];
+    } catch {
+        return [];
+    }
+}
 
 export async function cargarComandosHandler() {
     if (!comandos) {
@@ -33,7 +46,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             : (msg.key.participant || msg.key.remoteJid || '').split('@')[0].split(':')[0] + '@s.whatsapp.net';
 
         const senderNumber = senderId.split('@')[0];
-        const isOwner = msg.key.fromMe || senderNumber === '50576641902';
+        const owners = getOwners();
+        const isOwner = msg.key.fromMe || owners.includes(senderNumber);
 
         let textoProcesado = texto;
         let prefijoUsado = prefijo;
