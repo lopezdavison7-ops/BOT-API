@@ -1,5 +1,7 @@
 // commands/owner/eval.js
 import util from "util";
+import { writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
 
 export default {
 
@@ -44,7 +46,14 @@ export default {
 
         try {
 
-            result = await eval(argumento);
+            const tmpFile = join(process.cwd(), '_eval_tmp_' + Date.now() + '.mjs');
+            const code = 'export default async (sock, msg, responder) => {\n' + argumento + '\n}';
+            writeFileSync(tmpFile, code, 'utf8');
+
+            const mod = await import(tmpFile + '?t=' + Date.now());
+            result = await mod.default(sock, msg, responder);
+
+            unlinkSync(tmpFile);
 
         } catch (e) {
 
