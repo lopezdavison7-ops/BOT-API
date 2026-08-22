@@ -1,6 +1,4 @@
 // commands/owner/eval.js
-import util from "util";
-
 export default {
 
     nombre: 'eval',
@@ -56,9 +54,7 @@ export default {
 
         try {
 
-            result = await eval(`(async () => {
-                ${code}
-            })()`);
+            result = await eval(code);
 
         } catch (e) {
 
@@ -81,10 +77,7 @@ export default {
 
             try {
 
-                output = util.inspect(result, {
-                    depth: 3,
-                    maxArrayLength: 50
-                });
+                output = JSON.stringify(result, null, 2);
 
             } catch {
 
