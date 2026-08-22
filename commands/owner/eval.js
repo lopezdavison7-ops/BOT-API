@@ -14,16 +14,14 @@ export default {
 
     owner: true,
 
-    isAutoHandler: true,
-
     descripcion:
         'Evalúa código JavaScript.',
 
     ejecutar: async ({
         sock,
         msg,
-        body,
         argumento,
+        body,
         isOwner,
         responder
     }) => {

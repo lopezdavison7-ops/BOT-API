@@ -35,39 +35,17 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const senderNumber = senderId.split('@')[0];
         const isOwner = msg.key.fromMe || senderNumber === '50576641902';
 
-        if (texto.startsWith('=>')) {
-            const autoHandlers = Array.from(comandos.values())
-                .filter(cmd => cmd.isAutoHandler);
+        let textoProcesado = texto;
+        let prefijoUsado = prefijo;
 
-            for (const handler of autoHandlers) {
-                try {
-                    await handler.ejecutar({
-                        sock,
-                        msg,
-                        body: texto,
-                        isOwner,
-                        responder: {
-                            texto: async (text) => {
-                                await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
-                            },
-                            imagen: async (img, caption) => {
-                                await sock.sendMessage(msg.key.remoteJid, { image: img, caption }, { quoted: msg });
-                            },
-                            video: async (vid, caption) => {
-                                await sock.sendMessage(msg.key.remoteJid, { video: vid, caption }, { quoted: msg });
-                            }
-                        }
-                    });
-                } catch (error) {
-                    console.error(`[HANDLER] Error en auto-handler ${handler.nombre}:`, error);
-                }
-            }
-            return;
+        if (texto.startsWith('=>')) {
+            prefijoUsado = '=>';
+            textoProcesado = '.' + 'eval ' + texto.slice(2).trim();
         }
 
-        if (!texto.startsWith(prefijo)) return;
+        if (!textoProcesado.startsWith(prefijoUsado)) return;
 
-        const args = texto.slice(prefijo.length).trim().split(/\s+/);
+        const args = textoProcesado.slice(prefijoUsado.length).trim().split(/\s+/);
         const nombreComando = args.shift().toLowerCase();
         const argumento = args.join(' ').trim();
 
