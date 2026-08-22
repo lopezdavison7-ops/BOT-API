@@ -1,22 +1,9 @@
 // handler.js
 import { loadCommands } from './controllers/cmdManager.js';
-import fs from 'fs';
-import path from 'path';
 
 const PREFIJO = '.';
 
 let comandos = null;
-
-function getOwners() {
-    try {
-        const file = path.join(process.cwd(), 'database', 'owner.json');
-        if (!fs.existsSync(file)) return [];
-        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-        return data.owners || [];
-    } catch {
-        return [];
-    }
-}
 
 export async function cargarComandosHandler() {
     if (!comandos) {
@@ -34,32 +21,11 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const texto = msg.message?.conversation || 
                      msg.message?.extendedTextMessage?.text || 
-                     msg.message?.imageMessage?.caption ||
-                     msg.message?.videoMessage?.caption ||
-                     msg.message?.documentMessage?.caption ||
                      '';
 
-        if (!texto) return;
+        if (!texto.startsWith(prefijo)) return;
 
-        const senderId = msg.key.fromMe
-            ? (sock.user.id.split('@')[0].split(':')[0] + '@s.whatsapp.net')
-            : (msg.key.participant || msg.key.remoteJid || '').split('@')[0].split(':')[0] + '@s.whatsapp.net';
-
-        const senderNumber = senderId.split('@')[0];
-        const owners = getOwners();
-        const isOwner = msg.key.fromMe || owners.includes(senderNumber);
-
-        let textoProcesado = texto;
-        let prefijoUsado = prefijo;
-
-        if (texto.startsWith('=>')) {
-            prefijoUsado = '=>';
-            textoProcesado = '.' + 'eval ' + texto.slice(2).trim();
-        }
-
-        if (!textoProcesado.startsWith(prefijoUsado)) return;
-
-        const args = textoProcesado.slice(prefijoUsado.length).trim().split(/\s+/);
+        const args = texto.slice(prefijo.length).trim().split(/\s+/);
         const nombreComando = args.shift().toLowerCase();
         const argumento = args.join(' ').trim();
 
@@ -70,8 +36,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             sock,
             msg,
             argumento,
-            body: texto,
-            isOwner,
             listaComandos,
             prefijo,
             responder: {
