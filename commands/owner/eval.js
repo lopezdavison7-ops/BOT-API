@@ -44,7 +44,9 @@ export default {
 
         try {
 
-            result = await eval("(async () => {" + argumento + "})()");
+            const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+            const fn = new AsyncFn('sock', 'msg', 'responder', 'util', argumento);
+            result = await fn(sock, msg, responder, util);
 
         } catch (e) {
 
