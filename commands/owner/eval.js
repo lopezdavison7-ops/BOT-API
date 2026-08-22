@@ -2,24 +2,27 @@
 // BOT-API
 // COMANDO: EVAL
 // ============================================================
-// Eval seguro para Owners.
+// Comando exclusivo de Owner.
+//
+// Owners:
+// database/owner.json
+//
+// Compatible con:
+// - Número normal
+// - JID @s.whatsapp.net
+// - LID @lid
+// - LID -> PN mediante Baileys
 //
 // Ejemplos:
+// .eval
 // .eval 1 + 1
-// .eval Math.max(10, 25)
-// .eval "hola".toUpperCase()
-// .eval JSON.stringify({ ok: true })
 // .eval msg.key
 // .eval sock.user
-//
-// IMPORTANTE:
-// No ejecuta código arbitrario del servidor.
-// Se bloquean módulos, filesystem, procesos, variables de
-// entorno y mecanismos de ejecución dinámica.
 // ============================================================
 
 import fs from 'fs/promises';
 import path from 'path';
+import { jidNormalizedUser } from 'baileys';
 
 // ============================================================
 // CONFIGURACIÓN
@@ -30,6 +33,70 @@ const OWNER_FILE = path.join(
     'database',
     'owner.json'
 );
+
+// ============================================================
+// LIMPIAR JID / NÚMERO
+// ============================================================
+
+function limpiarValor(valor) {
+    if (!valor) return null;
+
+    if (typeof valor === 'object') {
+        valor =
+            valor.lid ||
+            valor.jid ||
+            valor.id ||
+            valor.number ||
+            valor.numero ||
+            valor.phone ||
+            '';
+    }
+
+    const texto = String(valor).trim();
+
+    return texto || null;
+}
+
+// ============================================================
+// OBTENER NÚMERO DE UN JID
+// ============================================================
+
+function obtenerNumero(valor) {
+    if (!valor) return null;
+
+    const texto = String(valor)
+        .split('@')[0]
+        .split(':')[0]
+        .replace(/\D/g, '');
+
+    return texto || null;
+}
+
+// ============================================================
+// NORMALIZAR PN
+// ============================================================
+
+function normalizarPN(valor) {
+    if (!valor) return null;
+
+    const texto = String(valor).trim();
+
+    if (!texto) return null;
+
+    if (texto.includes('@')) {
+        try {
+            return jidNormalizedUser(texto);
+        } catch {
+            // Continuamos con limpieza manual.
+        }
+    }
+
+    const numero = obtenerNumero(texto);
+
+    if (!numero) return null;
+
+    return `${numero}@s.whatsapp.net`;
+}
 
 // ============================================================
 // LEER OWNERS
@@ -52,6 +119,10 @@ async function leerOwners() {
             return data.owners;
         }
 
+        if (Array.isArray(data?.owner)) {
+            return data.owner;
+        }
+
         return [];
 
     } catch (error) {
@@ -65,60 +136,209 @@ async function leerOwners() {
 }
 
 // ============================================================
-// OBTENER NÚMERO
+// OBTENER OWNER NUMBERS
 // ============================================================
 
-function obtenerNumero(jid) {
-    if (!jid) return '';
+async function obtenerNumerosOwners() {
+    const owners = await leerOwners();
 
-    return String(jid)
-        .split('@')[0]
-        .split(':')[0]
-        .replace(/\D/g, '');
+    const numeros = [];
+
+    for (const owner of owners) {
+        const valor = limpiarValor(owner);
+
+        if (!valor) continue;
+
+        const numero = obtenerNumero(valor);
+
+        if (numero && !numeros.includes(numero)) {
+            numeros.push(numero);
+        }
+    }
+
+    return numeros;
+}
+
+// ============================================================
+// RESOLVER LID -> PN
+// ============================================================
+
+async function resolverLidAPN(sock, jid) {
+    if (!jid) return null;
+
+    const texto = String(jid).trim();
+
+    if (!texto.endsWith('@lid')) {
+        return normalizarPN(texto);
+    }
+
+    const mapping =
+        sock?.signalRepository?.lidMapping;
+
+    if (
+        !mapping ||
+        typeof mapping.getPNForLID !== 'function'
+    ) {
+        console.warn(
+            `[EVAL] No está disponible getPNForLID para ${texto}`
+        );
+
+        return null;
+    }
+
+    try {
+        const resultado =
+            await mapping.getPNForLID(texto);
+
+        if (!resultado) {
+            console.warn(
+                `[EVAL] No existe mapping PN para ${texto}`
+            );
+
+            return null;
+        }
+
+        const pn = normalizarPN(resultado);
+
+        if (pn) {
+            console.log(
+                `[EVAL] LID ${texto} -> PN ${pn}`
+            );
+        }
+
+        return pn;
+
+    } catch (error) {
+        console.error(
+            `[EVAL] Error resolviendo LID ${texto}:`,
+            error?.message || error
+        );
+
+        return null;
+    }
+}
+
+// ============================================================
+// OBTENER JID DEL REMITENTE
+// ============================================================
+
+function obtenerJidRemitente(msg) {
+    if (!msg) return null;
+
+    // En grupos normalmente está aquí.
+    if (msg.key?.participant) {
+        return msg.key.participant;
+    }
+
+    // Algunas versiones/estructuras pueden utilizar este campo.
+    if (msg.participant) {
+        return msg.participant;
+    }
+
+    // En chat privado el remoteJid normalmente es el usuario.
+    if (msg.key?.remoteJid) {
+        return msg.key.remoteJid;
+    }
+
+    return null;
 }
 
 // ============================================================
 // COMPROBAR OWNER
 // ============================================================
 
-async function esOwner(msg) {
-    const sender = obtenerNumero(
-        msg?.key?.participant ||
-        msg?.participant ||
-        msg?.key?.remoteJid ||
-        ''
-    );
+async function esOwner(msg, sock) {
+    const owners = await obtenerNumerosOwners();
 
-    if (!sender) {
+    if (!owners.length) {
+        console.warn(
+            '[EVAL] owner.json no contiene Owners.'
+        );
+
         return false;
     }
 
-    const owners = await leerOwners();
+    const jidRemitente =
+        obtenerJidRemitente(msg);
 
-    return owners.some(owner => {
-        let numero;
+    if (!jidRemitente) {
+        console.warn(
+            '[EVAL] No se pudo obtener el JID del remitente.'
+        );
 
-        if (typeof owner === 'object') {
-            numero =
-                owner.number ||
-                owner.numero ||
-                owner.phone ||
-                owner.jid ||
-                owner.id ||
-                owner.lid ||
-                '';
-        } else {
-            numero = owner;
+        return false;
+    }
+
+    console.log(
+        `[EVAL] JID remitente: ${jidRemitente}`
+    );
+
+    // --------------------------------------------------------
+    // CASO 1: JID normal
+    // --------------------------------------------------------
+
+    if (
+        jidRemitente.endsWith(
+            '@s.whatsapp.net'
+        )
+    ) {
+        const numero =
+            obtenerNumero(
+                jidRemitente
+            );
+
+        console.log(
+            `[EVAL] Número remitente: ${numero}`
+        );
+
+        return owners.includes(numero);
+    }
+
+    // --------------------------------------------------------
+    // CASO 2: LID
+    // --------------------------------------------------------
+
+    if (
+        jidRemitente.endsWith('@lid')
+    ) {
+        const pn =
+            await resolverLidAPN(
+                sock,
+                jidRemitente
+            );
+
+        if (!pn) {
+            console.warn(
+                '[EVAL] No se pudo convertir LID a PN.'
+            );
+
+            return false;
         }
 
-        numero = obtenerNumero(numero);
+        const numero =
+            obtenerNumero(pn);
 
-        return numero === sender;
-    });
+        console.log(
+            `[EVAL] Número resuelto: ${numero}`
+        );
+
+        return owners.includes(numero);
+    }
+
+    // --------------------------------------------------------
+    // CASO 3: Número sin dominio
+    // --------------------------------------------------------
+
+    const numero =
+        obtenerNumero(
+            jidRemitente
+        );
+
+    return owners.includes(numero);
 }
 
 // ============================================================
-// BLOQUEO DE OPERACIONES PELIGROSAS
+// BLOQUEOS
 // ============================================================
 
 const BLOQUEADOS = [
@@ -128,36 +348,33 @@ const BLOQUEADOS = [
     'exports',
     'import',
     'global',
-    'globalThis',
+    'globalthis',
     'eval',
-    'Function',
-    'AsyncFunction',
-    'GeneratorFunction',
-    'WebAssembly',
+    'function',
+    'asyncfunction',
+    'generatorfunction',
+    'webassembly',
+    'child_process',
     'child_process',
     'exec',
-    'execSync',
+    'execsync',
     'spawn',
-    'spawnSync',
+    'spawnsync',
     'fork',
     'fs',
     'fs/promises',
-    'readFile',
-    'writeFile',
+    'readfile',
+    'writefile',
     'unlink',
-    'rm',
     'rmdir',
     'mkdir',
     'rename',
-    'copyFile',
-    'database',
-    'owner.json',
+    'copyfile',
     'dotenv',
-    'env',
-    'PATH',
-    'HOME',
+    'owner.json',
     '__dirname',
-    '__filename'
+    '__filename',
+    'env.'
 ];
 
 // ============================================================
@@ -165,25 +382,30 @@ const BLOQUEADOS = [
 // ============================================================
 
 function validarCodigo(codigo) {
-    const texto = String(codigo || '').trim();
+    const texto =
+        String(codigo || '').trim();
 
     if (!texto) {
         return {
             valido: false,
-            razon: 'No ingresaste ningún código.'
+            razon:
+                'No ingresaste ningún código.'
         };
     }
 
-    const codigoNormalizado = texto.toLowerCase();
+    const normalizado =
+        texto.toLowerCase();
 
     for (const bloqueado of BLOQUEADOS) {
-        const patron = bloqueado.toLowerCase();
-
-        if (codigoNormalizado.includes(patron)) {
+        if (
+            normalizado.includes(
+                bloqueado
+            )
+        ) {
             return {
                 valido: false,
                 razon:
-                    `La expresión contiene una operación bloqueada: ${bloqueado}`
+                    `Operación bloqueada: ${bloqueado}`
             };
         }
     }
@@ -194,116 +416,101 @@ function validarCodigo(codigo) {
 }
 
 // ============================================================
-// EVALUADOR SEGURO
+// CREAR CONTEXTO SEGURO
 // ============================================================
 
-function evaluarSeguro(codigo, contexto) {
+function crearContexto(msg, sock) {
+    return {
+        msg: {
+            key: {
+                remoteJid:
+                    msg?.key?.remoteJid ||
+                    null,
 
-    const resultadoValidacion =
-        validarCodigo(codigo);
+                participant:
+                    msg?.key?.participant ||
+                    null,
 
-    if (!resultadoValidacion.valido) {
-        throw new Error(
-            resultadoValidacion.razon
-        );
-    }
+                id:
+                    msg?.key?.id ||
+                    null,
 
-    // --------------------------------------------------------
-    // API limitada disponible dentro del evaluador
-    // --------------------------------------------------------
+                fromMe:
+                    Boolean(
+                        msg?.key?.fromMe
+                    )
+            }
+        },
 
-    const sandbox = Object.freeze({
-
-        // Datos básicos del mensaje.
-        msg: Object.freeze({
-            key: msgSeguro(contexto.msg)
-        }),
-
-        // Información pública básica del socket.
-        sock: Object.freeze({
-            user: contexto.sock?.user
+        sock: {
+            user: sock?.user
                 ? {
-                    id: contexto.sock.user.id || null,
-                    name: contexto.sock.user.name || null
+                    id:
+                        sock.user.id ||
+                        null,
+
+                    name:
+                        sock.user.name ||
+                        null
                 }
                 : null
-        }),
+        },
 
-        // Math seguro.
         Math,
-
-        // JSON.
         JSON,
-
-        // String.
         String,
-
-        // Number.
         Number,
-
-        // Boolean.
         Boolean,
-
-        // Array.
         Array,
-
-        // Object.
         Object,
-
-        // Date.
         Date
-    });
-
-    // --------------------------------------------------------
-    // Evaluación mediante Function.
-    //
-    // No tiene acceso al scope del módulo.
-    // Las palabras peligrosas se bloquearon previamente.
-    // --------------------------------------------------------
-
-    const nombres = Object.keys(sandbox);
-    const valores = Object.values(sandbox);
-
-    const fn = new Function(
-        ...nombres,
-        `"use strict"; return (${codigo});`
-    );
-
-    return fn(...valores);
-}
-
-// ============================================================
-// LIMPIAR MSG PARA EVAL
-// ============================================================
-
-function msgSeguro(msg) {
-    if (!msg) {
-        return null;
-    }
-
-    return {
-        key: {
-            remoteJid:
-                msg.key?.remoteJid || null,
-
-            fromMe:
-                Boolean(msg.key?.fromMe),
-
-            id:
-                msg.key?.id || null,
-
-            participant:
-                msg.key?.participant || null
-        }
     };
 }
 
 // ============================================================
-// FORMATEAR RESULTADO
+// EVALUAR
+// ============================================================
+
+function evaluarSeguro(
+    codigo,
+    msg,
+    sock
+) {
+    const validacion =
+        validarCodigo(codigo);
+
+    if (!validacion.valido) {
+        throw new Error(
+            validacion.razon
+        );
+    }
+
+    const contexto =
+        crearContexto(
+            msg,
+            sock
+        );
+
+    const nombres =
+        Object.keys(contexto);
+
+    const valores =
+        Object.values(contexto);
+
+    const ejecutar =
+        new Function(
+            ...nombres,
+            `"use strict"; return (${codigo});`
+        );
+
+    return ejecutar(...valores);
+}
+
+// ============================================================
+// OBTENER TIPO
 // ============================================================
 
 function obtenerTipo(valor) {
-
     if (valor === null) {
         return 'null';
     }
@@ -316,11 +523,10 @@ function obtenerTipo(valor) {
 }
 
 // ============================================================
-// CONVERTIR RESULTADO A TEXTO
+// CONVERTIR RESULTADO
 // ============================================================
 
-function resultadoTexto(valor) {
-
+function convertirResultado(valor) {
     if (valor === undefined) {
         return 'undefined';
     }
@@ -329,11 +535,8 @@ function resultadoTexto(valor) {
         return 'null';
     }
 
-    if (typeof valor === 'string') {
-        return valor;
-    }
-
     if (
+        typeof valor === 'string' ||
         typeof valor === 'number' ||
         typeof valor === 'boolean' ||
         typeof valor === 'bigint'
@@ -353,16 +556,15 @@ function resultadoTexto(valor) {
 }
 
 // ============================================================
-// FORMATO DE ÉXITO
+// RESULTADO EXITOSO
 // ============================================================
 
-function crearResultadoExito(valor) {
-
+function resultadoExito(valor) {
     const tipo =
         obtenerTipo(valor);
 
     const contenido =
-        resultadoTexto(valor);
+        convertirResultado(valor);
 
     return (
         '⚙️ *ᴇᴠᴀʟ ʀᴇsᴜʟᴛ*\n\n' +
@@ -373,20 +575,17 @@ function crearResultadoExito(valor) {
         `┃ Type: ${tipo}\n` +
         '╰┈┈┈┈┈┈┈┈⬡\n\n' +
 
-        '```' +
-        '\n' +
+        '```text\n' +
         contenido +
-        '\n' +
-        '```'
+        '\n```'
     );
 }
 
 // ============================================================
-// FORMATO DE ERROR
+// RESULTADO ERROR
 // ============================================================
 
-function crearResultadoError(error) {
-
+function resultadoError(error) {
     const mensaje =
         error?.message ||
         String(error);
@@ -400,16 +599,14 @@ function crearResultadoError(error) {
         '┃ Type: Error\n' +
         '╰┈┈┈┈┈┈┈┈⬡\n\n' +
 
-        '```' +
-        '\n' +
+        '```text\n' +
         mensaje +
-        '\n' +
-        '```'
+        '\n```'
     );
 }
 
 // ============================================================
-// COMANDO
+// COMANDO EVAL
 // ============================================================
 
 export default {
@@ -424,7 +621,7 @@ export default {
     ],
 
     descripcion:
-        'Evalúa expresiones JavaScript seguras. Comando exclusivo del Owner.',
+        'Evalúa expresiones JavaScript seguras. Exclusivo del Owner.',
 
     ejecutar: async ({
         msg,
@@ -440,7 +637,10 @@ export default {
             // ------------------------------------------------
 
             const autorizado =
-                await esOwner(msg);
+                await esOwner(
+                    msg,
+                    sock
+                );
 
             if (!autorizado) {
 
@@ -453,15 +653,13 @@ export default {
             }
 
             // ------------------------------------------------
-            // OBTENER CÓDIGO
+            // CÓDIGO
             // ------------------------------------------------
 
             const codigo =
-                String(argumento || '').trim();
-
-            // ------------------------------------------------
-            // SIN CÓDIGO
-            // ------------------------------------------------
+                String(
+                    argumento || ''
+                ).trim();
 
             if (!codigo) {
 
@@ -474,64 +672,60 @@ export default {
                     '> => 1 + 1\n' +
                     '> => msg.key\n' +
                     '> => sock.user\n' +
-                    '> => Math.max(10, 25)\n' +
-                    '> => "hola".toUpperCase()'
+                    '> => Math.max(10, 25)'
                 );
 
                 return;
             }
 
-            // ------------------------------------------------
-            // MOSTRAR EN CONSOLA
-            // ------------------------------------------------
+            console.log(
+                '=========================================='
+            );
 
             console.log(
-                `[EVAL] Owner ejecutó: ${codigo}`
+                `[EVAL] Código: ${codigo}`
             );
 
             // ------------------------------------------------
-            // EVALUAR
+            // EJECUTAR
             // ------------------------------------------------
-
-            let resultado;
 
             try {
 
-                resultado =
+                const resultado =
                     evaluarSeguro(
                         codigo,
-                        {
-                            msg,
-                            sock
-                        }
+                        msg,
+                        sock
                     );
+
+                console.log(
+                    `[EVAL] Resultado: ${String(resultado)}`
+                );
+
+                await responder.texto(
+                    resultadoExito(
+                        resultado
+                    )
+                );
 
             } catch (error) {
 
                 console.error(
                     '[EVAL] Error:',
-                    error?.stack ||
                     error?.message ||
                     error
                 );
 
                 await responder.texto(
-                    crearResultadoError(
+                    resultadoError(
                         error
                     )
                 );
-
-                return;
             }
 
-            // ------------------------------------------------
-            // ENVIAR RESULTADO
-            // ------------------------------------------------
-
-            await responder.texto(
-                crearResultadoExito(
-                    resultado
-                )
+            console.log(
+                '=========================================='
             );
 
         } catch (error) {
@@ -546,7 +740,7 @@ export default {
             try {
 
                 await responder.texto(
-                    crearResultadoError(
+                    resultadoError(
                         error
                     )
                 );
@@ -554,7 +748,7 @@ export default {
             } catch (sendError) {
 
                 console.error(
-                    '[EVAL] No se pudo enviar el resultado:',
+                    '[EVAL] Error enviando respuesta:',
                     sendError?.message ||
                     sendError
                 );
