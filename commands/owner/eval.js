@@ -23,17 +23,22 @@ export default {
         sock,
         msg,
         body,
+        argumento,
         isOwner,
         responder
     }) => {
 
         if (!isOwner) return;
 
-        if (!body || !body.startsWith('=>')) return;
+        let code = '';
 
-        const argumento = body.slice(2).trim();
+        if (body && body.startsWith('=>')) {
+            code = body.slice(2).trim();
+        } else if (argumento) {
+            code = argumento;
+        }
 
-        if (!argumento) {
+        if (!code) {
 
             await responder.texto(
                 '⚙️ *ᴇᴠᴀʟ*\n\n' +
@@ -54,7 +59,7 @@ export default {
         try {
 
             result = await eval(`(async () => {
-                ${argumento}
+                ${code}
             })()`);
 
         } catch (e) {
