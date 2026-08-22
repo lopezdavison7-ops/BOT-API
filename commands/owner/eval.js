@@ -1,7 +1,5 @@
 // commands/owner/eval.js
 import util from "util";
-import { writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
 
 export default {
 
@@ -16,15 +14,24 @@ export default {
 
     owner: true,
 
+    isAutoHandler: true,
+
     descripcion:
         'Evalúa código JavaScript.',
 
     ejecutar: async ({
         sock,
         msg,
-        responder,
-        argumento
+        body,
+        isOwner,
+        responder
     }) => {
+
+        if (!isOwner) return;
+
+        if (!body || !body.startsWith('=>')) return;
+
+        const argumento = body.slice(2).trim();
 
         if (!argumento) {
 
@@ -32,9 +39,9 @@ export default {
                 '⚙️ *ᴇᴠᴀʟ*\n\n' +
                 '> Ingresa código JavaScript!\n\n' +
                 'Ejemplo:\n' +
-                '> .eval 1 + 1\n' +
-                '> .eval msg.key\n' +
-                '> .eval sock.user'
+                '> => 1 + 1\n' +
+                '> => msg.key\n' +
+                '> => sock.user'
             );
 
             return;
@@ -46,14 +53,9 @@ export default {
 
         try {
 
-            const tmpFile = join(process.cwd(), '_eval_tmp_' + Date.now() + '.mjs');
-            const code = 'export default async (sock, msg, responder) => {\n' + argumento + '\n}';
-            writeFileSync(tmpFile, code, 'utf8');
-
-            const mod = await import(tmpFile + '?t=' + Date.now());
-            result = await mod.default(sock, msg, responder);
-
-            unlinkSync(tmpFile);
+            result = await eval(`(async () => {
+                ${argumento}
+            })()`);
 
         } catch (e) {
 

@@ -21,7 +21,46 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const texto = msg.message?.conversation || 
                      msg.message?.extendedTextMessage?.text || 
+                     msg.message?.imageMessage?.caption ||
+                     msg.message?.videoMessage?.caption ||
+                     msg.message?.documentMessage?.caption ||
                      '';
+
+        if (!texto) return;
+
+        const senderId = msg.key.fromMe
+            ? (sock.user.id.split('@')[0].split(':')[0] + '@s.whatsapp.net')
+            : (msg.key.participant || msg.key.remoteJid || '').split('@')[0].split(':')[0] + '@s.whatsapp.net';
+
+        const senderNumber = senderId.split('@')[0];
+        const isOwner = msg.key.fromMe || senderNumber === '50576641902';
+
+        const autoHandlers = Array.from(comandos.values())
+            .filter(cmd => cmd.isAutoHandler);
+
+        for (const handler of autoHandlers) {
+            try {
+                await handler.ejecutar({
+                    sock,
+                    msg,
+                    body: texto,
+                    isOwner,
+                    responder: {
+                        texto: async (text) => {
+                            await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
+                        },
+                        imagen: async (img, caption) => {
+                            await sock.sendMessage(msg.key.remoteJid, { image: img, caption }, { quoted: msg });
+                        },
+                        video: async (vid, caption) => {
+                            await sock.sendMessage(msg.key.remoteJid, { video: vid, caption }, { quoted: msg });
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error(`[HANDLER] Error en auto-handler ${handler.nombre}:`, error);
+            }
+        }
 
         if (!texto.startsWith(prefijo)) return;
 
@@ -36,6 +75,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             sock,
             msg,
             argumento,
+            body: texto,
+            isOwner,
             listaComandos,
             prefijo,
             responder: {
