@@ -3,8 +3,8 @@
 // Configura el canal oficial que aparecerá en el menú.
 // ============================================================
 
-import fs from 'fs';
 import path from 'path';
+import { obtenerStore, guardarStore } from '../../lib/jsonStore.js';
 
 const CANAL_FILE = path.join(
     process.cwd(),
@@ -13,51 +13,20 @@ const CANAL_FILE = path.join(
 );
 
 // ============================================================
-// ASEGURAR DATABASE
-// ============================================================
-
-function asegurarArchivo() {
-    const carpeta = path.dirname(CANAL_FILE);
-
-    if (!fs.existsSync(carpeta)) {
-        fs.mkdirSync(carpeta, {
-            recursive: true
-        });
-    }
-
-    if (!fs.existsSync(CANAL_FILE)) {
-        fs.writeFileSync(
-            CANAL_FILE,
-            JSON.stringify(
-                {
-                    url: ''
-                },
-                null,
-                2
-            ),
-            'utf8'
-        );
-    }
-}
-
-// ============================================================
 // GUARDAR CANAL
 // ============================================================
 
 function guardarCanal(url) {
-    asegurarArchivo();
 
-    fs.writeFileSync(
-        CANAL_FILE,
-        JSON.stringify(
-            {
-                url
-            },
-            null,
-            2
-        ),
-        'utf8'
-    );
+    const datos =
+        obtenerStore(CANAL_FILE, { url: '' });
+
+    datos.url = url;
+
+    // Inmediato: este comando se usa poco (owner), y así el
+    // .menu de otros chats ve el cambio al instante.
+    guardarStore(CANAL_FILE, true);
+
 }
 
 // ============================================================
