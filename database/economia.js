@@ -1,6 +1,6 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { obtenerStore, guardarStore } from '../lib/jsonStore.js';
 
 const __filename =
     fileURLToPath(import.meta.url);
@@ -27,63 +27,19 @@ export const COOLDOWN_RW =
     4 * 60 * 60 * 1000;
 
 // ============================================================
-// ASEGURAR ARCHIVO
+// ACCESO A DATOS (ahora en memoria, no toca disco cada vez)
 // ============================================================
 
-function asegurarArchivo() {
+function datos() {
 
-    if (!fs.existsSync(ARCHIVO)) {
-
-        fs.writeFileSync(
-            ARCHIVO,
-            '{}',
-            'utf8'
-        );
-
-    }
+    return obtenerStore(ARCHIVO, {});
 
 }
 
-// ============================================================
-// CARGAR DATOS
-// ============================================================
+function guardar() {
 
-function cargar() {
-
-    asegurarArchivo();
-
-    try {
-
-        return JSON.parse(
-            fs.readFileSync(
-                ARCHIVO,
-                'utf8'
-            )
-        );
-
-    } catch {
-
-        return {};
-
-    }
-
-}
-
-// ============================================================
-// GUARDAR DATOS
-// ============================================================
-
-function guardar(datos) {
-
-    fs.writeFileSync(
-        ARCHIVO,
-        JSON.stringify(
-            datos,
-            null,
-            2
-        ),
-        'utf8'
-    );
+    // Escritura en disco agrupada (debounce), no bloquea el bot.
+    guardarStore(ARCHIVO);
 
 }
 
@@ -114,17 +70,17 @@ function crearUsuario() {
 
 export function obtenerUsuario(id) {
 
-    const datos =
-        cargar();
+    const db =
+        datos();
 
-    if (!datos[id]) {
+    if (!db[id]) {
 
-        datos[id] =
+        db[id] =
             crearUsuario();
 
-        guardar(datos);
+        guardar();
 
-        return datos[id];
+        return db[id];
 
     }
 
@@ -132,43 +88,53 @@ export function obtenerUsuario(id) {
     // Compatibilidad con usuarios existentes
     // --------------------------------------------------------
 
+    let cambiado = false;
+
     if (
-        typeof datos[id].dinero !== 'number'
+        typeof db[id].dinero !== 'number'
     ) {
 
-        datos[id].dinero = 0;
+        db[id].dinero = 0;
+        cambiado = true;
 
     }
 
     if (
         !Array.isArray(
-            datos[id].personajes
+            db[id].personajes
         )
     ) {
 
-        datos[id].personajes = [];
+        db[id].personajes = [];
+        cambiado = true;
 
     }
 
     if (
-        typeof datos[id].ultimoTrabajo !== 'number'
+        typeof db[id].ultimoTrabajo !== 'number'
     ) {
 
-        datos[id].ultimoTrabajo = 0;
+        db[id].ultimoTrabajo = 0;
+        cambiado = true;
 
     }
 
     if (
-        typeof datos[id].ultimoRW !== 'number'
+        typeof db[id].ultimoRW !== 'number'
     ) {
 
-        datos[id].ultimoRW = 0;
-
-        guardar(datos);
+        db[id].ultimoRW = 0;
+        cambiado = true;
 
     }
 
-    return datos[id];
+    if (cambiado) {
+
+        guardar();
+
+    }
+
+    return db[id];
 
 }
 
@@ -181,30 +147,30 @@ export function modificarDinero(
     cantidad
 ) {
 
-    const datos =
-        cargar();
+    const db =
+        datos();
 
-    if (!datos[id]) {
+    if (!db[id]) {
 
-        datos[id] =
+        db[id] =
             crearUsuario();
 
     }
 
-    datos[id].dinero +=
+    db[id].dinero +=
         cantidad;
 
     if (
-        datos[id].dinero < 0
+        db[id].dinero < 0
     ) {
 
-        datos[id].dinero = 0;
+        db[id].dinero = 0;
 
     }
 
-    guardar(datos);
+    guardar();
 
-    return datos[id];
+    return db[id];
 
 }
 
@@ -217,13 +183,13 @@ export function guardarUsuario(
     usuario
 ) {
 
-    const datos =
-        cargar();
+    const db =
+        datos();
 
-    datos[id] =
+    db[id] =
         usuario;
 
-    guardar(datos);
+    guardar();
 
     return usuario;
 
@@ -299,22 +265,22 @@ export function tiempoRestanteRW(id) {
 
 export function registrarRW(id) {
 
-    const datos =
-        cargar();
+    const db =
+        datos();
 
-    if (!datos[id]) {
+    if (!db[id]) {
 
-        datos[id] =
+        db[id] =
             crearUsuario();
 
     }
 
-    datos[id].ultimoRW =
+    db[id].ultimoRW =
         Date.now();
 
-    guardar(datos);
+    guardar();
 
-    return datos[id];
+    return db[id];
 
 }
 
@@ -324,6 +290,6 @@ export function registrarRW(id) {
 
 export function obtenerTodos() {
 
-    return cargar();
+    return datos();
 
 }
