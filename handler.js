@@ -25,9 +25,24 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!texto.startsWith(prefijo)) return;
 
-        const args = texto.slice(prefijo.length).trim().split(/\s+/);
-        const nombreComando = args.shift().toLowerCase();
-        const argumento = args.join(' ').trim();
+        // Se separa solo el nombre del comando (primer "token").
+        // El resto del texto se conserva TAL CUAL (con sus saltos de
+        // línea originales), para que comandos como .eval reciban
+        // código multilínea intacto en vez de todo aplastado en
+        // una sola línea con espacios.
+        const sinPrefijo = texto.slice(prefijo.length).trim();
+        const indiceEspacio = sinPrefijo.search(/\s/);
+
+        const nombreComando = (
+            indiceEspacio === -1
+                ? sinPrefijo
+                : sinPrefijo.slice(0, indiceEspacio)
+        ).toLowerCase();
+
+        const argumento =
+            indiceEspacio === -1
+                ? ''
+                : sinPrefijo.slice(indiceEspacio + 1).trim();
 
         const cmd = comandos.get(nombreComando);
         if (!cmd) return;
