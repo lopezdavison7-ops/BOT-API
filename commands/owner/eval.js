@@ -25,6 +25,22 @@ function conTimeout(promesa, ms) {
     ]);
 }
 
+// ============================================================
+// RED DE SEGURIDAD
+// Si el código llegó "aplastado" en una sola línea (por ejemplo
+// porque el handler colapsó los saltos de línea originales),
+// intenta insertar los ';' que falten antes de palabras clave
+// de statement para permitir que el parser lo entienda igual.
+// ============================================================
+function repararStatements(codigo) {
+
+    return codigo.replace(
+        /([^\s;{(,:])\s+(const|let|var|await|for|if|return|function|class|switch|try)\b/g,
+        '$1;\n$2'
+    );
+
+}
+
 function inspeccionar(valor) {
 
     if (typeof valor === 'string') {
@@ -154,12 +170,35 @@ export default {
 
                 }
 
-                resultado = await conTimeout(
-                    eval(
-                        `(async () => {\n${argumento}\n})()`
-                    ),
-                    TIMEOUT_MS
-                );
+                try {
+
+                    resultado = await conTimeout(
+                        eval(
+                            `(async () => {\n${argumento}\n})()`
+                        ),
+                        TIMEOUT_MS
+                    );
+
+                } catch (error2) {
+
+                    if (!(error2 instanceof SyntaxError)) {
+
+                        throw error2;
+
+                    }
+
+                    // Último recurso: reparar statements pegados
+                    // en una sola línea (sin saltos ni ';').
+                    const reparado = repararStatements(argumento);
+
+                    resultado = await conTimeout(
+                        eval(
+                            `(async () => {\n${reparado}\n})()`
+                        ),
+                        TIMEOUT_MS
+                    );
+
+                }
 
             }
 
