@@ -5,6 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { obtenerStore } from '../../lib/jsonStore.js';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -89,16 +90,7 @@ function crearMencion(jid) {
 
 function obtenerCanal() {
     try {
-        if (!fs.existsSync(CANAL_FILE)) {
-            return '';
-        }
-
-        const datos = JSON.parse(
-            fs.readFileSync(
-                CANAL_FILE,
-                'utf8'
-            )
-        );
+        const datos = obtenerStore(CANAL_FILE, { url: '' });
 
         return typeof datos.url === 'string'
             ? datos.url.trim()
