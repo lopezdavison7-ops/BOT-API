@@ -14,6 +14,12 @@
 // - Mayor tolerancia a errores de subida
 // ============================================================
 
+// Se carga aquí directamente (y no solo en index.js) para que
+// este comando SIEMPRE tenga su API key sin importar cómo se
+// arranque el proceso (node index.js, panel de hosting, pm2,
+// etc.) ni el orden en que se importen los demás comandos.
+import 'dotenv/config';
+
 const API_BASE =
     'https://apiyosoyyo-ofc.onrender.com';
 
