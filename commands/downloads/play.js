@@ -176,10 +176,107 @@ async function reaccionar(
 }
 
 // ============================================================
+// CACHÉ DE BÚSQUEDAS
+// ============================================================
+// Con muchos usuarios pidiendo canciones populares al mismo
+// tiempo (o la misma persona repitiendo), no tiene sentido
+// golpear la API de búsqueda una y otra vez por lo mismo.
+// Se guarda el resultado en memoria por unos minutos.
+// ============================================================
+
+const CACHE_BUSQUEDA_TTL_MS = 10 * 60 * 1000; // 10 minutos
+const cacheBusquedas = new Map();
+
+// Búsquedas EN CURSO (todavía no terminan). Si dos usuarios
+// piden lo mismo casi al mismo tiempo, la segunda no dispara
+// otra llamada a la API: espera el resultado de la primera.
+const busquedasEnCurso = new Map();
+
+function normalizarConsulta(consulta) {
+    return String(consulta)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+}
+
+function obtenerDeCache(consulta) {
+    const clave = normalizarConsulta(consulta);
+    const entrada = cacheBusquedas.get(clave);
+
+    if (!entrada) {
+        return null;
+    }
+
+    if (Date.now() > entrada.expira) {
+        cacheBusquedas.delete(clave);
+        return null;
+    }
+
+    return entrada.resultado;
+}
+
+function guardarEnCache(consulta, resultado) {
+    const clave = normalizarConsulta(consulta);
+
+    cacheBusquedas.set(clave, {
+        resultado,
+        expira: Date.now() + CACHE_BUSQUEDA_TTL_MS
+    });
+
+    // Evitar que el caché crezca sin límite en un bot muy activo.
+    if (cacheBusquedas.size > 300) {
+        const primeraClave =
+            cacheBusquedas.keys().next().value;
+        cacheBusquedas.delete(primeraClave);
+    }
+}
+
+// ============================================================
 // BUSCAR YOUTUBE
 // ============================================================
 
 async function buscarYouTube(
+    consulta
+) {
+    const enCache =
+        obtenerDeCache(consulta);
+
+    if (enCache) {
+        console.log(
+            `[PLAY] ⚡ Búsqueda desde caché: ${consulta}`
+        );
+        return enCache;
+    }
+
+    const clave =
+        normalizarConsulta(consulta);
+
+    // Si ya hay una búsqueda idéntica en curso, se engancha a
+    // esa misma promesa en vez de disparar otra llamada a la
+    // API (evita duplicados cuando varios piden lo mismo casi
+    // al mismo tiempo).
+    if (busquedasEnCurso.has(clave)) {
+
+        console.log(
+            `[PLAY] 🔗 Enganchado a búsqueda en curso: ${consulta}`
+        );
+
+        return busquedasEnCurso.get(clave);
+
+    }
+
+    const promesa =
+        buscarYouTubeEnApi(consulta)
+            .finally(() => {
+                busquedasEnCurso.delete(clave);
+            });
+
+    busquedasEnCurso.set(clave, promesa);
+
+    return promesa;
+}
+
+async function buscarYouTubeEnApi(
     consulta
 ) {
     if (!API_KEY) {
@@ -250,7 +347,7 @@ async function buscarYouTube(
         );
     }
 
-    return {
+    const resultado = {
         titulo:
             limpiarTexto(
                 primero.title ||
@@ -285,6 +382,10 @@ async function buscarYouTube(
                 'No disponible'
             )
     };
+
+    guardarEnCache(consulta, resultado);
+
+    return resultado;
 }
 
 // ============================================================
@@ -520,6 +621,16 @@ function crearInformacion(
 }
 
 // ============================================================
+// DESCARGAS ACTIVAS POR USUARIO
+// ============================================================
+// Evita que la misma persona dispare varias descargas al
+// mismo tiempo (spam de .play). Además de ahorrar recursos en
+// un bot con muchos participantes, evita mensajes duplicados.
+// ============================================================
+
+const descargasActivas = new Map();
+
+// ============================================================
 // COMANDO PLAY
 // ============================================================
 
@@ -571,6 +682,41 @@ export default {
         if (!jid) {
             return;
         }
+
+        // =================================================
+        // BLOQUEO: DESCARGA PENDIENTE
+        // =================================================
+        // Identifica a quien pidió la canción (en grupos, el
+        // participante; en privado, el propio chat).
+        // =================================================
+
+        const remitente =
+            msg?.key?.participant ||
+            msg?.key?.participantAlt ||
+            jid;
+
+        if (descargasActivas.has(remitente)) {
+
+            await responder.texto(
+                '╭━━〔 ⏳ 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ⚠️ Ya tienes una descarga pendiente.\n' +
+                '┃\n' +
+                `┃ 🎵 ${descargasActivas.get(remitente)}\n` +
+                '┃\n' +
+                '┃ Espera a que termine antes de pedir otra.\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+
+            return;
+
+        }
+
+        descargasActivas.set(
+            remitente,
+            consulta
+        );
 
         console.log(
             '================================================'
@@ -782,6 +928,16 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
+
+        } finally {
+
+            // Se libera SIEMPRE, sin importar si terminó bien
+            // o con error, para no dejar al usuario bloqueado.
+            descargasActivas.delete(
+                remitente
+            );
+
         }
     }
 };
+        
