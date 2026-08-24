@@ -19,11 +19,13 @@
 // arranque el proceso (node index.js, panel de hosting, pm2,
 // etc.) ni el orden en que se importen los demás comandos.
 import 'dotenv/config';
+import config from '../../config.js';
 
 const API_BASE =
     'https://apiyosoyyo-ofc.onrender.com';
 
 const API_KEY =
+    config.YT_API_KEY ||
     process.env.YT_API_KEY;
 
 const API_SEARCH =
