@@ -497,7 +497,7 @@ function crearInformacion(
         `┃ ⏱️ ${resultado.duracion}\n` +
         `┃ 📅 ${resultado.publicado}\n` +
         '┃\n' +
-        '┃ ⚡ *Preparando audio...*\n' +
+        '┃ ⚡ *Enviando audio...*\n' +
         '┃\n' +
         '╰━━━━━━━━━━━━━━━━⬣'
     );
@@ -583,33 +583,81 @@ export default {
                 );
 
             // =================================================
-            // 2. MOSTRAR INFORMACIÓN
+            // 2. PEDIR MP3 + THUMBNAIL EN PARALELO
+            // =================================================
+            // Ambas peticiones son independientes entre sí, así
+            // que se lanzan al mismo tiempo en vez de una
+            // detrás de la otra.
             // =================================================
 
-            await responder.texto(
-                crearInformacion(
-                    resultado
-                )
-            );
+            const promesaThumbnail =
+                obtenerThumbnail(
+                    resultado.thumbnail
+                );
 
-            // =================================================
-            // 3. PEDIR MP3
-            // =================================================
-
-            const mp3 =
-                await obtenerMP3(
+            const promesaMp3 =
+                obtenerMP3(
                     resultado.videoUrl
                 );
 
             // =================================================
-            // 4. THUMBNAIL
+            // 3. ENVIAR FOTO + TÍTULO + INFO (un solo mensaje)
+            // =================================================
+            // Se manda en cuanto el thumbnail está listo, sin
+            // esperar al MP3 (que sigue trabajando en paralelo
+            // por debajo).
             // =================================================
 
-            const thumbnail =
-                await obtenerThumbnail(
-                    mp3.thumbnail ||
-                    resultado.thumbnail
+            let thumbnail =
+                await promesaThumbnail;
+
+            if (thumbnail) {
+
+                await responder.imagen(
+                    thumbnail,
+                    crearInformacion(
+                        resultado
+                    )
                 );
+
+            } else {
+
+                // Sin miniatura disponible: se manda solo texto
+                // como respaldo, para no perder la información.
+                await responder.texto(
+                    crearInformacion(
+                        resultado
+                    )
+                );
+
+            }
+
+            // =================================================
+            // 4. ESPERAR EL MP3
+            // =================================================
+            // Como ya venía trabajando en paralelo desde el
+            // paso 2, para cuando la foto terminó de enviarse
+            // normalmente ya avanzó bastante o está listo.
+            // =================================================
+
+            const mp3 =
+                await promesaMp3;
+
+            // Si no había thumbnail en la búsqueda pero el
+            // MP3 trae uno propio y distinto, se intenta ese
+            // como último recurso (no bloquea el audio si falla).
+            if (
+                !thumbnail &&
+                mp3.thumbnail &&
+                mp3.thumbnail !== resultado.thumbnail
+            ) {
+
+                thumbnail =
+                    await obtenerThumbnail(
+                        mp3.thumbnail
+                    );
+
+            }
 
             // =================================================
             // 5. STREAM
