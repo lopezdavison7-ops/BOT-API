@@ -100,7 +100,7 @@ export default {
         if (!jid) return;
 
         try {
-            await responder.texto(`📌 *Pinterest*\n\n🔎 Búsqueda: *${consulta}*\n⏳ Descargando y creando álbumes...`);
+            await responder.texto(`📌 *Pinterest*\n\n🔎 Búsqueda: *${consulta}*\n⏳ Descargando con amor y paciencia...`);
 
             const resultados = await buscarPinterest(consulta);
 
