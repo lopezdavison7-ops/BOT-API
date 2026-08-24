@@ -11,6 +11,7 @@
 // ============================================================
 
 import axios from 'axios';
+import config from '../../config.js';
 
 const API_URL =
     'https://apiyosoyyo-ofc.onrender.com/api/lyrics';
@@ -75,6 +76,7 @@ export default {
         // --------------------------------------------------------
 
         const apiKey =
+            config.YOSOYYO_API_KEY ||
             process.env.YOSOYYO_API_KEY;
 
         if (!apiKey) {
