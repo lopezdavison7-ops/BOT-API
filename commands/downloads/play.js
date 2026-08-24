@@ -20,6 +20,7 @@
 // etc.) ni el orden en que se importen los demás comandos.
 import 'dotenv/config';
 import config from '../../config.js';
+import { Readable } from 'stream';
 
 const API_BASE =
     'https://apiyosoyyo-ofc.onrender.com';
@@ -445,7 +446,14 @@ async function obtenerStream(
         );
     }
 
-    return respuesta.body;
+    // fetch() nativo de Node devuelve un stream "Web"
+    // (ReadableStream), pero Baileys espera un stream clásico
+    // de Node.js (el que tiene .destroy(), .pipe(), etc.).
+    // Se convierte aquí para evitar "stream.destroy is not
+    // a function" al mandarlo con sock.sendMessage.
+    return Readable.fromWeb(
+        respuesta.body
+    );
 }
 
 // ============================================================
