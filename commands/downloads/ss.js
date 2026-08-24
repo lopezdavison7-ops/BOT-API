@@ -1,6 +1,7 @@
 // commands/downloads/ss.js
 import 'dotenv/config';
 import axios from 'axios';
+import config from '../../config.js';
 
 const API_URL =
     'https://apiyosoyyo-ofc.onrender.com/api/ssweb';
@@ -24,10 +25,11 @@ export default {
     }) => {
 
         // =========================================================
-        // LEER API KEY DIRECTAMENTE DESDE .env
+        // LEER API KEY (config.js primero, .env como respaldo)
         // =========================================================
 
         const apiKey =
+            config.YOSOYYO_API_KEY?.trim() ||
             process.env.YOSOYYO_API_KEY?.trim();
 
         if (!apiKey) {
