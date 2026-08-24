@@ -1,6 +1,6 @@
 // commands/downloads/pinterest.js
 // ============================================================
-// COMANDO: PINTEREST - MANDA TODAS LAS QUE VENGA
+// COMANDO: PINTEREST - MANDA TODAS LAS QUE VENGA EN ÁLBUMES
 // BOT-API + YO SOY YO BAILEYS
 // ============================================================
 
@@ -8,10 +8,71 @@ const API_BASE = 'https://apiyosoyyo-ofc.onrender.com';
 const API_KEY = process.env.YO_SOY_YO_API_KEY || process.env.YT_API_KEY || 'yosoyyo_sk_gincmnk3';
 const API_PINTEREST = `${API_BASE}/api/pinterest`;
 const TIMEOUT_API = 30000;
-const LIMITE_RESULTADOS = 30; // Le pedimos más a la API. WhatsApp max 10 por álbum
+const LIMITE_RESULTADOS = 30; // Le pedimos 30 a la API
 const CAPTION = 'BOT-API 👄😍';
 
-//... el resto de funciones fetchConTimeout, descargarImagen, buscarPinterest quedan igual...
+// ============================================================
+// FETCH CON TIMEOUT
+// ============================================================
+async function fetchConTimeout(url, opciones = {}, timeout = TIMEOUT_API) {
+    const controller = new AbortController();
+    const temporizador = setTimeout(() => controller.abort(), timeout);
+    try {
+        return await fetch(url, {...opciones, signal: controller.signal });
+    } finally {
+        clearTimeout(temporizador);
+    }
+}
+
+// ============================================================
+// DESCARGAR IMAGEN A BUFFER
+// ============================================================
+async function descargarImagen(url) {
+    const respuesta = await fetchConTimeout(url, {
+        headers: {
+            Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*',
+            'User-Agent': 'Mozilla/5.0'
+        }
+    }, 60000);
+
+    if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+
+    const arrayBuffer = await respuesta.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+}
+
+// ============================================================
+// BUSCAR PINTEREST
+// ============================================================
+async function buscarPinterest(consulta) {
+    const parametros = new URLSearchParams({
+        q: consulta,
+        limite: String(LIMITE_RESULTADOS),
+        apiKey: API_KEY
+    });
+
+    const endpoint = `${API_PINTERES T}?${parametros.toString()}`; // OJO: sin espacio
+    console.log(`[PINTEREST] Buscando: ${consulta}`);
+
+    const respuesta = await fetchConTimeout(endpoint, {
+        headers: { Accept: 'application/json', 'User-Agent': 'BOT-API/1.0' }
+    });
+
+    if (!respuesta.ok) throw new Error(`La API respondió HTTP ${respuesta.status}`);
+
+    const datos = await respuesta.json();
+    if (!datos?.status) throw new Error(datos?.message || 'La API rechazó la búsqueda.');
+
+    let resultados = [];
+    if (Array.isArray(datos.result)) resultados = datos.result;
+    else if (Array.isArray(datos?.result?.data)) resultados = datos.result.data;
+
+    const imagenes = resultados.filter(item => item && item.descarga);
+    if (imagenes.length === 0) throw new Error('No encontré imágenes para esa búsqueda.');
+
+    console.log(`[PINTEREST] Imágenes válidas: ${imagenes.length}`);
+    return imagenes;
+}
 
 // ============================================================
 // COMANDO
@@ -73,12 +134,12 @@ export default {
                 await sock.sendMessage(jid, {
                     album: chunk,
                     caption: isFirstAlbum
-                       ? `📌 *Pinterest*: ${consulta}\n🖼️ ${buffers.length} imágenes totales\nÁlbum ${albumNum}/${totalAlbums}\n${CAPTION}`
-                        : `Álbum ${albumNum}/${totalAlbums}`
+                      ? `📌 *Pinterest*: ${consulta}\n🖼️ ${buffers.length} imágenes totales\nÁlbum ${albumNum}/${totalAlbums}\n${CAPTION}`
+                       : `Álbum ${albumNum}/${totalAlbums}`
                 }, { quoted: isFirstAlbum? msg : undefined });
 
                 albumNum++;
-                await new Promise(r => setTimeout(r, 2000)); // delay anti-ban entre álbumes
+                await new Promise(r => setTimeout(r, 2000)); // delay anti-ban
             }
 
             await responder.texto(`✅ *Listo*\n\n🔎 Búsqueda: *${consulta}*\n🖼️ Enviadas: *${buffers.length}* en *${totalAlbums}* álbumes`);
