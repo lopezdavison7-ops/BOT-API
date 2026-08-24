@@ -1,6 +1,7 @@
 // commands/sticker/brat.js
 import fetch from 'node-fetch';
 import sharp from 'sharp';
+import config from '../../config.js';
 
 export default {
     nombre: 'brat',
@@ -21,7 +22,11 @@ export default {
             }
 
             const color = 'white';
-            const apiKey = 'yosoyyo_sk_gincmnk3';
+            const apiKey =
+                config.YO_SOY_YO_API_KEY ||
+                config.YT_API_KEY ||
+                process.env.YO_SOY_YO_API_KEY ||
+                process.env.YT_API_KEY;
 
             // Llamada a la API
             const apiUrl = `https://apiyosoyyo-ofc.onrender.com/api/brat?text=${encodeURIComponent(texto)}&color=${color}&apiKey=${apiKey}`;
