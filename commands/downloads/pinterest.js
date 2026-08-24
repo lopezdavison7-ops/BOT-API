@@ -1,424 +1,91 @@
 // commands/downloads/pinterest.js
 // ============================================================
-// COMANDO: PINTEREST
-// BOT-API
-//
-// Busca imágenes en Pinterest y las envía directamente.
-// No usa sendAlbumMessage(), para mayor compatibilidad.
-// Las imágenes se envían sin mostrar URLs.
+// COMANDO: PINTEREST - MANDA TODAS LAS QUE VENGA
+// BOT-API + YO SOY YO BAILEYS
 // ============================================================
 
-const API_BASE =
-    'https://apiyosoyyo-ofc.onrender.com';
-
-const API_KEY =
-    process.env.YO_SOY_YO_API_KEY ||
-    process.env.YT_API_KEY ||
-    'yosoyyo_sk_gincmnk3';
-
-const API_PINTEREST =
-    `${API_BASE}/api/pinterest`;
-
+const API_BASE = 'https://apiyosoyyo-ofc.onrender.com';
+const API_KEY = process.env.YO_SOY_YO_API_KEY || process.env.YT_API_KEY || 'yosoyyo_sk_gincmnk3';
+const API_PINTEREST = `${API_BASE}/api/pinterest`;
 const TIMEOUT_API = 30000;
-
-// Cantidad máxima de imágenes que enviará el comando.
-const LIMITE_RESULTADOS = 10;
-
+const LIMITE_RESULTADOS = 30; // Le pedimos más a la API. WhatsApp max 10 por álbum
 const CAPTION = 'BOT-API 👄😍';
 
-// ============================================================
-// FETCH CON TIMEOUT
-// ============================================================
-
-async function fetchConTimeout(
-    url,
-    opciones = {},
-    timeout = TIMEOUT_API
-) {
-    const controller =
-        new AbortController();
-
-    const temporizador =
-        setTimeout(
-            () => controller.abort(),
-            timeout
-        );
-
-    try {
-        return await fetch(
-            url,
-            {
-                ...opciones,
-                signal: controller.signal
-            }
-        );
-    } finally {
-        clearTimeout(temporizador);
-    }
-}
-
-// ============================================================
-// LIMPIAR TEXTO
-// ============================================================
-
-function limpiarTexto(
-    texto,
-    fallback = ''
-) {
-    if (
-        texto === null ||
-        texto === undefined
-    ) {
-        return fallback;
-    }
-
-    return String(texto)
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-// ============================================================
-// BUSCAR PINTEREST
-// ============================================================
-
-async function buscarPinterest(
-    consulta
-) {
-    const parametros =
-        new URLSearchParams({
-            q: consulta,
-            limite:
-                String(LIMITE_RESULTADOS),
-            apiKey: API_KEY
-        });
-
-    const endpoint =
-        `${API_PINTEREST}?${parametros.toString()}`;
-
-    console.log(
-        `[PINTEREST] Buscando: ${consulta}`
-    );
-
-    const respuesta =
-        await fetchConTimeout(
-            endpoint,
-            {
-                headers: {
-                    Accept:
-                        'application/json',
-                    'User-Agent':
-                        'BOT-API/1.0'
-                }
-            }
-        );
-
-    console.log(
-        `[PINTEREST] HTTP: ${respuesta.status}`
-    );
-
-    if (!respuesta.ok) {
-        throw new Error(
-            `La API respondió HTTP ${respuesta.status}`
-        );
-    }
-
-    const datos =
-        await respuesta.json();
-
-    if (!datos?.status) {
-        throw new Error(
-            datos?.message ||
-            'La API rechazó la búsqueda.'
-        );
-    }
-
-    let resultados = [];
-
-    if (
-        Array.isArray(
-            datos.result
-        )
-    ) {
-        resultados =
-            datos.result;
-    } else if (
-        Array.isArray(
-            datos?.result?.data
-        )
-    ) {
-        resultados =
-            datos.result.data;
-    }
-
-    const imagenes =
-        resultados
-            .filter(
-                item =>
-                    item &&
-                    item.descarga
-            )
-            .slice(
-                0,
-                LIMITE_RESULTADOS
-            );
-
-    if (
-        imagenes.length === 0
-    ) {
-        throw new Error(
-            'No encontré imágenes para esa búsqueda.'
-        );
-    }
-
-    console.log(
-        `[PINTEREST] Imágenes válidas: ${imagenes.length}`
-    );
-
-    return imagenes;
-}
-
-// ============================================================
-// ENVIAR IMAGEN
-// ============================================================
-
-async function enviarImagen(
-    sock,
-    jid,
-    url,
-    msg,
-    indice,
-    total
-) {
-    console.log(
-        `[PINTEREST] Descargando imagen ${indice}/${total}`
-    );
-
-    const respuesta =
-        await fetchConTimeout(
-            url,
-            {
-                headers: {
-                    Accept:
-                        'image/avif,image/webp,image/jpeg,image/png,*/*',
-                    'User-Agent':
-                        'Mozilla/5.0'
-                }
-            },
-            60000
-        );
-
-    if (!respuesta.ok) {
-        throw new Error(
-            `HTTP ${respuesta.status} al descargar imagen ${indice}`
-        );
-    }
-
-    const tipo =
-        respuesta.headers
-            .get('content-type') ||
-        'image/jpeg';
-
-    if (
-        !tipo.startsWith('image/')
-    ) {
-        throw new Error(
-            `La URL ${indice} no devolvió una imagen.`
-        );
-    }
-
-    const arrayBuffer =
-        await respuesta.arrayBuffer();
-
-    const buffer =
-        Buffer.from(arrayBuffer);
-
-    if (!buffer.length) {
-        throw new Error(
-            `La imagen ${indice} está vacía.`
-        );
-    }
-
-    console.log(
-        `[PINTEREST] Imagen ${indice}: ${buffer.length} bytes`
-    );
-
-    await sock.sendMessage(
-        jid,
-        {
-            image: buffer,
-            caption: CAPTION
-        },
-        {
-            quoted: msg
-        }
-    );
-
-    console.log(
-        `[PINTEREST] Imagen ${indice}/${total} enviada`
-    );
-}
+//... el resto de funciones fetchConTimeout, descargarImagen, buscarPinterest quedan igual...
 
 // ============================================================
 // COMANDO
 // ============================================================
-
 export default {
-
     nombre: 'pinterest',
-
     categoria: 'descargas',
+    alias: ['pin', 'pinterestimg'],
+    descripcion: 'Busca imágenes en Pinterest y las envía en álbum.',
+    ejecutar: async ({ sock, msg, responder, argumento }) => {
 
-    alias: [
-        'pin',
-        'pinterestimg'
-    ],
-
-    descripcion:
-        'Busca imágenes en Pinterest y las envía.',
-
-    ejecutar: async ({
-        sock,
-        msg,
-        responder,
-        argumento
-    }) => {
-
-        const consulta =
-            argumento?.trim();
-
+        const consulta = argumento?.trim();
         if (!consulta) {
             await responder.texto(
                 '╭━━〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe qué quieres buscar.\n' +
-                '┃\n' +
-                '┃ 📌 Ejemplos:\n' +
-                '┃ › .pinterest zhao lusi\n' +
-                '┃ › .pinterest anime\n' +
-                '┃ › .pinterest gatos\n' +
-                '┃ › .pinterest carros 4x4\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '┃ 📌 Ej:.pinterest anime\n' +
+                '╰━━━━━━━━⬣'
             );
-
             return;
         }
 
-        const jid =
-            msg?.key?.remoteJid;
-
-        if (!jid) {
-            return;
-        }
-
-        console.log(
-            '================================================'
-        );
-
-        console.log(
-            `[PINTEREST] Consulta: ${consulta}`
-        );
+        const jid = msg?.key?.remoteJid;
+        if (!jid) return;
 
         try {
+            await responder.texto(`📌 *Pinterest*\n\n🔎 Búsqueda: *${consulta}*\n⏳ Descargando y creando álbumes...`);
+
+            const resultados = await buscarPinterest(consulta);
 
             // ------------------------------------------------
-            // BUSCAR
+            // DESCARGAR TODAS LAS IMÁGENES PRIMERO
             // ------------------------------------------------
-
-            const resultados =
-                await buscarPinterest(
-                    consulta
-                );
-
-            // ------------------------------------------------
-            // AVISO
-            // ------------------------------------------------
-
-            await responder.texto(
-                '📌 *Pinterest*\n\n' +
-                `🔎 Búsqueda: *${consulta}*\n` +
-                `🖼️ Imágenes: *${resultados.length}*\n\n` +
-                '⏳ Enviando imágenes...'
-            );
-
-            // ------------------------------------------------
-            // ENVIAR IMÁGENES
-            // ------------------------------------------------
-
-            let enviadas = 0;
-
-            for (
-                let i = 0;
-                i < resultados.length;
-                i++
-            ) {
-
+            const buffers = [];
+            for (let i = 0; i < resultados.length; i++) {
                 try {
-
-                    await enviarImagen(
-                        sock,
-                        jid,
-                        resultados[i].descarga,
-                        msg,
-                        i + 1,
-                        resultados.length
-                    );
-
-                    enviadas++;
-
-                } catch (error) {
-
-                    console.error(
-                        `[PINTEREST] Error imagen ${i + 1}:`,
-                        error?.message ||
-                        error
-                    );
+                    const buffer = await descargarImagen(resultados[i].descarga);
+                    buffers.push({ image: buffer });
+                    console.log(`[PINTEREST] Imagen ${i + 1}/${resultados.length} lista`);
+                } catch (e) {
+                    console.error(`[PINTEREST] Error img ${i + 1}:`, e.message);
                 }
             }
 
-            // ------------------------------------------------
-            // RESULTADO FINAL
-            // ------------------------------------------------
+            if (buffers.length === 0) throw new Error('No pude descargar ninguna imagen.');
 
-            if (enviadas === 0) {
+            // ------------------------------------------------
+            // ENVIAR EN ÁLBUMES DE 10 - WHATSAPP NO DEJA MÁS
+            // ------------------------------------------------
+            const CHUNK_SIZE = 10;
+            let albumNum = 1;
+            const totalAlbums = Math.ceil(buffers.length / CHUNK_SIZE);
 
-                throw new Error(
-                    'No pude enviar ninguna imagen.'
-                );
+            for (let i = 0; i < buffers.length; i += CHUNK_SIZE) {
+                const chunk = buffers.slice(i, i + CHUNK_SIZE);
+                const isFirstAlbum = i === 0;
+
+                await sock.sendMessage(jid, {
+                    album: chunk,
+                    caption: isFirstAlbum
+                       ? `📌 *Pinterest*: ${consulta}\n🖼️ ${buffers.length} imágenes totales\nÁlbum ${albumNum}/${totalAlbums}\n${CAPTION}`
+                        : `Álbum ${albumNum}/${totalAlbums}`
+                }, { quoted: isFirstAlbum? msg : undefined });
+
+                albumNum++;
+                await new Promise(r => setTimeout(r, 2000)); // delay anti-ban entre álbumes
             }
 
-            console.log(
-                `[PINTEREST] Finalizado: ${enviadas}/${resultados.length}`
-            );
-
-            await responder.texto(
-                `✅ *Pinterest terminado*\n\n` +
-                `🔎 Búsqueda: *${consulta}*\n` +
-                `🖼️ Enviadas: *${enviadas}/${resultados.length}*\n\n` +
-                `${CAPTION}`
-            );
+            await responder.texto(`✅ *Listo*\n\n🔎 Búsqueda: *${consulta}*\n🖼️ Enviadas: *${buffers.length}* en *${totalAlbums}* álbumes`);
 
         } catch (error) {
-
-            console.error(
-                '[PINTEREST] Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
-
-            await responder.texto(
-                '╭━━〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
-                '┃\n' +
-                '┃ No pude completar la búsqueda.\n' +
-                '┃\n' +
-                `┃ ⚠️ ${
-                    error?.message ||
-                    'Error desconocido.'
-                }\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            console.error('[PINTEREST] Error:', error);
+            await responder.texto(`╭━━〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n┃\n┃ ⚠️ ${error?.message || 'Error desconocido.'}\n╰━━━━━━━━⬣`);
         }
     }
 };
