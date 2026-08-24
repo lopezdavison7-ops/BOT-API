@@ -8,12 +8,9 @@ const API_BASE = 'https://apiyosoyyo-ofc.onrender.com';
 const API_KEY = process.env.YO_SOY_YO_API_KEY || process.env.YT_API_KEY || 'yosoyyo_sk_gincmnk3';
 const API_PINTEREST = `${API_BASE}/api/pinterest`;
 const TIMEOUT_API = 30000;
-const LIMITE_RESULTADOS = 30; // Le pedimos 30 a la API
+const LIMITE_RESULTADOS = 30;
 const CAPTION = 'BOT-API 👄😍';
 
-// ============================================================
-// FETCH CON TIMEOUT
-// ============================================================
 async function fetchConTimeout(url, opciones = {}, timeout = TIMEOUT_API) {
     const controller = new AbortController();
     const temporizador = setTimeout(() => controller.abort(), timeout);
@@ -24,26 +21,16 @@ async function fetchConTimeout(url, opciones = {}, timeout = TIMEOUT_API) {
     }
 }
 
-// ============================================================
-// DESCARGAR IMAGEN A BUFFER
-// ============================================================
 async function descargarImagen(url) {
     const respuesta = await fetchConTimeout(url, {
-        headers: {
-            Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*',
-            'User-Agent': 'Mozilla/5.0'
-        }
+        headers: { Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*', 'User-Agent': 'Mozilla/5.0' }
     }, 60000);
 
     if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-
     const arrayBuffer = await respuesta.arrayBuffer();
     return Buffer.from(arrayBuffer);
 }
 
-// ============================================================
-// BUSCAR PINTEREST
-// ============================================================
 async function buscarPinterest(consulta) {
     const parametros = new URLSearchParams({
         q: consulta,
@@ -51,7 +38,7 @@ async function buscarPinterest(consulta) {
         apiKey: API_KEY
     });
 
-    const endpoint = `${API_PINTERES T}?${parametros.toString()}`; // OJO: sin espacio
+    const endpoint = `${API_PINTEREST}?${parametros.toString()}`; // <-- ARREGLADO
     console.log(`[PINTEREST] Buscando: ${consulta}`);
 
     const respuesta = await fetchConTimeout(endpoint, {
@@ -74,9 +61,6 @@ async function buscarPinterest(consulta) {
     return imagenes;
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'pinterest',
     categoria: 'descargas',
@@ -86,13 +70,7 @@ export default {
 
         const consulta = argumento?.trim();
         if (!consulta) {
-            await responder.texto(
-                '╭━━〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe qué quieres buscar.\n' +
-                '┃ 📌 Ej:.pinterest anime\n' +
-                '╰━━━━━━━━⬣'
-            );
+            await responder.texto('╭━━〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n┃\n┃ ❌ Escribe qué quieres buscar.\n╰━━━━━━━━⬣');
             return;
         }
 
@@ -100,13 +78,9 @@ export default {
         if (!jid) return;
 
         try {
-            await responder.texto(`📌 *Pinterest*\n\n🔎 Búsqueda: *${consulta}*\n⏳ Descargando con amor y paciencia...`);
-
+            await responder.texto(`📌 *Pinterest*\n\n🔎 Búsqueda: *${consulta}*\n⏳ Descargando con amor ...`);
             const resultados = await buscarPinterest(consulta);
 
-            // ------------------------------------------------
-            // DESCARGAR TODAS LAS IMÁGENES PRIMERO
-            // ------------------------------------------------
             const buffers = [];
             for (let i = 0; i < resultados.length; i++) {
                 try {
@@ -120,9 +94,6 @@ export default {
 
             if (buffers.length === 0) throw new Error('No pude descargar ninguna imagen.');
 
-            // ------------------------------------------------
-            // ENVIAR EN ÁLBUMES DE 10 - WHATSAPP NO DEJA MÁS
-            // ------------------------------------------------
             const CHUNK_SIZE = 10;
             let albumNum = 1;
             const totalAlbums = Math.ceil(buffers.length / CHUNK_SIZE);
@@ -133,13 +104,11 @@ export default {
 
                 await sock.sendMessage(jid, {
                     album: chunk,
-                    caption: isFirstAlbum
-                      ? `📌 *Pinterest*: ${consulta}\n🖼️ ${buffers.length} imágenes totales\nÁlbum ${albumNum}/${totalAlbums}\n${CAPTION}`
-                       : `Álbum ${albumNum}/${totalAlbums}`
+                    caption: isFirstAlbum? `📌 *Pinterest*: ${consulta}\n🖼️ ${buffers.length} imágenes\nÁlbum ${albumNum}/${totalAlbums}\n${CAPTION}` : `Álbum ${albumNum}/${totalAlbums}`
                 }, { quoted: isFirstAlbum? msg : undefined });
 
                 albumNum++;
-                await new Promise(r => setTimeout(r, 2000)); // delay anti-ban
+                await new Promise(r => setTimeout(r, 2000));
             }
 
             await responder.texto(`✅ *Listo*\n\n🔎 Búsqueda: *${consulta}*\n🖼️ Enviadas: *${buffers.length}* en *${totalAlbums}* álbumes`);
