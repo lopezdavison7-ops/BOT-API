@@ -4,6 +4,12 @@
 // Sistema de bienvenida con foto de perfil
 // ============================================================
 
+// IMPORTANTE: esto debe ir primero que cualquier otro import.
+// Carga el .env en process.env antes de que se evalúe ningún
+// comando (varios leen process.env.ALGO al importarse, y si
+// dotenv no cargó todavía, les llega undefined).
+import 'dotenv/config';
+
 import * as baileysNS from 'baileys';
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
