@@ -26,6 +26,145 @@ function conTimeout(promesa, ms) {
 }
 
 // ============================================================
+// AUTO-RETURN DE LA ÚLTIMA EXPRESIÓN
+// ============================================================
+// Cuando el código tiene varios statements (const x = ...;
+// foo(); JSON.stringify(x)) y el último es una expresión SIN
+// 'return' explícito, por defecto no se captura ningún valor
+// (igual que en JS normal). Esto imita lo que hace la consola
+// de Node: si la última línea es una expresión "suelta", se le
+// agrega 'return' automáticamente para poder ver su resultado.
+// ============================================================
+
+const PALABRA_RESERVADA_INICIO =
+    /^(const|let|var|function|async\s+function|class|if|for|while|do|switch|try|catch|finally|return|throw|import|export|break|continue|yield)\b/;
+
+function dividirEnStatementsSuperior(codigo) {
+
+    const partes = [];
+    let actual = '';
+    let profundidad = 0;
+    let comilla = null;
+    let escapando = false;
+
+    for (let i = 0; i < codigo.length; i++) {
+
+        const c = codigo[i];
+        actual += c;
+
+        if (escapando) {
+
+            escapando = false;
+            continue;
+
+        }
+
+        if (comilla) {
+
+            if (c === '\\') {
+
+                escapando = true;
+
+            } else if (c === comilla) {
+
+                comilla = null;
+
+            }
+
+            continue;
+
+        }
+
+        if (c === '\'' || c === '"' || c === '`') {
+
+            comilla = c;
+            continue;
+
+        }
+
+        if (c === '(' || c === '{' || c === '[') {
+
+            profundidad++;
+            continue;
+
+        }
+
+        if (c === ')' || c === '}' || c === ']') {
+
+            profundidad--;
+            continue;
+
+        }
+
+        if (
+            profundidad === 0 &&
+            (c === ';' || c === '\n')
+        ) {
+
+            partes.push(actual.slice(0, -1));
+            actual = '';
+
+        }
+
+    }
+
+    if (actual.trim()) {
+
+        partes.push(actual);
+
+    }
+
+    return partes.filter(
+        p => p.trim() !== ''
+    );
+
+}
+
+function autoReturnUltimaExpresion(codigo) {
+
+    if (/\breturn\b/.test(codigo)) {
+
+        // Ya tiene un return explícito en algún lado,
+        // no tocamos nada para no interferir.
+        return codigo;
+
+    }
+
+    const partes =
+        dividirEnStatementsSuperior(codigo);
+
+    if (partes.length === 0) {
+
+        return codigo;
+
+    }
+
+    const ultimaIdx =
+        partes.length - 1;
+
+    const ultima =
+        partes[ultimaIdx].trim();
+
+    if (
+        !ultima ||
+        PALABRA_RESERVADA_INICIO.test(ultima)
+    ) {
+
+        // La última línea no es una expresión "suelta"
+        // (es una declaración/control de flujo) -> no se
+        // puede inferir un valor de retorno con seguridad.
+        return codigo;
+
+    }
+
+    partes[ultimaIdx] =
+        'return ' + ultima;
+
+    return partes.join(';\n');
+
+}
+
+// ============================================================
 // RED DE SEGURIDAD
 // Si el código llegó "aplastado" en una sola línea (por ejemplo
 // porque el handler colapsó los saltos de línea originales),
@@ -172,9 +311,12 @@ export default {
 
                 try {
 
+                    const conAutoReturn =
+                        autoReturnUltimaExpresion(argumento);
+
                     resultado = await conTimeout(
                         eval(
-                            `(async () => {\n${argumento}\n})()`
+                            `(async () => {\n${conAutoReturn}\n})()`
                         ),
                         TIMEOUT_MS
                     );
@@ -188,8 +330,13 @@ export default {
                     }
 
                     // Último recurso: reparar statements pegados
-                    // en una sola línea (sin saltos ni ';').
-                    const reparado = repararStatements(argumento);
+                    // en una sola línea (sin saltos ni ';'),
+                    // y además intentar capturar el valor de
+                    // la última expresión suelta.
+                    const reparado =
+                        autoReturnUltimaExpresion(
+                            repararStatements(argumento)
+                        );
 
                     resultado = await conTimeout(
                         eval(
