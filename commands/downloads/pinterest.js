@@ -3,8 +3,9 @@
 // COMANDO: PINTEREST
 // BOT-API
 //
-// Busca imágenes en Pinterest y las envía directamente.
-// No usa sendAlbumMessage(), para mayor compatibilidad.
+// Busca imágenes en Pinterest y las manda como ÁLBUM (todas
+// juntas en un solo mensaje). Si el álbum falla por cualquier
+// motivo, cae automáticamente al envío una por una.
 // Las imágenes se envían sin mostrar URLs.
 // ============================================================
 
@@ -181,21 +182,13 @@ async function buscarPinterest(
 }
 
 // ============================================================
-// ENVIAR IMAGEN
+// DESCARGAR IMAGEN (sin enviarla)
 // ============================================================
 
-async function enviarImagen(
-    sock,
-    jid,
+async function descargarImagen(
     url,
-    msg,
-    indice,
-    total
+    indice
 ) {
-    console.log(
-        `[PINTEREST] Descargando imagen ${indice}/${total}`
-    );
-
     const respuesta =
         await fetchConTimeout(
             url,
@@ -241,6 +234,31 @@ async function enviarImagen(
         );
     }
 
+    return buffer;
+}
+
+// ============================================================
+// ENVIAR IMAGEN (una por una — respaldo si falla el álbum)
+// ============================================================
+
+async function enviarImagen(
+    sock,
+    jid,
+    url,
+    msg,
+    indice,
+    total
+) {
+    console.log(
+        `[PINTEREST] Descargando imagen ${indice}/${total}`
+    );
+
+    const buffer =
+        await descargarImagen(
+            url,
+            indice
+        );
+
     console.log(
         `[PINTEREST] Imagen ${indice}: ${buffer.length} bytes`
     );
@@ -259,6 +277,99 @@ async function enviarImagen(
     console.log(
         `[PINTEREST] Imagen ${indice}/${total} enviada`
     );
+}
+
+// ============================================================
+// ENVIAR COMO ÁLBUM (todas las imágenes en un solo mensaje)
+// ============================================================
+// Devuelve la cantidad de imágenes incluidas en el álbum.
+// Lanza error si el fork de Baileys no soporta { album: [...] }
+// o si ninguna imagen se pudo descargar.
+// ============================================================
+
+async function enviarComoAlbum(
+    sock,
+    jid,
+    msg,
+    resultados
+) {
+
+    console.log(
+        `[PINTEREST] Descargando ${resultados.length} imágenes en paralelo...`
+    );
+
+    const descargas =
+        await Promise.allSettled(
+            resultados.map(
+                (item, i) =>
+                    descargarImagen(
+                        item.descarga,
+                        i + 1
+                    )
+            )
+        );
+
+    const buffers = [];
+
+    descargas.forEach(
+        (resultado, i) => {
+
+            if (resultado.status === 'fulfilled') {
+
+                buffers.push(
+                    resultado.value
+                );
+
+            } else {
+
+                console.error(
+                    `[PINTEREST] Falló imagen ${i + 1}:`,
+                    resultado.reason?.message ||
+                    resultado.reason
+                );
+
+            }
+
+        }
+    );
+
+    if (buffers.length === 0) {
+        throw new Error(
+            'No pude descargar ninguna imagen.'
+        );
+    }
+
+    console.log(
+        `[PINTEREST] Enviando álbum de ${buffers.length} imágenes...`
+    );
+
+    const album =
+        buffers.map(
+            (buffer, i) => ({
+                image: buffer,
+                caption:
+                    i === buffers.length - 1
+                        ? CAPTION
+                        : undefined
+            })
+        );
+
+    await sock.sendMessage(
+        jid,
+        {
+            album
+        },
+        {
+            quoted: msg
+        }
+    );
+
+    console.log(
+        `[PINTEREST] Álbum enviado: ${buffers.length}/${resultados.length}`
+    );
+
+    return buffers.length;
+
 }
 
 // ============================================================
@@ -345,38 +456,59 @@ export default {
             );
 
             // ------------------------------------------------
-            // ENVIAR IMÁGENES
+            // ENVIAR IMÁGENES (álbum primero, respaldo si falla)
             // ------------------------------------------------
 
             let enviadas = 0;
 
-            for (
-                let i = 0;
-                i < resultados.length;
-                i++
-            ) {
+            try {
 
-                try {
-
-                    await enviarImagen(
+                enviadas =
+                    await enviarComoAlbum(
                         sock,
                         jid,
-                        resultados[i].descarga,
                         msg,
-                        i + 1,
-                        resultados.length
+                        resultados
                     );
 
-                    enviadas++;
+            } catch (errorAlbum) {
 
-                } catch (error) {
+                console.error(
+                    '[PINTEREST] Álbum falló, usando respaldo ' +
+                    'una por una:',
+                    errorAlbum?.message ||
+                    errorAlbum
+                );
 
-                    console.error(
-                        `[PINTEREST] Error imagen ${i + 1}:`,
-                        error?.message ||
-                        error
-                    );
+                for (
+                    let i = 0;
+                    i < resultados.length;
+                    i++
+                ) {
+
+                    try {
+
+                        await enviarImagen(
+                            sock,
+                            jid,
+                            resultados[i].descarga,
+                            msg,
+                            i + 1,
+                            resultados.length
+                        );
+
+                        enviadas++;
+
+                    } catch (error) {
+
+                        console.error(
+                            `[PINTEREST] Error imagen ${i + 1}:`,
+                            error?.message ||
+                            error
+                        );
+                    }
                 }
+
             }
 
             // ------------------------------------------------
