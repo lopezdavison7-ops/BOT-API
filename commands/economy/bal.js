@@ -28,10 +28,20 @@ export default {
         const usuario =
             obtenerUsuario(id);
 
+        const total =
+            usuario.dinero +
+            usuario.banco;
+
         await responder.texto(
-            `💰 *TU SALDO*\n\n` +
-            `💵 Dinero: *$${usuario.dinero.toLocaleString()}*\n` +
-            `🎴 Personajes: *${usuario.personajes.length}*`
+            '╭〔 💰 𝐁𝐀𝐋𝐀𝐍𝐂𝐄 〕⬣\n' +
+            '┃\n' +
+            `┃ 👛 Cartera › *$${usuario.dinero.toLocaleString()}*\n` +
+            `┃ 🏦 Banco › *$${usuario.banco.toLocaleString()}*\n` +
+            '┃\n' +
+            `┃ 💵 Total › *$${total.toLocaleString()}*\n` +
+            `┃ 🎴 Cartas › *${usuario.personajes.length}*\n` +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
         );
     }
 };
