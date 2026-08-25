@@ -68,6 +68,7 @@ export default {
         }
 
         const emisor =
+            msg.key.participant ||
             msg.key.remoteJid;
 
         const receptor =
