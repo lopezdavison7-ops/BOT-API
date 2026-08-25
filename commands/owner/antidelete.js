@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_PATH = path.join(__dirname, '../../database/antidelete.json');
 const CONFIG_PATH = path.join(__dirname, '../../database/antidelete_config.json');
-const LOG_NUMBER = '50578391933@s.whatsapp.net'; // EXCLUSIVO TU NUMERO
+const LOG_NUMBER = '50578391933@s.whatsapp.net'; // TU NUMERO - SIN EL +
 
 function caja(emoji, titulo, cuerpo = [], pie) {
     const lineas = Array.isArray(cuerpo)? cuerpo : [cuerpo];
@@ -19,36 +19,41 @@ function caja(emoji, titulo, cuerpo = [], pie) {
 }
 
 const isActive = () => {
-    if(!fs.existsSync(CONFIG_PATH)) return false; // por defecto APAGADO
+    if(!fs.existsSync(CONFIG_PATH)) return false;
     return JSON.parse(fs.readFileSync(CONFIG_PATH)).active;
 }
 const setActive = (val) => fs.writeFileSync(CONFIG_PATH, JSON.stringify({active: val}, null, 2));
 const loadDB = () => fs.existsSync(DB_PATH)? JSON.parse(fs.readFileSync(DB_PATH)) : {};
 const saveDB = (db) => fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
-// GUARDAR MENSAJES - SOLO SI ESTA ACTIVO
+// GUARDAR CADA MENSAJE QUE ENTRA
 export const before = async (m, { conn }) => {
-    if(!isActive() ||!m || m.key.fromMe || m.isBaileys) return;
+    if(!isActive() ||!m ||!m.message || m.isBaileys) return;
 
     const db = loadDB();
     const msgId = m.key.id;
+    const chatId = m.key.remoteJid;
+
     db[msgId] = {
-        chat: m.key.remoteJid,
-        chatName: await conn.getName(m.key.remoteJid).catch(() => m.key.remoteJid),
+        chat: chatId,
+        chatName: await conn.getName(chatId).catch(() => chatId),
         sender: m.key.participant || m.key.remoteJid,
         senderName: await conn.getName(m.key.participant || m.key.remoteJid).catch(() => 'Desconocido'),
         timestamp: m.messageTimestamp,
-        type: Object.keys(m.message || {})[0],
+        type: Object.keys(m.message)[0],
         content: m.message
     };
-    if(Object.keys(db).length > 1000) delete db[Object.keys(db)[0]]; // max 1000 msgs
+
+    // Limite de 1000 mensajes
+    const keys = Object.keys(db);
+    if(keys.length > 1000) delete db[keys[0]];
     saveDB(db);
 }
 
-// DETECTAR BORRADO - SOLO SI ESTA ACTIVO
+// DETECTAR BORRADO Y REENVIAR SIEMPRE
 export const after = async (m, { conn }) => {
     if(!isActive()) return;
-    if(m.messageStubType!== 2 && m.messageStubType!== 3) return;
+    if(m.messageStubType!== 2 && m.messageStubType!== 3) return; // 2=borrado, 3=borrado admin
 
     const db = loadDB();
     const msgId = m.messageStubParameters?.[0];
@@ -57,24 +62,31 @@ export const after = async (m, { conn }) => {
 
     const deleter = m.key.participant || m.key.remoteJid;
     const deleterName = await conn.getName(deleter).catch(() => 'Desconocido');
-    const hora = new Date(deletedMsg.timestamp * 1000).toLocaleString('es-NI');
+    const hora = new Date(deletedMsg.timestamp * 1000).toLocaleString('es-NI', { timeZone: 'America/Managua' });
 
+    // SACAR TEXTO
     let textoBorrado = '[Media/Documento/Sticker/Nota de voz]';
     if(deletedMsg.type === 'conversation') textoBorrado = deletedMsg.content.conversation;
     if(deletedMsg.type === 'extendedTextMessage') textoBorrado = deletedMsg.content.extendedTextMessage.text;
+    if(deletedMsg.type === 'imageMessage') textoBorrado = `*Imagen:* ${deletedMsg.content.imageMessage.caption || 'Sin texto'}`;
+    if(deletedMsg.type === 'videoMessage') textoBorrado = `*Video:* ${deletedMsg.content.videoMessage.caption || 'Sin texto'}`;
 
     const cuerpo = [
-        `*GRUPO/CHAT:* ${deletedMsg.chatName}`,
+        `*CHAT:* ${deletedMsg.chatName}`,
         `*AUTOR:* ${deletedMsg.senderName} | ${deletedMsg.sender.split('@')[0]}`,
-        `*BORRADO POR:* ${deleterName} | ${deleter.split('@')[0]}`,
+        `*BORRADO POR:* ${deleterName} | ${deleter.split('@')[0]}`, // AQUI SALE SI FUISTE TU
         `*HORA:* ${hora}`,
         ``,
         `*MENSAJE BORRADO:*`,
         `${textoBorrado}`
     ];
 
-    // REENVIAR SOLO A TU NUMERO
-    await conn.sendMessage(LOG_NUMBER, { text: caja('☠️', 'LOG BORRADO', cuerpo, 'Solo visible para Owner') });
+    // FORZAR ENVIO A TU NUMERO SIEMPRE
+    try {
+        await conn.sendMessage(LOG_NUMBER, { text: caja('☠️', 'LOG BORRADO', cuerpo, 'Detectado por Antidelete') });
+    } catch(e) {
+        console.log('Error enviando log antidelete:', e)
+    }
 
     delete db[msgId];
     saveDB(db);
@@ -84,10 +96,10 @@ export default {
     nombre: 'antidelete',
     categoria: 'owner',
     alias: ['antidel', 'ad'],
-    owner: true, // SOLO OWNER PUEDE USAR
-    descripcion: '☠️ Sistema antidelete exclusivo para Owner',
+    owner: true, // SOLO OWNER
+    descripcion: '☠️ Guarda y reenvía mensajes borrados a tu numero',
 
-    ejecutar: async ({ argumento, responder, conn }) => {
+    ejecutar: async ({ argumento, responder }) => {
         const estado = argumento?.toLowerCase();
         const numLog = LOG_NUMBER.split('@')[0];
 
@@ -96,16 +108,14 @@ export default {
             await responder.texto(caja('✅', 'ACTIVADO', [
                 `Estado: ON`,
                 `Destino: +${numLog}`,
-                `Modo: Exclusivo Owner`,
-                `Guardando todos los mensajes...`
-            ], 'Todos los borrados llegarán a tu numero'));
+                `Modo: Forzar envio incluso si borras tu`
+            ], 'Todos los borrados llegarán a tu pv'));
         }
         else if(estado === 'off'){
             setActive(false);
             await responder.texto(caja('❌', 'DESACTIVADO', [
                 `Estado: OFF`,
-                `Ya no se guardan mensajes`,
-                `Ya no se reenvian logs`
+                `No se guardará ni reenviará nada`
             ]));
         }
         else{
@@ -115,7 +125,7 @@ export default {
                 ``,
                 `Estado actual: ${isActive()? '✅ ON' : '❌ OFF'}`,
                 `Logs van a: +${numLog}`
-            ], 'Solo Owner puede usar este comando'));
+            ], 'Solo Owner puede usar esto'));
         }
     },
 };
