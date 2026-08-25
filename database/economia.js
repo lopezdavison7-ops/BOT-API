@@ -53,7 +53,15 @@ function crearUsuario() {
 
         dinero: 0,
 
+        // Dinero guardado en el banco. NO se puede robar con
+        // .rob (solo el dinero en mano/wallet es vulnerable).
+        banco: 0,
+
         personajes: [],
+
+        // Items comprados en .shop (ids repetidos si compra
+        // varios del mismo).
+        items: [],
 
         ultimoTrabajo: 0,
 
@@ -136,6 +144,26 @@ export function obtenerUsuario(id) {
     ) {
 
         db[id].ultimoRobo = 0;
+        cambiado = true;
+
+    }
+
+    if (
+        typeof db[id].banco !== 'number'
+    ) {
+
+        db[id].banco = 0;
+        cambiado = true;
+
+    }
+
+    if (
+        !Array.isArray(
+            db[id].items
+        )
+    ) {
+
+        db[id].items = [];
         cambiado = true;
 
     }
@@ -378,6 +406,99 @@ export function registrarRobo(id) {
     guardar();
 
     return db[id];
+
+}
+
+// ============================================================
+// BANCO
+// ============================================================
+// El dinero en el banco está protegido de .rob. Solo el
+// dinero "en mano" (campo `dinero`) es robable.
+// ============================================================
+
+export function depositar(
+    id,
+    cantidad
+) {
+
+    const usuario =
+        obtenerUsuario(id);
+
+    const monto =
+        Math.min(
+            cantidad,
+            usuario.dinero
+        );
+
+    if (monto <= 0) {
+
+        return usuario;
+
+    }
+
+    usuario.dinero -= monto;
+    usuario.banco += monto;
+
+    guardar();
+
+    return usuario;
+
+}
+
+export function retirar(
+    id,
+    cantidad
+) {
+
+    const usuario =
+        obtenerUsuario(id);
+
+    const monto =
+        Math.min(
+            cantidad,
+            usuario.banco
+        );
+
+    if (monto <= 0) {
+
+        return usuario;
+
+    }
+
+    usuario.banco -= monto;
+    usuario.dinero += monto;
+
+    guardar();
+
+    return usuario;
+
+}
+
+// ============================================================
+// INVENTARIO (items comprados en .shop)
+// ============================================================
+
+export function agregarItem(
+    id,
+    itemId
+) {
+
+    const usuario =
+        obtenerUsuario(id);
+
+    usuario.items.push(
+        itemId
+    );
+
+    guardar();
+
+    return usuario;
+
+}
+
+export function obtenerInventario(id) {
+
+    return obtenerUsuario(id).items;
 
 }
 
