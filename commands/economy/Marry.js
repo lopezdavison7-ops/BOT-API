@@ -6,6 +6,10 @@ import {
     crearPropuesta
 } from '../../database/perfiles.js';
 
+import {
+    resolverMencionable
+} from '../../lib/simple.js';
+
 export default {
     nombre: 'marry',
 
@@ -20,6 +24,7 @@ export default {
         'Propón matrimonio a alguien. Uso: .marry @usuario',
 
     ejecutar: async ({
+        sock,
         msg,
         responder,
         argumento
@@ -28,6 +33,34 @@ export default {
         const emisor =
             msg.key.participant ||
             msg.key.remoteJid;
+
+        const jidChat =
+            msg.key.remoteJid;
+
+        // ---------------------------------------------------
+        // PARTICIPANTES DEL GRUPO (para resolver LID -> JID
+        // normal en las menciones; en privado no aplica).
+        // ---------------------------------------------------
+
+        let participantes = [];
+
+        if (jidChat?.endsWith('@g.us')) {
+
+            try {
+
+                const metadata =
+                    await sock.groupMetadata(
+                        jidChat
+                    );
+
+                participantes =
+                    metadata?.participants || [];
+
+            } catch {
+                // Si falla, se sigue con el jid original.
+            }
+
+        }
 
         const mencionados =
             msg.message?.extendedTextMessage
@@ -73,15 +106,21 @@ export default {
             const parejaActual =
                 obtenerPareja(emisor);
 
+            const parejaMencion =
+                resolverMencionable(
+                    parejaActual,
+                    participantes
+                );
+
             await responder.texto(
                 '╭━━〔 ❌ 𝐌𝐀𝐑𝐑𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ Ya estás casado con\n' +
-                `┃ @${parejaActual.split('@')[0]}\n` +
+                `┃ @${parejaMencion.split('@')[0]}\n` +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣',
                 {
-                    mentions: [parejaActual]
+                    mentions: [parejaMencion]
                 }
             );
 
@@ -125,18 +164,30 @@ export default {
             receptor
         );
 
+        const emisorMencion =
+            resolverMencionable(
+                emisor,
+                participantes
+            );
+
+        const receptorMencion =
+            resolverMencionable(
+                receptor,
+                participantes
+            );
+
         await responder.texto(
             '╭〔 💍 𝐏𝐑𝐎𝐏𝐔𝐄𝐒𝐓𝐀 𝐃𝐄 𝐌𝐀𝐓𝐑𝐈𝐌𝐎𝐍𝐈𝐎 〕⬣\n' +
             '┃\n' +
-            `┃ @${emisor.split('@')[0]} le propone\n` +
-            `┃ matrimonio a @${receptor.split('@')[0]} 💕\n` +
+            `┃ @${emisorMencion.split('@')[0]} le propone\n` +
+            `┃ matrimonio a @${receptorMencion.split('@')[0]} 💕\n` +
             '┃\n' +
             '┃ Para aceptar, escribe:\n' +
             '┃ *.aceptar*\n' +
             '┃\n' +
             '╰━━━━━━━━━━━━━━━━⬣',
             {
-                mentions: [emisor, receptor]
+                mentions: [emisorMencion, receptorMencion]
             }
         );
     }
