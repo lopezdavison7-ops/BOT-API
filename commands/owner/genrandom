@@ -1,17 +1,17 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const { esOwner } = require('../../lib/owner.js');
-const { obtenerStore, guardarStore } = require('../../lib/jsonStore.js');
+import { esOwner } from '../../lib/owner.js';
+import { obtenerStore, guardarStore } from '../../lib/jsonStore.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MEDIA_DIR = path.join(__dirname, '../../media/gacha');
 const GACHA_DATABASE = path.join(__dirname, '../../database/gacha.json');
 
-const VALORES_POSIBLES = [
-    1200, 2500, 3800, 4660, 5200, 6800,
-    8500, 10000, 12400, 15000, 18000, 25000
-];
-
+const VALORES_POSIBLES = [1200, 2500, 3800, 4660, 5200, 6800, 8500, 10000, 12400, 15000, 18000, 25000];
 const UA = { 'User-Agent': 'konachan-scraper/1.0' };
 
 const randomValue = () => VALORES_POSIBLES[Math.floor(Math.random() * VALORES_POSIBLES.length)];
@@ -29,19 +29,6 @@ function caja(emoji, titulo, cuerpo = [], pie) {
     return texto;
 }
 
-function parseKonachanUrl(input) {
-    try {
-        const url = new URL(input);
-        if (!url.hostname.includes('konachan')) return null;
-        const rawTags = url.searchParams.get('tags');
-        if (!rawTags) return null;
-        const tags = rawTags.trim().split(/\s+/).filter(Boolean);
-        return { seriesTag: tags[0], extraTags: tags.slice(1) };
-    } catch {
-        return null;
-    }
-}
-
 function tagToSeriesName(tag) {
     return tag.replace(/[_:]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim();
 }
@@ -54,7 +41,6 @@ async function fetchAllPosts(seriesTag, extraTags = [], pages = 5) {
     const baseTags = [seriesTag,...extraTags].join(' ');
     const allPosts = [];
     const BANNED = /(loli|shota|child|toddler|infant)/;
-
     for (let page = 1; page <= pages; page++) {
         const url = `https://konachan.net/post.json?tags=${encodeURIComponent(baseTags)}&limit=100&page=${page}`;
         try {
@@ -69,9 +55,7 @@ async function fetchAllPosts(seriesTag, extraTags = [], pages = 5) {
             allPosts.push(...filtrados);
             if (posts.length < 100) break;
             await delay(800);
-        } catch {
-            break;
-        }
+        } catch { break; }
     }
     return allPosts;
 }
@@ -240,10 +224,10 @@ async function runGeneration(responder, seriesTag, extraTags = [], pages = 5) {
     return { seriesName, agregados, saltados, posts: posts.length, skipped: false };
 }
 
-module.exports = {
-    nombre: 'genrandom', // <-- AQUI ESTA EL CAMBIO
+export default {
+    nombre: 'genrandom',
     categoria: 'gacha',
-    alias: ['grandom', 'gr'], // le puse alias cortos
+    alias: ['grandom', 'gr'],
     owner: true,
     descripcion: '🎴 (Owner) Genera 5 series random desde konachan para el gacha.',
     ejecutar: async ({ msg, responder, argumento }) => {
@@ -279,9 +263,7 @@ module.exports = {
         const totalAg = resultados.reduce((s, r) => s + r.agregados.length, 0);
         const totalSk = resultados.reduce((s, r) => s + r.saltados.length, 0);
         const lineasResumen = resultados.map((r) =>
-            r.skipped
-               ? `❌ ${r.seriesName} — omitida${r.error? ` (${r.error})` : ''}`
-                : `✅ ${r.seriesName} — ${r.agregados.length} nuevos, ${r.saltados.length} saltados (${r.posts} posts)`
+            r.skipped? `❌ ${r.seriesName} — omitida${r.error? ` (${r.error})` : ''}` : `✅ ${r.seriesName} — ${r.agregados.length} nuevos, ${r.saltados.length} saltados (${r.posts} posts)`
         );
 
         await responder.texto(caja('🏁', 'COMPLETADO', lineasResumen, `👥 Total agregados: *${totalAg}* — ⏭️ Total saltados: *${totalSk}*`));
