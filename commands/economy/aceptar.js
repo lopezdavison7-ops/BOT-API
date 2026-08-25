@@ -40,7 +40,7 @@ export default {
                 '┃ matrimonio pendiente.\n' +
                 '┃\n' +
                 '┃ 📌 Pide que te propongan con:\n' +
-                '┃ *.marry @tu_bot_api*\n' +
+                '┃ *.marry @usuario*\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
