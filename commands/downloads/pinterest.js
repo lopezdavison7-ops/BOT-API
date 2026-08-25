@@ -28,7 +28,7 @@ const TIMEOUT_API = 30000;
 // Cantidad máxima de imágenes que enviará el comando.
 const LIMITE_RESULTADOS = 10;
 
-const CAPTION = 'BOT-API 👄😍';
+const CAPTION = 'BOT-API 💙💻';
 
 // ============================================================
 // FETCH CON TIMEOUT
