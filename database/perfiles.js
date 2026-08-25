@@ -354,3 +354,39 @@ export function aceptarPropuesta(paraId) {
     return deId;
 
 }
+
+// ============================================================
+// DIVORCIO
+// ============================================================
+// Rompe el matrimonio para AMBAS partes. Devuelve el id de la
+// (ex) pareja, o null si el usuario no estaba casado.
+// ============================================================
+
+export function divorciar(id) {
+
+    const perfil =
+        obtenerPerfil(id);
+
+    const parejaId =
+        perfil.pareja;
+
+    if (!parejaId) {
+
+        return null;
+
+    }
+
+    perfil.pareja = null;
+    perfil.casadoDesde = null;
+
+    const perfilPareja =
+        obtenerPerfil(parejaId);
+
+    perfilPareja.pareja = null;
+    perfilPareja.casadoDesde = null;
+
+    guardar();
+
+    return parejaId;
+
+}
