@@ -1,7 +1,8 @@
 // commands/economy/shop.js
 import {
     obtenerUsuario,
-    modificarDinero
+    modificarDinero,
+    agregarItem
 } from '../../database/economia.js';
 
 const ITEMS = [
@@ -45,6 +46,7 @@ export default {
     }) => {
 
         const id =
+            msg.key.participant ||
             msg.key.remoteJid;
 
         const usuario =
@@ -156,6 +158,11 @@ export default {
         modificarDinero(
             id,
             -item.precio
+        );
+
+        agregarItem(
+            id,
+            item.id
         );
 
         await responder.texto(
