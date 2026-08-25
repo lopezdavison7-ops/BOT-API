@@ -58,7 +58,10 @@ function crearUsuario() {
         ultimoTrabajo: 0,
 
         // Última vez que utilizó .rw
-        ultimoRW: 0
+        ultimoRW: 0,
+
+        // Última vez que usó .rob (intento o éxito, ambos cuentan)
+        ultimoRobo: 0
 
     };
 
@@ -124,6 +127,15 @@ export function obtenerUsuario(id) {
     ) {
 
         db[id].ultimoRW = 0;
+        cambiado = true;
+
+    }
+
+    if (
+        typeof db[id].ultimoRobo !== 'number'
+    ) {
+
+        db[id].ultimoRobo = 0;
         cambiado = true;
 
     }
@@ -276,6 +288,91 @@ export function registrarRW(id) {
     }
 
     db[id].ultimoRW =
+        Date.now();
+
+    guardar();
+
+    return db[id];
+
+}
+
+// ============================================================
+// COOLDOWN DE ROBO
+// ============================================================
+
+// 8 minutos entre intentos de robo
+export const COOLDOWN_ROBO =
+    8 * 60 * 1000;
+
+export function puedeRobar(id) {
+
+    const usuario =
+        obtenerUsuario(id);
+
+    const ahora =
+        Date.now();
+
+    const ultimoRobo =
+        Number(
+            usuario.ultimoRobo || 0
+        );
+
+    if (!ultimoRobo) {
+
+        return true;
+
+    }
+
+    return (
+        ahora - ultimoRobo >=
+        COOLDOWN_ROBO
+    );
+
+}
+
+export function tiempoRestanteRobo(id) {
+
+    const usuario =
+        obtenerUsuario(id);
+
+    const ahora =
+        Date.now();
+
+    const ultimoRobo =
+        Number(
+            usuario.ultimoRobo || 0
+        );
+
+    if (!ultimoRobo) {
+
+        return 0;
+
+    }
+
+    const restante =
+        COOLDOWN_ROBO -
+        (ahora - ultimoRobo);
+
+    return Math.max(
+        0,
+        restante
+    );
+
+}
+
+export function registrarRobo(id) {
+
+    const db =
+        datos();
+
+    if (!db[id]) {
+
+        db[id] =
+            crearUsuario();
+
+    }
+
+    db[id].ultimoRobo =
         Date.now();
 
     guardar();
