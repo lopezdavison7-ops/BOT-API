@@ -3,6 +3,12 @@ import {
     obtenerUsuario
 } from '../../database/economia.js';
 
+import {
+    obtenerPerfil,
+    calcularEdad,
+    GENEROS
+} from '../../database/perfiles.js';
+
 export default {
     nombre: 'profile',
 
@@ -30,6 +36,9 @@ export default {
         const usuario =
             obtenerUsuario(id);
 
+        const perfil =
+            obtenerPerfil(id);
+
         const personajes =
             Array.isArray(usuario.personajes)
                 ? usuario.personajes
@@ -51,16 +60,80 @@ export default {
         let tieneFoto = false;
 
         try {
-            const url = await sock.profilePictureUrl(id, 'image');
+
+            const url =
+                await sock.profilePictureUrl(
+                    id,
+                    'image'
+                );
+
             if (url) {
-                const respuesta = await fetch(url);
+
+                const respuesta =
+                    await fetch(url);
+
                 if (respuesta.ok) {
-                    fotoBuffer = await respuesta.buffer();
+
+                    // fetch() nativo de Node no tiene .buffer()
+                    // (eso es de node-fetch v2). Se usa
+                    // arrayBuffer() + Buffer.from, que sí existe.
+                    const arrayBuffer =
+                        await respuesta.arrayBuffer();
+
+                    fotoBuffer =
+                        Buffer.from(arrayBuffer);
+
                     tieneFoto = true;
+
                 }
+
             }
+
         } catch {
-            // Si no tiene foto, ignoramos
+            // Si no tiene foto, ignoramos.
+        }
+
+        // -------------------------------------------------------
+        // LÍNEAS OPCIONALES (edad / género / pareja)
+        // -------------------------------------------------------
+
+        let lineaEdad = '';
+        let lineaGenero = '';
+        let lineaPareja = '';
+
+        const mentions = [id];
+
+        if (perfil.fechaNacimiento) {
+
+            const edad =
+                calcularEdad(
+                    perfil.fechaNacimiento
+                );
+
+            lineaEdad =
+                `┃ 🎂 Edad › *${edad} años*\n`;
+
+        }
+
+        if (perfil.genero && GENEROS[perfil.genero]) {
+
+            const info =
+                GENEROS[perfil.genero];
+
+            lineaGenero =
+                `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
+
+        }
+
+        if (perfil.pareja) {
+
+            lineaPareja =
+                `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
+
+            mentions.push(
+                perfil.pareja
+            );
+
         }
 
         // -------------------------------------------------------
@@ -75,7 +148,7 @@ export default {
 ┃ 🆔 Usuario › @${numero}
 ┃ 💰 Dinero › *$${dinero.toLocaleString()}*
 ┃ 🎴 Cartas › *${personajes.length}*
-┃
+${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
@@ -84,24 +157,28 @@ export default {
         // -------------------------------------------------------
 
         if (tieneFoto && fotoBuffer) {
+
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
                     image: fotoBuffer,
                     caption: texto,
-                    mentions: [id]
+                    mentions
                 },
                 { quoted: msg }
             );
+
         } else {
+
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
                     text: texto,
-                    mentions: [id]
+                    mentions
                 },
                 { quoted: msg }
             );
+
         }
     }
 };
