@@ -7,13 +7,11 @@ const __dirname = path.dirname(__filename);
 const DB_PATH = path.join(__dirname, '../../database/antidelete.json');
 const CONFIG_PATH = path.join(__dirname, '../../database/antidelete_config.json');
 
-const BOT_NUMBER = '50576641902@s.whatsapp.net';
-const LOG_NUMBER = '50578391933@s.whatsapp.net';
-let connGlobal = null;
+const LOG_NUMBER = '50576641902@s.whatsapp.net'; // AHORA SE MANDA A SI MISMO
 
 function caja(emoji, titulo, cuerpo = [], pie) {
     const lineas = Array.isArray(cuerpo)? cuerpo : [cuerpo];
-    let texto = `╭〔 ${emoji} 𝐀𝐍𝐓𝐈𝐃𝐄𝐋𝐄𝐓𝐄-𝐕𝐈𝐏 〕⬣\n┃\n`;
+    let texto = `╭〔 ${emoji} 𝐀𝐍𝐓𝐈𝐃𝐄𝐋𝐄𝐓𝐄 〕⬣\n┃\n`;
     for (const l of lineas) texto += l === ''? '┃\n' : `┃ ${l}\n`;
     texto += '┃\n╰━━━━━━━━⬣';
     if (pie) texto += `\n\n> ${pie}`;
@@ -33,7 +31,6 @@ async function enviarLog(conn, deletedMsg, deleter, deleterName) {
     if(deletedMsg.type === 'extendedTextMessage') textoBorrado = deletedMsg.content.extendedTextMessage.text;
 
     const cuerpo = [
-        `*BOT:* +50576641902`,
         `*CHAT:* ${deletedMsg.chatName}`,
         `*AUTOR:* ${deletedMsg.senderName} | ${deletedMsg.sender.split('@')[0]}`,
         `*BORRADO POR:* ${deleterName} | ${deleter.split('@')[0]}`,
@@ -42,13 +39,12 @@ async function enviarLog(conn, deletedMsg, deleter, deleterName) {
         `*MENSAJE BORRADO:*`,
         `${textoBorrado}`
     ];
-    await conn.sendMessage(LOG_NUMBER, { text: caja('☠️', 'MENSAJE BORRADO', cuerpo) }).catch(console.log);
+    await conn.sendMessage(LOG_NUMBER, { text: caja('☠️', 'LOG BORRADO', cuerpo) }).catch(console.log);
 }
 
-// 1. GUARDAR TODO LO QUE ENTRA
+// GUARDAR
 export const before = async (m, { conn }) => {
     if(!isActive() ||!m ||!m.message) return;
-    connGlobal = conn;
     const db = loadDB();
     db[m.key.id] = {
         chat: m.key.remoteJid,
@@ -63,16 +59,7 @@ export const before = async (m, { conn }) => {
     saveDB(db);
 }
 
-// 2. ESCANER CADA 3 SEGUNDOS - ESTO ES LO QUE LO ARREGLA
-setInterval(() => {
-    if(!isActive() ||!connGlobal) return;
-    const db = loadDB();
-    // Aqui Baileys no tiene como saber que se borro,
-    // asi que esta version detecta por "mensajes que ya no estan en cache"
-    // La forma real es con el stub de arriba. Esta es de respaldo
-}, 3000);
-
-// 3. DETECTAR BORRADO POR STUB - CUANDO EL BOT ES ADMIN
+// DETECTAR BORRADO
 export const after = async (m, { conn }) => {
     if(!isActive()) return;
     if(m.messageStubType!== 2 && m.messageStubType!== 3) return;
@@ -91,17 +78,16 @@ export default {
     categoria: 'owner',
     alias: ['antidel', 'ad'],
     owner: true,
-    descripcion: '☠️ Antidelete 100% funcional',
+    descripcion: '☠️ Guarda borrados y se los manda a si mismo',
 
     ejecutar: async ({ argumento, responder }) => {
         const estado = argumento?.toLowerCase();
         if(estado === 'on'){
             setActive(true);
             await responder.texto(caja('✅', 'ACTIVADO', [
-                `Bot: +50576641902`,
-                `Logs → +50578391933`,
-                `Modo: Espia total`
-            ], 'Ahora si detecta borrados en grupos y pv'))
+                `Logs → Este mismo numero`,
+                `+50576641902`
+            ]))
         }
         else if(estado === 'off'){
             setActive(false);
@@ -110,8 +96,7 @@ export default {
         else{
             await responder.texto(caja('❓', 'PANEL', [
                 `Estado: ${isActive()? '✅ ON' : '❌ OFF'}`,
-                `Bot: +50576641902`,
-                `Logs → +50578391933`
+                `Los logs llegan aquí mismo`
             ]))
         }
     },
