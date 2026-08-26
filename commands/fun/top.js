@@ -6,7 +6,8 @@ export default {
     ejecutar: async ({ msg, argumento, responder, sock }) => {
         const chatJid = msg.key.remoteJid;
         const esGrupo = chatJid.endsWith('@g.us');
-        const nombreBot = '💻 BOT-API ⚡'; // <- ponle el nombre de tu bot
+        const nombreBot = '💻 BOT-API ⚡';
+        const s = sock || global.conns?.[0] || Object.values(global.conns)[0]; // <- por si acaso
 
         if (!esGrupo) {
             let text = `╭〔 ❌ ${nombreBot} 〕⬣\n`;
@@ -18,7 +19,7 @@ export default {
 
         let groupMetadata;
         try {
-            groupMetadata = await sock.groupMetadata(chatJid);
+            groupMetadata = await s.groupMetadata(chatJid);
         } catch {
             return responder.texto('❌ No pude obtener datos del grupo. Reinicia el bot');
         }
@@ -31,8 +32,8 @@ export default {
 
         const tema = argumento || "los más locos";
         const top10 = participantesValidos
- .sort(() => Math.random() - 0.5)
- .slice(0, 10);
+.sort(() => Math.random() - 0.5)
+.slice(0, 10);
 
         let mensaje = `╭〔 🏆 𝐓𝐎𝐏 𝟏𝟎 𝐅𝐔𝐍: ${tema.toUpperCase()} 〕⬣\n`;
         mensaje += `┃\n`;
@@ -45,6 +46,8 @@ export default {
         mensaje += `╰〔 ⚡ ${nombreBot} 〕⬣`;
 
         const mentions = top10.map(p => p.id);
-        await responder.texto(mensaje, { mentions });
+
+        // USAR sendMessage DIRECTO PARA QUE TAGUEE
+        await s.sendMessage(chatJid, { text: mensaje, mentions }, { quoted: msg });
     }
 };
