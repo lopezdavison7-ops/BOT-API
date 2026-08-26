@@ -41,7 +41,7 @@ function formatearDinero(cantidad) {
 
 export default {
 
-    nombre: 'top',
+    nombre: 'baltop',
 
     categoria: 'economia',
 
