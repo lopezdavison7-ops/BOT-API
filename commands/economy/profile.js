@@ -113,6 +113,11 @@ export default {
             lineaEdad =
                 `┃ 🎂 Edad › *${edad} años*\n`;
 
+        } else {
+
+            lineaEdad =
+                '┃ 🎂 Edad › *No definida*\n';
+
         }
 
         if (perfil.genero && GENEROS[perfil.genero]) {
@@ -122,6 +127,11 @@ export default {
 
             lineaGenero =
                 `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
+
+        } else {
+
+            lineaGenero =
+                '┃ ⚧️ Género › *No definido*\n';
 
         }
 
@@ -133,6 +143,11 @@ export default {
             mentions.push(
                 perfil.pareja
             );
+
+        } else {
+
+            lineaPareja =
+                '┃ 💍 Pareja › *No definida*\n';
 
         }
 
