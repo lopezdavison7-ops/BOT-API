@@ -21,7 +21,7 @@ export default {
         const mencionados = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
         if (mencionados.length === 0) {
-            return responder.texto('╭〔 ⚠️ 𝐌𝐀𝐑𝐘 〕⬣\n┃\n┃ ❌ Menciona a la persona.\n┃\n┃ 📌 Uso:.marry @usuario\n┃\n╰━━━━━━━━⬣');
+            return responder.texto('╭〔 ⚠️ 𝐌𝐀𝐑𝐑𝐘 〕⬣\n┃\n┃ ❌ Menciona a la persona.\n┃\n┃ 📌 Uso:.marry @usuario\n┃\n╰━━━━━━━━⬣');
         }
 
         const receptor = mencionados[0];
@@ -52,7 +52,7 @@ export default {
             const restante = DOS_MINUTOS - (Date.now() - tiempo);
             if (restante > 0) {
                 const seg = Math.ceil(restante / 1000);
-                return responder.texto(`╭〔 ⚠️ 𝐌𝐀𝐑𝐘 〕⬣\n┃\n┃ Ya tienes una propuesta pendiente.\n┃ Espera a que responda o se cancele.\n┃ ⏰ Te quedan ${seg}s\n┃\n╰━━━━━━━━⬣`);
+                return responder.texto(`╭〔 ⚠️ 𝐌𝐀𝐑𝐑𝐘〕⬣\n┃\n┃ Ya tienes una propuesta pendiente.\n┃ Espera a que responda o se cancele.\n┃ ⏰ Te quedan ${seg}s\n┃\n╰━━━━━━━━⬣`);
             } else {
                 eliminarPropuesta(yaPropusoA); // limpiar la vieja
             }
@@ -65,7 +65,7 @@ export default {
             if (Date.now() - prop.timestamp > DOS_MINUTOS) {
                 eliminarPropuesta(receptor);
             } else {
-                return responder.texto('╭〔 ⚠️ 𝐌𝐀𝐑𝐘 〕⬣\n┃\n┃ Esa persona ya tiene una propuesta pendiente.\n┃\n╰━━━━━━━━⬣');
+                return responder.texto('╭〔 ⚠️ 𝐌𝐀𝐑𝐑𝐘〕⬣\n┃\n┃ Esa persona ya tiene una propuesta pendiente.\n┃\n╰━━━━━━━━⬣');
             }
         }
 
