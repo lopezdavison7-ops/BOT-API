@@ -20,6 +20,7 @@ import readline from 'readline';
 
 import { handleMessage } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
+import { manejarMensajeTTT } from './lib/ttt.js';
 
 const baileys = baileysNS.default ?? baileysNS;
 const makeWASocket = typeof baileys === 'function' ? baileys : baileys.makeWASocket;
@@ -318,6 +319,22 @@ async function iniciarBot() {
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
+
+            // Si hay una partida de TTT activa en este chat y el
+            // mensaje es un número suelto (1-9) de uno de los
+            // jugadores, se procesa como movimiento y NO se sigue
+            // el flujo normal de comandos (evita que "5" dispare
+            // un error de "comando no encontrado").
+            try {
+                const fueMovimientoTTT =
+                    await manejarMensajeTTT(sock, m);
+
+                if (fueMovimientoTTT) {
+                    return;
+                }
+            } catch (error) {
+                console.error('[TTT] Error procesando mensaje:', error?.message || error);
+            }
 
             // Obtener lista de comandos real desde el mapa
             const listaComandos = Array.from(comandos.values())
