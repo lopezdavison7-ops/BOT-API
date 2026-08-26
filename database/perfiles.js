@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ARCHIVO = path.join(__dirname, 'perfiles.json');
 
-function datos() {
+// CAMBIO: ahora exportada para usarla en /marry
+export function datos() {
     return obtenerStore(ARCHIVO, {});
 }
 
@@ -133,11 +134,11 @@ export function obtenerPareja(id) {
 export function crearPropuesta(deId, paraId) {
     const perfilDestino = obtenerPerfil(paraId);
     perfilDestino.propuestaDe = deId;
-    perfilDestino.propuestaFecha = Date.now(); // <- guarda el tiempo
+    perfilDestino.propuestaFecha = Date.now();
     guardar();
 }
 
-// CAMBIO 1: Ahora retorna objeto con emisor y timestamp
+// Retorna {emisor, timestamp} o null
 export function obtenerPropuestaPendiente(paraId) {
     const perfil = obtenerPerfil(paraId);
     if (!perfil.propuestaDe ||!perfil.propuestaFecha) return null;
@@ -147,7 +148,6 @@ export function obtenerPropuestaPendiente(paraId) {
     };
 }
 
-// CAMBIO 2: Renombrada para que coincida con el comando
 export function eliminarPropuesta(paraId) {
     const perfil = obtenerPerfil(paraId);
     perfil.propuestaDe = null;
@@ -162,10 +162,10 @@ export function aceptarPropuesta(paraId) {
     if (!deId) return null;
 
     const DOS_MINUTOS = 2 * 60 * 1000;
-    // NUEVO: Checar si expiró al aceptar
+    // Checar si expiró al aceptar
     if (Date.now() - perfilPara.propuestaFecha > DOS_MINUTOS) {
         eliminarPropuesta(paraId);
-        return 'expirado'; // <- para que el comando sepa que expiró
+        return 'expirado';
     }
 
     const perfilDe = obtenerPerfil(deId);
