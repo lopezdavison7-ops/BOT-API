@@ -1,13 +1,8 @@
-
 // commands/economy/aceptar.js
 import {
     obtenerPropuestaPendiente,
     aceptarPropuesta
 } from '../../database/perfiles.js';
-
-import {
-    resolverMencionable
-} from '../../lib/simple.js';
 
 export default {
     nombre: 'aceptar',
@@ -23,16 +18,12 @@ export default {
         'Acepta una propuesta de matrimonio pendiente. Uso: .aceptar',
 
     ejecutar: async ({
-        sock,
         msg,
         responder
     }) => {
 
         const receptor =
             msg.key.participant ||
-            msg.key.remoteJid;
-
-        const jidChat =
             msg.key.remoteJid;
 
         const pendiente =
@@ -49,7 +40,7 @@ export default {
                 '┃ matrimonio pendiente.\n' +
                 '┃\n' +
                 '┃ 📌 Pide que te propongan con:\n' +
-                '┃ *.marry @usuario*\n' +
+                '┃ *.marry @tu_bot_api*\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
@@ -79,55 +70,18 @@ export default {
 
         }
 
-        // -----------------------------------------------------
-        // PARTICIPANTES DEL GRUPO (para resolver LID -> JID
-        // normal en las menciones; en privado no aplica).
-        // -----------------------------------------------------
-
-        let participantes = [];
-
-        if (jidChat?.endsWith('@g.us')) {
-
-            try {
-
-                const metadata =
-                    await sock.groupMetadata(
-                        jidChat
-                    );
-
-                participantes =
-                    metadata?.participants || [];
-
-            } catch {
-                // Si falla, se sigue con el jid original.
-            }
-
-        }
-
-        const parejaMencion =
-            resolverMencionable(
-                pareja,
-                participantes
-            );
-
-        const receptorMencion =
-            resolverMencionable(
-                receptor,
-                participantes
-            );
-
         await responder.texto(
             '╭〔 💒 ¡𝐁𝐎𝐃𝐀! 〕⬣\n' +
             '┃\n' +
-            `┃ @${parejaMencion.split('@')[0]} y\n` +
-            `┃ @${receptorMencion.split('@')[0]}\n` +
+            `┃ @${pareja.split('@')[0]} y\n` +
+            `┃ @${receptor.split('@')[0]}\n` +
             '┃ ahora están casados 💍💕\n' +
             '┃\n' +
             '┃ ¡Felicidades!\n' +
             '┃\n' +
             '╰━━━━━━━━━━━━━━━━⬣',
             {
-                mentions: [parejaMencion, receptorMencion]
+                mentions: [pareja, receptor]
             }
         );
     }
