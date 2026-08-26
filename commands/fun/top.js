@@ -3,10 +3,10 @@ export default {
     categoria: 'Fun',
     alias: ['toplocos', 'ranking'],
     descripcion: 'Crea un top 10 aleatorio con un tema. Uso:.top [tema]',
-    ejecutar: async ({ msg, argumento, responder, sock }) => { // <- agregué sock
+    ejecutar: async ({ msg, argumento, responder, sock }) => {
         const chatJid = msg.key.remoteJid;
         const esGrupo = chatJid.endsWith('@g.us');
-        const nombreBot = '💻 BOT-API ⚡'; // <- CAMBIA ESTO
+        const nombreBot = '💻 BOT-API ⚡'; // <- ponle el nombre de tu bot
 
         if (!esGrupo) {
             let text = `╭〔 ❌ ${nombreBot} 〕⬣\n`;
@@ -16,7 +16,6 @@ export default {
             return responder.texto(text);
         }
 
-        // FORZAR QUE TRAIGA LOS DATOS DEL GRUPO
         let groupMetadata;
         try {
             groupMetadata = await sock.groupMetadata(chatJid);
@@ -32,15 +31,20 @@ export default {
 
         const tema = argumento || "los más locos";
         const top10 = participantesValidos
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 10);
+ .sort(() => Math.random() - 0.5)
+ .slice(0, 10);
 
-        let mensaje = `╭〔 🏆 ${nombreBot} | TOP 10 FUN: ${tema.toUpperCase()} 〕⬣\n\n`;
+        let mensaje = `╭〔 🏆 𝐓𝐎𝐏 𝟏𝟎 𝐅𝐔𝐍: ${tema.toUpperCase()} 〕⬣\n`;
+        mensaje += `┃\n`;
         top10.forEach((p, i) => {
-            mensaje += `┃ ${i + 1}. @${p.id.split("@")[0]}\n`;
+            const numero = p.id.split("@")[0];
+            mensaje += `┃ ${i + 1}. @${numero}\n`;
         });
-        mensaje += `\n╰━━━━━━━━━━━━⬣`;
+        mensaje += `┃\n`;
+        mensaje += `╰━━━━━━━━⬣\n\n`;
+        mensaje += `╰〔 ⚡ ${nombreBot} 〕⬣`;
 
-        await responder.texto(mensaje, { mentions: top10.map(p => p.id) });
+        const mentions = top10.map(p => p.id);
+        await responder.texto(mensaje, { mentions });
     }
 };
