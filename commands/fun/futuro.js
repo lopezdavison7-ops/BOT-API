@@ -45,7 +45,7 @@ export default {
         ];
 
         const prediccion = predicciones[Math.floor(Math.random() * predicciones.length)];
-        const texto = `📜 *ORÁCULO DEL DEMI BOT* 📜\n\nPara @${objetivo.split('@')[0]}\n\n${prediccion}`;
+        const texto = `📜 *ORÁCULO DE 💻 BOT-API ⚡* 📜\n\nPara @${objetivo.split('@')[0]}\n\n${prediccion}`;
 
         await sock.sendMessage(jid, { // <- usa sock en vez de s
             text: texto,
