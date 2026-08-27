@@ -38,62 +38,70 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                      msg.message?.videoMessage?.caption ||
                      '';
 
+        if (!texto) return;
+
+        // ============================================
+        // FIX 1: ACEPTAR SOLO NUMERO EJ: "1"
+        // ============================================
+        if (/^\d+$/.test(texto.trim())) {
+            const num = parseInt(texto.trim());
+            const mapa = global.menuMap?.[jid];
+            if (mapa && mapa[num]) {
+                const catSeleccionada = mapa[num];
+                let cmdMenu = comandos.get('menu');
+                if (!cmdMenu) cmdMenu = [...comandos.values()].find(c => c.alias?.includes('menu'));
+                if (cmdMenu) {
+                    return await cmdMenu.ejecutar({
+                        sock, msg, argumento: catSeleccionada, listaComandos, prefijo,
+                        fromMe, isGroup, jid, botJid, responder: {
+                            texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                            imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                            video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                            audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
+                        }
+                    });
+                }
+            }
+        }
+        // ============================================
+
         if (!texto.startsWith(prefijo)) return;
 
         // Separar comando y argumento conservando saltos de linea
         const sinPrefijo = texto.slice(prefijo.length).trim();
-        const indiceEspacio = sinPrefijo.search(/\s/);
+        const indiceEspacio = sinPrefacio.search(/\s/);
 
         const nombreComando = (
             indiceEspacio === -1
-               ? sinPrefijo
+              ? sinPrefijo
                 : sinPrefijo.slice(0, indiceEspacio)
         ).toLowerCase();
 
         const argumento =
             indiceEspacio === -1
-               ? ''
+              ? ''
                 : sinPrefijo.slice(indiceEspacio + 1);
 
-        const args = argumento ? argumento.split(' ') : [];
+        const args = argumento? argumento.split(' ') : [];
 
         // ============================================
-        // FIX MENU NUMERICO - AGREGAR ESTO AQUI
+        // FIX 2: ACEPTAR.menu 1
         // ============================================
-        if (nombreComando === 'menu' && args[0] && !isNaN(args[0])) {
+        if (nombreComando === 'menu' && args[0] &&!isNaN(args[0])) {
             const num = parseInt(args[0]);
             const mapa = global.menuMap?.[jid];
             if (mapa && mapa[num]) {
                 const catSeleccionada = mapa[num];
-                // Buscar el comando menu y ejecutarlo con la categoria
                 let cmdMenu = comandos.get('menu');
-                if (!cmdMenu) {
-                    cmdMenu = [...comandos.values()].find(c => c.alias?.includes('menu'));
-                }
+                if (!cmdMenu) cmdMenu = [...comandos.values()].find(c => c.alias?.includes('menu'));
                 if (cmdMenu) {
                     return await cmdMenu.ejecutar({
-                        sock,
-                        msg,
-                        argumento: catSeleccionada,
-                        listaComandos,
-                        prefijo,
-                        fromMe,
-                        isGroup,
-                        jid,
-                        botJid,
-                        responder: {
-                            texto: async (text) => {
-                                await sock.sendMessage(jid, { text }, { quoted: msg });
-                            },
-                            imagen: async (img, caption = '') => {
-                                await sock.sendMessage(jid, { image: img, caption }, { quoted: msg });
-                            },
-                            video: async (vid, caption = '') => {
-                                await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg });
-                            },
-                            audio: async (aud, ptt = true) => {
-                                await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg });
-                            }
+                        sock, msg, argumento: catSeleccionada, listaComandos, prefijo,
+                        fromMe, isGroup, jid, botJid, responder: {
+                            texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                            imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                            video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                            audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
                         }
                     });
                 }
