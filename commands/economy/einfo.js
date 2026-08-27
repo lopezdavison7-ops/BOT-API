@@ -4,36 +4,42 @@ import path from 'path';
 export default {
     nombre: 'einfo',
     categoria: 'economy',
-    alias: ['economiainfo', 'series'],
-    descripcion: 'Lista todas las series de personajes.',
+    alias: ['economiainfo', 'personajes', 'list'],
+    descripcion: 'Lista todos los personajes disponibles en el gacha.',
 
     ejecutar: async ({ responder }) => {
         try {
             const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
-            
             let data = await fs.readFile(RUTA, 'utf-8');
             let db = JSON.parse(data);
 
-            const series = Object.keys(db);
-            if (series.length === 0) {
-                return await responder.texto('❌ No hay series en gacha.json');
+            const personajes = Object.keys(db);
+            if (personajes.length === 0) {
+                return await responder.texto('❌ No hay personajes en gacha.json');
             }
 
-            let texto = `☆ *Series Disponibles* (●´ϖ\`●)\n\n`;
+            let texto = `☆ *Gacha - Personajes Disponibles* (●´ϖ\`●)\n`;
+            texto += `Total: ${personajes.length}\n\n`;
             
-            for (let key of series) {
-                const serie = db[key];
-                const personajes = serie.personajes || [];
-                const total = personajes.length;
-                const reclamados = personajes.filter(p => p.estado === 'Reclamado').length;
+            let i = 1;
+            for (let key in db) {
+                const p = db[key];
+                const estado = p.estado || 'Libre';
+                const emoji = estado === 'Reclamado' ? '🔒' : '✅';
                 
-                texto += `➭ *${serie.nombre}*\n`;
-                texto += `   › Personajes: ${total}\n`;
-                texto += `   › Reclamados: ${reclamados}/${total}\n`;
-                texto += `   › Comando: .ainfo ${serie.nombre}\n\n`;
+                texto += `${i}. ${emoji} *${p.nombre || key}*\n`;
+                texto += `   › Valor: ${p.valor?.toLocaleString() || 0} RWcoins\n`;
+                texto += `   › Estado: ${estado}\n`;
+                texto += `   › Comando: .vp ${p.nombre || key}\n\n`;
+                
+                if(i === 50) { // por si tienes muchos, corta a 50
+                    texto += `... y ${personajes.length - 50} más\n`;
+                    break;
+                }
+                i++;
             }
 
-            texto += `💡 Usa *.ainfo <nombre>* para ver los personajes`;
+            texto += `💡 Usa *.vp <nombre>* para ver info + foto`;
             await responder.texto(texto);
 
         } catch(e) {
