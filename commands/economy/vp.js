@@ -1,55 +1,52 @@
 import fs from 'fs/promises';
-
-const RUTA = './database/gacha.json';
-
-const buscarPersonaje = async (nombre) => {
-    const data = await fs.readFile(RUTA, 'utf-8');
-    const db = JSON.parse(data);
-
-    for (let key in db) {
-        let serie = db[key];
-        let pers = serie.personajes.find(p => p.nombre.toLowerCase() === nombre.toLowerCase());
-        if (pers) {
-            return {...pers, serie: serie.nombre }; // le agregamos el nombre de la serie
-        }
-    }
-    return null;
-};
+import path from 'path';
 
 export default {
     nombre: 'vp',
-    categoria: 'economia',
-    alias: ['verpersonaje', 'char'],
+    categoria: 'economy',
+    alias: ['verpersonaje', 'verp'],
     descripcion: 'Ver info de un personaje con foto.',
 
     ejecutar: async ({ args, responder, conn, msg }) => {
         try {
             const nombrePers = args.join(' ');
-            if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`\nEj: `.vp Sakura Miku`');
+            if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`');
 
-            const personaje = await buscarPersonaje(nombrePers);
-            if (!personaje) return await responder.texto(`❌ No se encontró el personaje: *${nombrePers}*`);
+            const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
+            const data = await fs.readFile(RUTA, 'utf-8');
+            const db = JSON.parse(data);
 
-            const texto = `● Nombre: ${personaje.nombre}
-✧ Género: ${personaje.genero}
-✦ Valor: ${personaje.valor.toLocaleString()} RWcoins
+            // Buscar el personaje. Tu json es: { "Momioka Risa": {nombre: "Momioka Risa",...} }
+            let personaje = null;
+            for (let key in db) {
+                if (db[key].nombre?.toLowerCase() === nombrePers.toLowerCase()) {
+                    personaje = db[key];
+                    break;
+                }
+            }
+
+            if (!personaje) {
+                return await responder.texto(`❌ No se encontró el personaje: *${nombrePers}*\nUsa.einfo para ver la lista`);
+            }
+
+            const texto = `☆ *${personaje.nombre}*
+✧ Género: ${personaje.genero || 'Desconocido'}
+✦ Valor: ${personaje.valor?.toLocaleString() || 0} RWcoins
 ◆ Votos: ${personaje.votos || 0}
-✤ Fuente: ${personaje.serie}
-★ Estado: ${personaje.estado}`;
+★ Estado: ${personaje.estado || 'Libre'}`;
 
-            // Si tiene imagen la manda, si no solo texto
-            if (personaje.imagen && personaje.imagen!== '') {
-                await conn.sendMessage(msg.key.remoteJid, {
+            if (personaje.imagen) {
+                return await conn.sendMessage(msg.key.remoteJid, {
                     image: { url: personaje.imagen },
                     caption: texto
                 });
             } else {
-                await responder.texto(texto + '\n\n⚠️ Sin imagen');
+                return await responder.texto(texto + '\n\n⚠️ Este personaje no tiene imagen');
             }
 
         } catch(e) {
             console.error('Error en vp:', e);
-            await responder.texto('❌ Error al obtener el personaje. Revisa gacha.json');
+            await responder.texto(`❌ Error al obtener el personaje. Revisa gacha.json`);
         }
     }
 };
