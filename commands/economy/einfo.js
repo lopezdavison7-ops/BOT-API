@@ -1,59 +1,52 @@
 import fs from 'fs/promises';
-
-const RUTA = './database/gacha.json';
+import path from 'path';
 
 export default {
-    nombre: 'vp',
+    nombre: 'einfo',
     categoria: 'economia',
-    alias: ['verpersonaje'],
-    descripcion: 'Ver info de un personaje con foto.',
+    alias: ['economiainfo', 'series', 'listaseries'],
+    descripcion: 'Lista todas las series de personajes disponibles.',
 
-    ejecutar: async ({ args, responder, conn, msg }) => {
+    ejecutar: async ({ responder }) => {
         try {
-            const nombrePers = args.join(' ');
-            if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`');
-
-            // 1. Ver si existe el archivo
+            // Ruta relativa desde donde se ejecuta el bot
+            const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
+            
             let data;
             try {
                 data = await fs.readFile(RUTA, 'utf-8');
             } catch {
-                return await responder.texto('❌ No se encontró `database/gacha.json`\nCrea la carpeta y el archivo');
+                return await responder.texto('❌ No encontré `database/gacha.json`\nAsegúrate de que la carpeta y el archivo existan');
             }
 
-            // 2. Ver si el json es válido
             let db;
             try {
                 db = JSON.parse(data);
             } catch {
-                return await responder.texto('❌ El `gacha.json` está mal escrito. Revisa comas y llaves');
+                return await responder.texto('❌ Tu `gacha.json` tiene un error de sintaxis. Revisa comas y llaves');
             }
 
-            // 3. Buscar personaje
-            for (let key in db) {
-                let serie = db[key];
-                let pers = serie.personajes.find(p => p.nombre.toLowerCase() === nombrePers.toLowerCase());
-                if (pers) {
-                    const texto = `● Nombre: ${pers.nombre}
-✧ Género: ${pers.genero}
-✦ Valor: ${pers.valor.toLocaleString()} RWcoins
-◆ Votos: ${pers.votos || 0}
-✤ Fuente: ${serie.nombre}
-★ Estado: ${pers.estado}`;
+            const series = Object.keys(db);
+            if (series.length === 0) return await responder.texto('❌ No hay series en gacha.json');
 
-                    if (pers.imagen) {
-                        return await conn.sendMessage(msg.key.remoteJid, { image: { url: pers.imagen }, caption: texto });
-                    } else {
-                        return await responder.texto(texto);
-                    }
-                }
+            let texto = `☆ *Series Disponibles* (●´ϖ\`●)\n\n`;
+            
+            for (let key of series) {
+                const serie = db[key];
+                const total = serie.personajes?.length || 0;
+                const reclamados = serie.personajes?.filter(p => p.estado === 'Reclamado').length || 0;
+                
+                texto += `➭ *${serie.nombre}*\n`;
+                texto += `   › Personajes: ${total}\n`;
+                texto += `   › Reclamados: ${reclamados}/${total}\n`;
+                texto += `   › Comando: .ainfo ${serie.nombre}\n\n`;
             }
 
-            return await responder.texto(`❌ No se encontró el personaje: *${nombrePers}*`);
+            texto += `💡 Usa *.ainfo <nombre>* para ver los personajes\n`;
+            texto += `💡 Usa *.vp <nombre>* para ver 1 personaje`;
+
+            await responder.texto(texto);
 
         } catch(e) {
-            console.error(e);
-            await responder.texto('❌ Error al leer gacha.json');
-        }
-    }
-};
+            console.error('Error en einfo:', e);
+            await responder.texto
