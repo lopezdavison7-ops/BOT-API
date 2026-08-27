@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import config from '../../config.js';
 
-const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY); // <- ya usa config
+const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
 
 export default {
     nombre: 'bot',
@@ -19,7 +19,7 @@ export default {
         const pregunta = textoCompleto.split(' ').slice(1).join(' ');
 
         if (!config.GEMINI_API_KEY) {
-            return await responder.texto('❌ Error: No hay GEMINI_KEY configurada en el hosting');
+            return await responder.texto('❌ Error: Falta GEMINI_API_KEY en config.js');
         }
 
         if (!pregunta) {
@@ -44,7 +44,7 @@ export default {
 
         } catch (e) {
             console.log(e);
-            await responder.texto('❌ Error con la IA. Revisa GEMINI_KEY');
+            await responder.texto('❌ Error con la IA. Revisa GEMINI_API_KEY');
         }
     }
 };
