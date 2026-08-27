@@ -1,29 +1,24 @@
-import axios from 'axios';
+import config from '../../config.js';
+
+const API_BASE = 'https://apiyosoyyo-ofc.onrender.com';
+const API_KEY = config.YO_SOY_YO_API_KEY || process.env.YO_SOY_YO_API_KEY;
 
 export default {
     nombre: 'tts',
-    categoria: 'ai',
-    alias: ['voz', 'decir'],
-    ejecutar: async ({ args, msg, conn, responder }) => {
-        let texto = args.join(' ');
-        if (!texto) return responder.texto(`❌ Usa: .tts Hola bro`);
+    categoria: 'tools',
+    alias: ['voz'],
+    ejecutar: async ({ sock, msg, responder, argumento }) => {
+        const texto = argumento?.trim();
+        if (!texto) return await responder.texto('❌ .tts hola');
 
-        await responder.texto(`🔊 *GENERANDO CON YO SOY YO API...*`);
-
-        let API_KEY = 'yosoyyo_sk_gincmnk3'; // La que me pasaste
-        let URL = `https://apiyosoyyo-ofc.onrender.com/api/tts?text=${encodeURIComponent(texto)}&apiKey=${API_KEY}`;
-
-        try {
-            let res = await axios.get(URL, { responseType: 'arraybuffer' });
-            
-            await conn.sendMessage(msg.key.remoteJid, {
-                audio: res.data,
-                mimetype: 'audio/wav',
-                ptt: true // para que salga como nota de voz
-            });
-
-        } catch(e) {
-            await responder.texto(`❌ Error: ${e.response?.data || e.message}`);
-        }
+        const url = `${API_BASE}/api/tts?text=${encodeURIComponent(texto)}&apiKey=${API_KEY}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        
+        await sock.sendMessage(msg.key.remoteJid, {
+            audio: { url: json.result },
+            mimetype: 'audio/mpeg',
+            ptt: true
+        }, { quoted: msg });
     }
-};
+}
