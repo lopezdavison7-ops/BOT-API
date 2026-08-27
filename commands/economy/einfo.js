@@ -23,8 +23,9 @@ export default {
             
             for (let key of series) {
                 const serie = db[key];
-                const total = serie.personajes.length;
-                const reclamados = serie.personajes.filter(p => p.estado === 'Reclamado').length;
+                const personajes = serie.personajes || [];
+                const total = personajes.length;
+                const reclamados = personajes.filter(p => p.estado === 'Reclamado').length;
                 
                 texto += `➭ *${serie.nombre}*\n`;
                 texto += `   › Personajes: ${total}\n`;
@@ -33,15 +34,12 @@ export default {
             }
 
             texto += `💡 Usa *.ainfo <nombre>* para ver los personajes`;
-
             await responder.texto(texto);
 
         } catch(e) {
             console.error('Error en einfo:', e);
             if (e.code === 'ENOENT') {
                 await responder.texto('❌ No encontré `database/gacha.json`');
-            } else if (e instanceof SyntaxError) {
-                await responder.texto('❌ Tu `gacha.json` tiene error de sintaxis');
             } else {
                 await responder.texto(`❌ Error: ${e.message}`);
             }
