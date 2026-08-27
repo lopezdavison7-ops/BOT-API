@@ -9,56 +9,39 @@ export default {
 
     ejecutar: async ({ sock, msg, responder }) => {
         try {
-            // Para baileys-beta: sacar el texto así
             const type = Object.keys(msg.message || {})[0];
             const text = msg.message[type]?.text || msg.message[type]?.caption || msg.message.conversation || '';
-
             const nombrePers = text.split(' ').slice(1).join(' ').trim();
 
-            if (!nombrePers) {
-                return await sock.sendMessage(msg.key.remoteJid, {
-                    text: '❌ Usa: `.vp <nombre del personaje>`'
-                }, { quoted: msg });
-            }
+            if (!nombrePers) return await sock.sendMessage(msg.key.remoteJid, { text: '❌ Usa: `.vp <nombre del personaje>`' }, { quoted: msg });
 
             const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
-            const data = await fs.readFile(RUTA, 'utf-8');
-            const db = JSON.parse(data);
+            const db = JSON.parse(await fs.readFile(RUTA, 'utf-8'));
 
-            // Buscar por key exacto o por nombre
-            let personaje = db[nombrePers];
-            if (!personaje) {
-                personaje = Object.values(db).find(p => p.nombre?.toLowerCase() === nombrePers.toLowerCase());
-            }
-
-            if (!personaje) {
-                return await sock.sendMessage(msg.key.remoteJid, {
-                    text: `❌ No se encontró: *${nombrePers}*`
-                }, { quoted: msg });
-            }
+            let personaje = db[nombrePers] || Object.values(db).find(p => p.nombre?.toLowerCase() === nombrePers.toLowerCase());
+            if (!personaje) return await sock.sendMessage(msg.key.remoteJid, { text: `❌ No se encontró: *${nombrePers}*` }, { quoted: msg });
 
             const info = `☆ *${personaje.nombre}*
 ✧ Género: ${personaje.genero || 'Desconocido'}
+✧ Serie: ${personaje.serie || 'Desconocida'}
 ✦ Valor: ${personaje.valor?.toLocaleString() || 0} RWcoins
 ◆ Votos: ${personaje.votos || 0}
 ★ Estado: ${personaje.estado || 'Libre'}`;
 
-            if (personaje.imagen && personaje.imagen.startsWith('http')) {
+            if (personaje.imagen) {
+                const imgPath = path.join(process.cwd(), 'database', personaje.imagen);
+                const imgBuffer = await fs.readFile(imgPath);
                 await sock.sendMessage(msg.key.remoteJid, {
-                    image: { url: personaje.imagen },
+                    image: imgBuffer,
                     caption: info
                 }, { quoted: msg });
             } else {
-                await sock.sendMessage(msg.key.remoteJid, {
-                    text: info + '\n\n⚠️ Sin imagen'
-                }, { quoted: msg });
+                await sock.sendMessage(msg.key.remoteJid, { text: info + '\n\n⚠️ Sin imagen' }, { quoted: msg });
             }
 
         } catch(e) {
             console.error('Error en vp:', e);
-            await sock.sendMessage(msg.key.remoteJid, {
-                text: `❌ Error: ${e.message}`
-            }, { quoted: msg });
+            await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${e.message}` }, { quoted: msg });
         }
     }
 };
