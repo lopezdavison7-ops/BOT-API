@@ -1,5 +1,3 @@
-import * as cheerio from 'cheerio';
-
 export default {
     nombre: 'tiktok',
     ejecutar: async ({ sock, msg }) => {
@@ -8,30 +6,27 @@ export default {
 
         if(!query) return await sock.sendMessage(msg.key.remoteJid, {text: '❌ Uso:.tiktok bailalo rocky'}, {quoted: msg});
 
-        await sock.sendMessage(msg.key.remoteJid, {text: `🔍 Buscando y descargando *${query}*... espera 10s`}, {quoted: msg});
+        await sock.sendMessage(msg.key.remoteJid, {text: `🔍 Buscando *${query}*...`}, {quoted: msg});
 
         try {
-            // 1. BUSCAR CON SCRAPER A TIKWM
-            const searchRes = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=1`);
-            const searchJson = await searchRes.json();
-            const video = searchJson.data.videos[0];
+            // USAMOS LA API DE TIKWM QUE NO NECESITA NADA
+            const res = await fetch(`https://api.tikwm.com/video/feed/search?keywords=${encodeURIComponent(query)}&count=1`);
+            const json = await res.json();
+            const v = json.data.videos[0];
 
-            if(!video) throw new Error('No encontré videos');
+            if(!v) throw new Error('No hay videos');
 
-            const playUrl = video.play; // Este ya viene sin marca de agua
+            const videoUrl = v.play; // link directo mp4 sin marca
 
-            // 2. DESCARGAR Y MANDAR EL VIDEO DIRECTO
-            const videoRes = await fetch(playUrl);
-            const buffer = Buffer.from(await videoRes.arrayBuffer());
-
+            // WHATSAPP REPRODUCE EL LINK SOLO
             await sock.sendMessage(msg.key.remoteJid, {
-                video: buffer,
-                caption: `✅ @${video.author.unique_id}\n${video.title}`
+                video: { url: videoUrl },
+                caption: `✅ @${v.author.unique_id}\n${v.title}`
             }, {quoted: msg});
 
             // BOTÓN
             await sock.sendMessage(msg.key.remoteJid, {
-                text: `¿Quieres más de *${query}*?`,
+                text: `¿Más de *${query}*?`,
                 buttons: [
                     {buttonId: `.tiktok ${query}`, buttonText: {displayText: 'SI 🔥'}, type: 1}
                 ],
@@ -39,7 +34,7 @@ export default {
             }, {quoted: msg});
 
         } catch(e) {
-            await sock.sendMessage(msg.key.remoteJid, {text: `❌ Error: ${e.message}\nIntenta otra vez en 5s`}, {quoted: msg});
+            await sock.sendMessage(msg.key.remoteJid, {text: `❌ Error: ${e.message}`}, {quoted: msg});
         }
     }
 };
