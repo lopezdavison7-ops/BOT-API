@@ -1,3 +1,4 @@
+
 // handler.js
 import { loadCommands } from './controllers/cmdManager.js';
 
@@ -22,10 +23,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!botJid) botJid = sock.user.id;
 
-        // 1. IGNORAR SI NO HAY MENSAJE
         if (!msg.message) return;
-
-        // 2. IGNORAR SOLO ESTADOS
         if (msg.key.remoteJid === 'status@broadcast') return;
 
         const jid = msg.key.remoteJid;
@@ -40,9 +38,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!texto) return;
 
-        // ============================================
         // FIX 1: ACEPTAR SOLO NUMERO EJ: "1"
-        // ============================================
         if (/^\d+$/.test(texto.trim())) {
             const num = parseInt(texto.trim());
             const mapa = global.menuMap?.[jid];
@@ -63,13 +59,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 }
             }
         }
-        // ============================================
 
         if (!texto.startsWith(prefijo)) return;
 
-        // Separar comando y argumento conservando saltos de linea
-        const sinPrefijo = texto.slice(prefijo.length).trim();
-        const indiceEspacio = sinPrefacio.search(/\s/);
+        // Separar comando y argumento
+        const sinPrefijo = texto.slice(prefijo.length).trim(); // <-- AQUI ESTABA EL ERROR
+        const indiceEspacio = sinPrefijo.search(/\s/);
 
         const nombreComando = (
             indiceEspacio === -1
@@ -84,9 +79,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const args = argumento? argumento.split(' ') : [];
 
-        // ============================================
         // FIX 2: ACEPTAR.menu 1
-        // ============================================
         if (nombreComando === 'menu' && args[0] &&!isNaN(args[0])) {
             const num = parseInt(args[0]);
             const mapa = global.menuMap?.[jid];
@@ -107,7 +100,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 }
             }
         }
-        // ============================================
 
         // Buscar comando o alias normal
         let cmd = comandos.get(nombreComando);
@@ -117,28 +109,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (!cmd) return;
 
         await cmd.ejecutar({
-            sock,
-            msg,
-            argumento,
-            listaComandos,
-            prefijo,
-            fromMe,
-            isGroup,
-            jid,
-            botJid,
-            responder: {
-                texto: async (text) => {
-                    await sock.sendMessage(jid, { text }, { quoted: msg });
-                },
-                imagen: async (img, caption = '') => {
-                    await sock.sendMessage(jid, { image: img, caption }, { quoted: msg });
-                },
-                video: async (vid, caption = '') => {
-                    await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg });
-                },
-                audio: async (aud, ptt = true) => {
-                    await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg });
-                }
+            sock, msg, argumento, listaComandos, prefijo,
+            fromMe, isGroup, jid, botJid, responder: {
+                texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
             }
         });
 
