@@ -7,19 +7,18 @@ export default {
     alias: ['verpersonaje', 'verp'],
     descripcion: 'Ver info de un personaje con foto.',
 
-    ejecutar: async ({ args, responder, conn, msg }) => {
+    ejecutar: async ({ texto, responder, conn, msg }) => {
         try {
-            const nombrePers = args.join(' ').trim();
+            const nombrePers = texto.trim(); // <- CAMBIO: usamos texto
             if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`');
 
             const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
             const data = await fs.readFile(RUTA, 'utf-8');
             const db = JSON.parse(data);
 
-            // Debug: buscar exacto
-            let personaje = db[nombrePers]; // intenta buscar por key directo
+            // Buscar por key directo o por nombre
+            let personaje = db[nombrePers];
             if (!personaje) {
-                // si no, busca por nombre.toLowerCase
                 for (let key in db) {
                     if (db[key].nombre?.toLowerCase() === nombrePers.toLowerCase()) {
                         personaje = db[key];
@@ -29,10 +28,10 @@ export default {
             }
 
             if (!personaje) {
-                return await responder.texto(`❌ No se encontró: *${nombrePers}*\nKeys en json: ${Object.keys(db).slice(0,5).join(', ')}...`);
+                return await responder.texto(`❌ No se encontró: *${nombrePers}*`);
             }
 
-            const texto = `☆ *${personaje.nombre}*
+            const info = `☆ *${personaje.nombre}*
 ✧ Género: ${personaje.genero || 'Desconocido'}
 ✦ Valor: ${personaje.valor?.toLocaleString() || 0} RWcoins
 ◆ Votos: ${personaje.votos || 0}
@@ -41,15 +40,15 @@ export default {
             if (personaje.imagen && personaje.imagen.startsWith('http')) {
                 return await conn.sendMessage(msg.key.remoteJid, {
                     image: { url: personaje.imagen },
-                    caption: texto
+                    caption: info
                 });
             } else {
-                return await responder.texto(texto + '\n\n⚠️ Sin imagen');
+                return await responder.texto(info + '\n\n⚠️ Sin imagen');
             }
 
         } catch(e) {
             console.error('Error en vp:', e);
-            await responder.texto(`❌ Error: ${e.message}\nTipo: ${e.name}`);
+            await responder.texto(`❌ Error: ${e.message}`);
         }
     }
 };
