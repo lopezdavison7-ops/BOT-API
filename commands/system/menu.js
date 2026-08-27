@@ -1,5 +1,5 @@
 // ============================================================
-// MENU - BOT-API 2.0 FIX FINAL PARA BAILEYS-BETA
+// MENU - BOT-API 2.0 SIN BOTONES - 100% ESTABLE
 // ============================================================
 
 import fs from 'fs';
@@ -50,6 +50,18 @@ export default {
                 }
             }
 
+            let numero = 1;
+            let listaCategorias = '';
+            const mapaNumeros = {};
+
+            for (const cat of Object.keys(categorias)) {
+                listaCategorias += `┃ ${numero}. ${obtenerIcono(cat)} *${cat}*\n`;
+                mapaNumeros[numero] = cat;
+                numero++;
+            }
+
+            if (canal) listaCategorias += `┃ ${numero}. 📢 *VER CANAL*\n`;
+
             const texto = `╭━━〔 🚀 𝐁𝐎𝐓-𝐀𝐏𝐈 2.0 〕━━⬣
 ┃
 ┃ 👋 𝐇𝐎𝐋𝐀 ${mencionTexto}
@@ -63,56 +75,31 @@ export default {
 ╰━━━━⬣
 
 ╭━━〔 📋 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐀𝐒 〕━━⬣
-┃ Elige una categoría abajo
+${listaCategorias}┃
+┃ Responde con el número. Ej: *${prefijo}menu 1*
 ╰━━━━⬣`;
 
-            // BOTONES HIDRATADOS - ESTE ES EL QUE USA TU BAILEYS-BETA
-            const botones = Object.keys(categorias).slice(0, 4).map(cat => ({
-                quickReplyButton: {
-                    displayText: `${obtenerIcono(cat)} ${cat}`,
-                    id: `${prefijo}menu ${cat}`
-                }
-            }));
-
-            if (canal) {
-                botones.push({
-                    urlButton: {
-                        displayText: '📢 VER CANAL',
-                        url: canal
-                    }
-                });
-            }
-
-            const template = {
-                caption: texto,
-                mentions: menciones,
-                footer: '⚡ BOT-API 2.0',
-                templateButtons: botones
-            };
-
             if (fs.existsSync(FOTO_MENU)) {
-                template.image = { url: FOTO_MENU };
+                await sock.sendMessage(jid, { image: { url: FOTO_MENU }, caption: texto, mentions: menciones }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, { text: texto, mentions: menciones }, { quoted: msg });
             }
 
-            await sock.sendMessage(jid, template, { quoted: msg });
+            // Guardar mapa en memoria temporal
+            global.menuMap = global.menuMap || {};
+            global.menuMap[jid] = mapaNumeros;
 
         } catch (error) {
             console.error('[MENU] Error:', error);
-            await sock.sendMessage(jid, { text: `❌ Error: ${error.message}` }, { quoted: msg });
         }
     }
 };
 
 async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo, menciones) {
     const icono = obtenerIcono(categoria);
-    const botones = comandos.slice(0, 3).map(cmd => ({
-        quickReplyButton: { displayText: `${prefijo}${cmd.nombre}`, id: `${prefijo}${cmd.nombre}` }
-    }));
-    botones.push({ quickReplyButton: { displayText: '⬅️ Volver', id: `${prefijo}menu` } });
-
     let texto = `╭━━〔 ${icono} 𝐌𝐄𝐍Ú ${categoria.toUpperCase()} 〕━━⬣\n┃\n`;
     for (const cmd of comandos) { texto += `┃ ✦ *${prefijo}${cmd.nombre}*\n┃ ↳ ${cmd.descripcion || 'Sin descripción'}\n`; }
-    texto += `┃\n╰━━━━⬣`;
+    texto += `┃\n╰━━━━⬣\n\nPara volver: *${prefijo}menu*`;
 
-    await sock.sendMessage(jid, { text: texto, mentions: menciones, templateButtons: botones, footer: '⚡ BOT-API 2.0' }, { quoted: msg });
+    await sock.sendMessage(jid, { text: texto, mentions: menciones }, { quoted: msg });
 }
