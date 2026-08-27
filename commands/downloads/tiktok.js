@@ -1,75 +1,88 @@
-// commands/downloads/tiktok.js
-import { llamarApi } from '../../lib/api.js';
+import { exec } from 'child_process';
+import fs from 'fs/promises';
+import path from 'path';
+import util from 'util';
+
+const execAsync = util.promisify(exec);
 
 export default {
     nombre: 'tiktok',
-    categoria: 'descargas',
-    alias: ['tt'],
-    descripcion: 'Descarga video de TikTok (con prioridad HD). Uso: .tiktok <link>',
-    ejecutar: async ({ responder, argumento }) => {
-        if (!argumento) {
-            return responder.texto(
-                `❌ *TIKTOK*\n\n` +
-                `Manda un link de TikTok.\n\n` +
-                `📌 Ejemplo:\n` +
-                `*.tiktok https://vm.tiktok.com/xxxx*`
-            );
-        }
+    ejecutar: async ({ sock, msg }) => {
+        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+        const query = text.split(' ').slice(1).join(' ').trim();
 
-        // Intentar descargar hasta 3 veces si falla
-        let intentos = 0;
-        let data = null;
-        let fallo = '';
+        if(!query) return await sock.sendMessage(msg.key.remoteJid, {text: '❌ Uso:.tiktok gatos graciosos'}, {quoted: msg});
 
-        while (intentos < 3) {
-            try {
-                data = await llamarApi('/api/v1/download/tiktok', { url: argumento });
-                if (data?.status) break;
-                fallo = data?.message || 'Error desconocido';
-            } catch {
-                fallo = 'Error de conexión con la API';
-            }
-            intentos++;
-            if (intentos < 3) await new Promise(r => setTimeout(r, 1500)); // esperar antes de reintentar
-        }
+        await sock.sendMessage(msg.key.remoteJid, {text: `🔍 Buscando videos de: *${query}*...\nEsto tarda 20s bro`}, {quoted: msg});
 
-        if (!data?.status) {
-            return responder.texto(
-                `╭━━〔 ❌ 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n` +
-                `┃\n` +
-                `┃ No se pudo descargar el video.\n` +
-                `┃\n` +
-                `┃ ⚠️ ${fallo}\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
-            );
-        }
+        try {
+            // Guardamos un scraper temporal
+            const scriptPath = path.join(process.cwd(), 'temp_scraper.py');
+            const scraperCode = `
+import asyncio, time, sys
+from urllib.parse import quote
+BUSQUEDA = "${query}"
+SCROLLS = 2
+ARCHIVO_SALIDA = f"tiktok_links_{BUSQUEDA.replace(' ', '_')}.txt"
 
-        // Prioridad: HD > SD > cualquier otro
-        const videoUrl = data.result.hdplay || data.result.play || data.result.download || null;
+def metodo_ytdlp(query):
+    try:
+        import yt_dlp
+        ydl_opts = {'quiet': True, 'extract_flat': True, 'no_warnings': True}
+        search_url = f"ytsearch10:{query} tiktok"
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(search_url, download=False)
+            entries = info.get('entries', [])
+            links = []
+            for entry in entries:
+                url = entry.get('url') or entry.get('webpage_url')
+                if url and 'tiktok.com' in url:
+                    links.append(url.split('?')[0])
+            return links
+    except: return []
 
-        if (!videoUrl) {
-            return responder.texto(
-                `╭━━〔 ❌ 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n` +
-                `┃\n` +
-                `┃ La API no devolvió un enlace de video válido.\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
-            );
-        }
-
-        const titulo = data.result.title || '🎥 TikTok';
-
-        const caption = `
-╭〔 🎥 𝐓𝐈𝐊𝐓𝐎𝐊 〕⬣
-┃
-┃ 📌 ${titulo}
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
+links = metodo_ytdlp(BUSQUEDA)
+with open(ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
+    for link in links[:5]:
+        f.write(link + '\\n')
+print("OK")
 `;
+            await fs.writeFile(scriptPath, scraperCode);
 
-        await responder.video(videoUrl, caption);
+            // Ejecutar scraper
+            await execAsync(`python3 ${scriptPath}`);
+
+            // Leer resultados
+            const data = await fs.readFile(path.join(process.cwd(), `tiktok_links_${query.replace(/ /g, '_')}.txt`), 'utf-8');
+            const links = data.split('\n').filter(l => l.trim());
+
+            if(links.length === 0) throw new Error('No se encontraron videos');
+
+            // Diseño con tu estilo
+            let texto = `╭─「 *BOT APPING* 」─╮\n`;
+            texto += `│ 🔎 Búsqueda: *${query}*\n`;
+            texto += `│ ✅ Encontrados: *${links.length}* videos\n`;
+            texto += `╰───────────────────╯\n\n`;
+
+            texto += `*TOP VIDEOS:*\n`;
+            links.slice(0, 5).forEach((link, i) => {
+                texto += `${i+1}. ${link}\n`;
+            });
+
+            texto += `\n_Le enviaré los videos en un momento..._ 👇`;
+
+            await sock.sendMessage(msg.key.remoteJid, {text: texto}, {quoted: msg});
+
+            // Enviar los primeros 3 videos
+            for(let i = 0; i < Math.min(3, links.length); i++) {
+                await sock.sendMessage(msg.key.remoteJid, {text: links[i]}, {quoted: msg});
+                await new Promise(r => setTimeout(r, 1500));
+            }
+
+            await fs.unlink(scriptPath).catch(()=>{});
+
+        } catch(e) {
+            await sock.sendMessage(msg.key.remoteJid, {text: `❌ Error: ${e.message}\n\nPrueba con otra búsqueda bro`}, {quoted: msg});
+        }
     }
 };
