@@ -7,7 +7,7 @@ setInterval(() => cache.clear(), 5 * 60 * 1000);
 
 const obtenerIdUsuario = (msg) => {
     const remoteJid = msg.key?.remoteJid || '';
-    return remoteJid.endsWith('@g.us')? msg.key?.participant || msg.participant || null : remoteJid || null;
+    return remoteJid.endsWith('@g.us') ? msg.key?.participant || msg.participant || null : remoteJid || null;
 };
 
 const msToTime = (ms) => {
@@ -22,37 +22,67 @@ export default {
     descripcion: 'Comete un crimen.',
 
     ejecutar: async ({ msg, responder }) => {
-        const id = obtenerIdUsuario(msg);
-        let usuario = cache.get(id) || obtenerUsuario(id);
+        try {
+            const id = obtenerIdUsuario(msg);
+            if (!id) return await responder.texto('❌ Error: No se pudo identificar al usuario');
 
-        const ahora = Date.now();
-        const restante = COOLDOWN - (ahora - (usuario.ultimoCrime || 0));
-        if (restante > 0) return responder.texto(`⏰ Espera *${msToTime(restante)}* para delinquir de nuevo`);
+            let usuario = cache.get(id) || await obtenerUsuario(id);
+            usuario.dinero = usuario.dinero || 0;
+            usuario.ultimoCrime = usuario.ultimoCrime || 0;
 
-        const success = Math.random() > 0.4; // 60% ganar
-        let cantidad = 0;
+            const ahora = Date.now();
+            const restante = COOLDOWN - (ahora - usuario.ultimoCrime);
+            
+            if (restante > 0) {
+                return await responder.texto(`⏰ Espera *${msToTime(restante)}* para delinquir de nuevo`);
+            }
 
-        if (success) {
-            cantidad = Math.floor(Math.random() * 800) + 200;
-            usuario.dinero = (usuario.dinero || 0) + cantidad;
-            var texto = `╭━━〔 🥷 𝐂𝐑𝐈𝐌𝐄𝐍 〕━━⬣
-┃ Salió bien el golpe!
+            const roll = Math.random(); // 0 a 1
+            let texto = '';
+            let cantidad = 0;
+
+            // 60% ÉXITO
+            if (roll > 0.4) {
+                cantidad = Math.floor(Math.random() * 800) + 200;
+                usuario.dinero += cantidad;
+                texto = `╭━━〔 🥷 𝐂𝐑𝐈𝐌𝐄𝐍 𝐄𝐗𝐈𝐓𝐎𝐒𝐎 〕━━⬣
+┃ El golpe salió perfecto!
 ┃ 💰 Robaste: *$${cantidad.toLocaleString()}*
 ┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
 ╰━━━━━━━━⬣`;
-        } else {
-            cantidad = Math.floor(Math.random() * 300) + 100;
-            usuario.dinero = Math.max(0, (usuario.dinero || 0) - cantidad);
-            var texto = `╭━━〔 👮 𝐀𝐓𝐑𝐀𝐏𝐀𝐃𝐎 〕━━⬣
-┃ La poli te agarró!
-┃ 💸 Multa: *$${cantidad.toLocaleString()}*
+            
+            // 25% ATRAPADO CON MULTA
+            } else if (roll > 0.15) {
+                cantidad = Math.floor(Math.random() * 400) + 200;
+                usuario.dinero = Math.max(0, usuario.dinero - cantidad);
+                texto = `╭━━〔 👮 𝐀𝐓𝐑𝐀𝐏𝐀𝐃𝐎 〕━━⬣
+┃ La policía te agarró in fraganti!
+┃ 💸 Multa pagada: *$${cantidad.toLocaleString()}*
 ┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
 ╰━━━━━━━━⬣`;
-        }
 
-        usuario.ultimoCrime = ahora;
-        cache.set(id, usuario);
-        guardarUsuario(id, usuario).catch(() => {});
-        await responder.texto(texto);
+            // 15% PERSECUCIÓN Y PIERDE TODO
+            } else {
+                let perdido = Math.floor(usuario.dinero * 0.5); // pierde 50% de lo que tiene
+                if (perdido < 500) perdido = 500; // mínimo 500
+                usuario.dinero = Math.max(0, usuario.dinero - perdido);
+                
+                texto = `╭━━〔 🚨 𝐏𝐄𝐑𝐒𝐄𝐂𝐔𝐂𝐈𝐎𝐍 〕━━⬣
+┃ CORRE!! La poli te está persiguiendo!
+┃ Te atraparon después de una persecución
+┃ 💸 Perdiste: *$${perdido.toLocaleString()}*
+┃ 💵 Saldo restante: *$${usuario.dinero.toLocaleString()}*
+╰━━━━━━━━⬣`;
+            }
+
+            usuario.ultimoCrime = ahora;
+            cache.set(id, usuario);
+            await guardarUsuario(id, usuario);
+            await responder.texto(texto);
+
+        } catch(e) {
+            console.error('Error en crime:', e);
+            await responder.texto('❌ Error al ejecutar el crimen');
+        }
     }
 };
