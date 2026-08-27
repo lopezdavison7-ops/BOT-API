@@ -7,32 +7,31 @@ export default {
     alias: ['verpersonaje', 'verp'],
     descripcion: 'Ver info de un personaje con foto.',
 
-    ejecutar: async ({ texto, args, text, commandArgs, responder, conn, msg }) => {
+    ejecutar: async ({ sock, msg, responder }) => {
         try {
-            // Agarramos el nombre de donde sea que venga
-            const nombrePers = (texto || args?.join(' ') || text || commandArgs || '').trim();
+            // SACAR EL NOMBRE DE msg.body
+            const nombrePers = msg.body.split(' ').slice(1).join(' ').trim();
 
-            if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`');
+            if (!nombrePers) {
+                return await sock.sendMessage(msg.key.remoteJid, {
+                    text: '❌ Usa: `.vp <nombre del personaje>`'
+                }, { quoted: msg });
+            }
 
             const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
             const data = await fs.readFile(RUTA, 'utf-8');
             const db = JSON.parse(data);
 
-            // Buscar por key exacto primero
+            // Buscar por key o por nombre
             let personaje = db[nombrePers];
-
-            // Si no, buscar por nombre.toLowerCase
             if (!personaje) {
-                for (let key in db) {
-                    if (db[key].nombre?.toLowerCase() === nombrePers.toLowerCase()) {
-                        personaje = db[key];
-                        break;
-                    }
-                }
+                personaje = Object.values(db).find(p => p.nombre?.toLowerCase() === nombrePers.toLowerCase());
             }
 
             if (!personaje) {
-                return await responder.texto(`❌ No se encontró: *${nombrePers}*`);
+                return await sock.sendMessage(msg.key.remoteJid, {
+                    text: `❌ No se encontró: *${nombrePers}*`
+                }, { quoted: msg });
             }
 
             const info = `☆ *${personaje.nombre}*
@@ -42,17 +41,21 @@ export default {
 ★ Estado: ${personaje.estado || 'Libre'}`;
 
             if (personaje.imagen && personaje.imagen.startsWith('http')) {
-                return await conn.sendMessage(msg.key.remoteJid, {
+                await sock.sendMessage(msg.key.remoteJid, {
                     image: { url: personaje.imagen },
                     caption: info
-                });
+                }, { quoted: msg });
             } else {
-                return await responder.texto(info + '\n\n⚠️ Sin imagen');
+                await sock.sendMessage(msg.key.remoteJid, {
+                    text: info + '\n\n⚠️ Sin imagen'
+                }, { quoted: msg });
             }
 
         } catch(e) {
             console.error('Error en vp:', e);
-            await responder.texto(`❌ Error: ${e.message}`);
+            await sock.sendMessage(msg.key.remoteJid, {
+                text: `❌ Error: ${e.message}`
+            }, { quoted: msg });
         }
     }
 };
