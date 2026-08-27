@@ -7,17 +7,21 @@ export default {
     alias: ['verpersonaje', 'verp'],
     descripcion: 'Ver info de un personaje con foto.',
 
-    ejecutar: async ({ texto, responder, conn, msg }) => {
+    ejecutar: async ({ texto, args, text, commandArgs, responder, conn, msg }) => {
         try {
-            const nombrePers = texto.trim(); // <- CAMBIO: usamos texto
+            // Agarramos el nombre de donde sea que venga
+            const nombrePers = (texto || args?.join(' ') || text || commandArgs || '').trim();
+
             if (!nombrePers) return await responder.texto('❌ Usa: `.vp <nombre del personaje>`');
 
             const RUTA = path.join(process.cwd(), 'database', 'gacha.json');
             const data = await fs.readFile(RUTA, 'utf-8');
             const db = JSON.parse(data);
 
-            // Buscar por key directo o por nombre
+            // Buscar por key exacto primero
             let personaje = db[nombrePers];
+
+            // Si no, buscar por nombre.toLowerCase
             if (!personaje) {
                 for (let key in db) {
                     if (db[key].nombre?.toLowerCase() === nombrePers.toLowerCase()) {
