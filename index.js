@@ -1,13 +1,10 @@
 // ============================================================
 // BOT-API
 // Conexión por código de emparejamiento o QR
-// Sistema de bienvenida con foto de perfil
+// Sistema de bienvenida + despedida con foto de perfil
 // ============================================================
 
 // IMPORTANTE: esto debe ir primero que cualquier otro import.
-// Carga el .env en process.env antes de que se evalúe ningún
-// comando (varios leen process.env.ALGO al importarse, y si
-// dotenv no cargó todavía, les llega undefined).
 import 'dotenv/config';
 
 import * as baileysNS from 'baileys';
@@ -208,9 +205,40 @@ async function iniciarBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
+        // ========================================================
+        // BIENVENIDA + DESPEDIDA
+        // ========================================================
+
         sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+
+            // ====================================================
+            // DESPEDIDA
+            // ====================================================
+
+            if (action === 'remove') {
+                try {
+                    await manejarDespedida(sock, {
+                        id,
+                        participants,
+                        action
+                    });
+                } catch (error) {
+                    console.error(
+                        '[DESPEDIDA] Error:',
+                        error?.message || error
+                    );
+                }
+
+                return;
+            }
+
+            // ====================================================
+            // BIENVENIDA
+            // ====================================================
+
             try {
                 if (action !== 'add' || !Array.isArray(participants) || participants.length === 0) return;
+
                 let metadata;
                 try {
                     metadata = await sock.groupMetadata(id);
@@ -218,29 +246,63 @@ async function iniciarBot() {
                     console.error('[BIENVENIDA] Error obteniendo grupo:', error?.message || error);
                     return;
                 }
+
                 const nombreGrupo = metadata?.subject || 'este grupo';
+
                 for (const participante of participants) {
                     try {
-                        const participanteJid = typeof participante === 'string' ? participante : (participante?.phoneNumber || participante?.jid || participante?.id || participante?.participant || '');
+                        const participanteJid = typeof participante === 'string'
+                            ? participante
+                            : (participante?.phoneNumber || participante?.jid || participante?.id || participante?.participant || '');
+
                         if (!participanteJid) continue;
-                        const numeroLimpio = String(typeof participante === 'object' ? (participante?.phoneNumber || participante?.jid || participante?.id || '') : participante).split('@')[0].split(':')[0].replace(/\D/g, '');
+
+                        const numeroLimpio = String(
+                            typeof participante === 'object'
+                                ? (participante?.phoneNumber || participante?.jid || participante?.id || '')
+                                : participante
+                        ).split('@')[0].split(':')[0].replace(/\D/g, '');
+
                         const numeroMostrar = numeroLimpio ? `+${numeroLimpio}` : 'Usuario';
+
                         let nombreUsuario = '';
+
                         try {
                             const participanteMetadata = metadata?.participants?.find(item => {
-                                const itemJid = typeof item === 'string' ? item : (item?.phoneNumber || item?.jid || item?.id || item?.participant || '');
+                                const itemJid = typeof item === 'string'
+                                    ? item
+                                    : (item?.phoneNumber || item?.jid || item?.id || item?.participant || '');
+
                                 const limpioItem = String(itemJid).split('@')[0].split(':')[0];
                                 const limpioParticipante = String(participanteJid).split('@')[0].split(':')[0];
+
                                 return limpioItem === limpioParticipante;
                             });
-                            const contactos = [sock?.store?.contacts?.[participanteJid], sock?.store?.contacts?.[participante?.id], sock?.store?.contacts?.[participante?.phoneNumber]];
-                            const nombres = [participanteMetadata?.name, participanteMetadata?.notify, participanteMetadata?.verifiedName];
+
+                            const contactos = [
+                                sock?.store?.contacts?.[participanteJid],
+                                sock?.store?.contacts?.[participante?.id],
+                                sock?.store?.contacts?.[participante?.phoneNumber]
+                            ];
+
+                            const nombres = [
+                                participanteMetadata?.name,
+                                participanteMetadata?.notify,
+                                participanteMetadata?.verifiedName
+                            ];
+
                             for (const contacto of contactos) {
                                 if (!contacto) continue;
                                 nombres.push(contacto.name, contacto.notify, contacto.verifiedName);
                             }
+
                             for (const nombre of nombres) {
-                                if (typeof nombre === 'string' && nombre.trim() && nombre.trim() !== '[object Object]' && !/^\+?\d+$/.test(nombre.trim())) {
+                                if (
+                                    typeof nombre === 'string' &&
+                                    nombre.trim() &&
+                                    nombre.trim() !== '[object Object]' &&
+                                    !/^\+?\d+$/.test(nombre.trim())
+                                ) {
                                     nombreUsuario = nombre.trim();
                                     break;
                                 }
@@ -248,23 +310,39 @@ async function iniciarBot() {
                         } catch (error) {
                             console.error('[BIENVENIDA] Error obteniendo nombre:', error?.message || error);
                         }
-                        if (!nombreUsuario || nombreUsuario === '[object Object]') nombreUsuario = numeroMostrar;
-                        if (nombreUsuario.length > 35) nombreUsuario = nombreUsuario.slice(0, 35) + '…';
+
+                        if (!nombreUsuario || nombreUsuario === '[object Object]') {
+                            nombreUsuario = numeroMostrar;
+                        }
+
+                        if (nombreUsuario.length > 35) {
+                            nombreUsuario = nombreUsuario.slice(0, 35) + '…';
+                        }
+
                         let fotoPerfil = null;
+
                         try {
                             fotoPerfil = await sock.profilePictureUrl(participanteJid, 'image');
                         } catch {
                             fotoPerfil = null;
                         }
+
                         const bienvenida = `╭━━━〔 ✨ *BIENVENIDO/A* 〕━━━╮\n┃\n┃ 👤 *${nombreUsuario}*\n┃\n┃ 🎉 ¡Bienvenido/a a\n┃    *${nombreGrupo}*!\n┃\n┃ 🤝 Esperamos que disfrutes\n┃    tu estancia con nosotros.\n┃\n┃ 📜 Escribe *.menu* para\n┃    ver los comandos.\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n              🤖 *BOT-API*`;
+
                         if (fotoPerfil) {
                             try {
                                 const respuesta = await fetch(fotoPerfil);
                                 if (respuesta.ok) {
                                     const datos = await respuesta.arrayBuffer();
                                     const buffer = Buffer.from(datos);
+
                                     if (buffer.length > 0) {
-                                        await sock.sendMessage(id, { image: buffer, caption: bienvenida });
+                                        await sock.sendMessage(id, {
+                                            image: buffer,
+                                            caption: bienvenida,
+                                            mentions: [participanteJid]
+                                        });
+
                                         continue;
                                     }
                                 }
@@ -272,7 +350,12 @@ async function iniciarBot() {
                                 console.error('[BIENVENIDA] Error descargando foto:', error?.message || error);
                             }
                         }
-                        await sock.sendMessage(id, { text: bienvenida });
+
+                        await sock.sendMessage(id, {
+                            text: bienvenida,
+                            mentions: [participanteJid]
+                        });
+
                     } catch (error) {
                         console.error('[BIENVENIDA] Error procesando usuario:', error?.message || error);
                     }
@@ -284,32 +367,45 @@ async function iniciarBot() {
 
         sock.ev.on('connection.update', async update => {
             const { connection, lastDisconnect, qr } = update;
+
             if (qr && metodoConexion === '2') {
                 ultimoQR = qr;
+
                 console.log('\n======================================\n📱 QR GENERADO\n======================================\nAbre la ruta /qr de tu servidor y escanea el QR.\n======================================\n');
             }
+
             if (connection === 'open') {
                 intentos = 0;
                 ultimoQR = null;
+
                 console.log('\n======================================\n          ✅ BOT CONECTADO\n======================================\n');
-                console.log('🤖 BOT-API está funcionando.\n🎉 Sistema de bienvenida: ACTIVO\n🖼️ Foto de perfil: ACTIVA\n\nPrueba: .ping o .menu\n');
+                console.log('🤖 BOT-API está funcionando.\n🎉 Sistema de bienvenida: ACTIVO\n👋 Sistema de despedida: DISPONIBLE\n🖼️ Foto de perfil: ACTIVA\n\nPrueba: .ping o .menu\n');
             }
+
             if (connection === 'close') {
                 const codigoError = new Boom(lastDisconnect?.error)?.output?.statusCode || 0;
                 const registrado = sock.authState?.creds?.registered;
                 const reconectar = codigoError !== DisconnectReason.loggedOut;
+
                 console.log('\n❌ Conexión cerrada.');
                 console.log(`Código: ${codigoError}`);
                 console.log(`Sesión registrada: ${registrado}`);
+
                 if (!reconectar) {
                     console.log('🔒 Sesión cerrada por logout.\nNo se reconectará automáticamente.');
                     iniciando = false;
                     return;
                 }
+
                 intentos++;
                 const espera = Math.min(5000 * intentos, 60000);
+
                 console.log(`🔄 Reconectando en ${espera / 1000}s...`);
-                setTimeout(() => { iniciando = false; iniciarBot(); }, espera);
+
+                setTimeout(() => {
+                    iniciando = false;
+                    iniciarBot();
+                }, espera);
             }
         });
 
@@ -319,16 +415,11 @@ async function iniciarBot() {
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
+
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
 
-            // Si hay una partida de TTT activa en este chat y el
-            // mensaje es un número suelto (1-9) de uno de los
-            // jugadores, se procesa como movimiento y NO se sigue
-            // el flujo normal de comandos (evita que "5" dispare
-            // un error de "comando no encontrado").
             try {
-                const fueMovimientoTTT =
-                    await manejarMensajeTTT(sock, m);
+                const fueMovimientoTTT = await manejarMensajeTTT(sock, m);
 
                 if (fueMovimientoTTT) {
                     return;
@@ -337,11 +428,9 @@ async function iniciarBot() {
                 console.error('[TTT] Error procesando mensaje:', error?.message || error);
             }
 
-            // Obtener lista de comandos real desde el mapa
             const listaComandos = Array.from(comandos.values())
                 .filter((v, i, self) => self.indexOf(v) === i);
-            
-            // Le pasamos el prefijo y la lista de comandos real al handler
+
             handleMessage(sock, m, '.', listaComandos);
         });
 
@@ -354,11 +443,16 @@ async function iniciarBot() {
 
     } catch (error) {
         iniciando = false;
+
         console.error('\n❌ Error iniciando BOT-API:');
         console.error(error?.message || error);
+
         intentos++;
+
         const espera = Math.min(5000 * intentos, 60000);
+
         console.log(`🔄 Reintentando en ${espera / 1000}s...`);
+
         setTimeout(iniciarBot, espera);
     }
 }
