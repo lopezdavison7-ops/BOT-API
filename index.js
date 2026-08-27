@@ -21,6 +21,7 @@ import readline from 'readline';
 import { handleMessage } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
 import { manejarMensajeTTT } from './lib/ttt.js';
+import { manejarDespedida } from './commands/group/despedida.js';
 
 const baileys = baileysNS.default ?? baileysNS;
 const makeWASocket = typeof baileys === 'function' ? baileys : baileys.makeWASocket;
