@@ -29,7 +29,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (msg.key.remoteJid === 'status@broadcast') return;
 
         const jid = msg.key.remoteJid;
-        const fromMe = msg.key.fromMe; // true si lo mando el bot
+        const fromMe = msg.key.fromMe;
         const isGroup = jid.endsWith('@g.us');
 
         const texto = msg.message?.conversation ||
@@ -55,7 +55,53 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                ? ''
                 : sinPrefijo.slice(indiceEspacio + 1);
 
-        // Buscar comando o alias
+        const args = argumento ? argumento.split(' ') : [];
+
+        // ============================================
+        // FIX MENU NUMERICO - AGREGAR ESTO AQUI
+        // ============================================
+        if (nombreComando === 'menu' && args[0] && !isNaN(args[0])) {
+            const num = parseInt(args[0]);
+            const mapa = global.menuMap?.[jid];
+            if (mapa && mapa[num]) {
+                const catSeleccionada = mapa[num];
+                // Buscar el comando menu y ejecutarlo con la categoria
+                let cmdMenu = comandos.get('menu');
+                if (!cmdMenu) {
+                    cmdMenu = [...comandos.values()].find(c => c.alias?.includes('menu'));
+                }
+                if (cmdMenu) {
+                    return await cmdMenu.ejecutar({
+                        sock,
+                        msg,
+                        argumento: catSeleccionada,
+                        listaComandos,
+                        prefijo,
+                        fromMe,
+                        isGroup,
+                        jid,
+                        botJid,
+                        responder: {
+                            texto: async (text) => {
+                                await sock.sendMessage(jid, { text }, { quoted: msg });
+                            },
+                            imagen: async (img, caption = '') => {
+                                await sock.sendMessage(jid, { image: img, caption }, { quoted: msg });
+                            },
+                            video: async (vid, caption = '') => {
+                                await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg });
+                            },
+                            audio: async (aud, ptt = true) => {
+                                await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg });
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        // ============================================
+
+        // Buscar comando o alias normal
         let cmd = comandos.get(nombreComando);
         if (!cmd) {
             cmd = [...comandos.values()].find(c => c.alias?.includes(nombreComando));
@@ -90,7 +136,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
     } catch (error) {
         console.error('[HANDLER] Error al manejar mensaje:', error);
-        // Responder error solo si no es del bot para evitar bucle
         if (!msg.key.fromMe) {
             await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg });
         }
