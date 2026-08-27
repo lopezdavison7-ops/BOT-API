@@ -1,54 +1,71 @@
-const https = require("https");
+// commands/downloads/tiktok.js
 
-module.exports = {
+export default {
     nombre: 'tiktok',
-    ejecutar: async ({ sock, msg }) => {
-        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-        const query = text.split(' ').slice(1).join(' ').trim();
+    categoria: 'descargas',
+    alias: ['tt'],
+    descripcion: 'Descarga videos de TikTok sin marca de agua',
 
-        if(!query) return sock.sendMessage(msg.key.remoteJid, {text: '❌ Uso:.tiktok bailalo rocky'}, {quoted: msg});
+    ejecutar: async ({ sock, msg, responder, argumento }) => {
+        const jid = msg?.key?.remoteJid;
+        const consulta = argumento?.trim();
 
-        sock.sendMessage(msg.key.remoteJid, {text: `⏳ Buscando *${query}*...`}, {quoted: msg});
+        if (!consulta) {
+            return await responder.texto('❌ Uso: .tiktok link_o_busqueda');
+        }
 
-        // BUSCAR
-        https.get("https://www.tikwm.com/api/feed/search?keywords=" + encodeURIComponent(query) + "&count=1", 
-        { headers: { "User-Agent": "Mozilla/5.0" } }, 
-        res => {
-            let data = "";
-            res.on("data", c => data += c);
-            res.on("end", () => {
-                try {
-                    const json = JSON.parse(data);
-                    const v = json.data.videos[0];
-                    const linkTik = `https://www.tiktok.com/@${v.author.unique_id}/video/${v.video_id}`;
+        try {
+            await responder.texto('⏳ Descargando video...');
 
-                    // SACAR LINK DESCARGA
-                    https.get("https://www.tikwm.com/api/?url=" + encodeURIComponent(linkTik), 
-                    { headers: { "User-Agent": "Mozilla/5.0" } }, 
-                    res2 => {
-                        let data2 = "";
-                        res2.on("data", c => data2 += c);
-                        res2.on("end", () => {
-                            try {
-                                const json2 = JSON.parse(data2);
-                                const dl = json2.data.play;
+            const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(consulta)}`;
 
-                                // MANDAR VIDEO
-                                sock.sendMessage(msg.key.remoteJid, {
-                                    video: { url: dl },
-                                    caption: `✅ @${v.author.unique_id}\n${v.title}`
-                                }, {quoted: msg});
-
-                            } catch { 
-                                sock.sendMessage(msg.key.remoteJid, {text: "Error obteniendo video"}, {quoted: msg});
-                            }
-                        });
-                    });
-
-                } catch { 
-                    sock.sendMessage(msg.key.remoteJid, {text: "No se encontró video"}, {quoted: msg});
+            const res = await fetch(apiUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0'
                 }
             });
-        });
+
+            if (!res.ok) {
+                throw new Error(`Error de API: ${res.status}`);
+            }
+
+            const json = await res.json();
+
+            if (!json?.data?.play) {
+                throw new Error('No se encontró el video de descarga');
+            }
+
+            const linkVideo = json.data.play;
+
+            const videoRes = await fetch(linkVideo, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
+
+            if (!videoRes.ok) {
+                throw new Error(`Error al descargar el video: ${videoRes.status}`);
+            }
+
+            const buffer = Buffer.from(await videoRes.arrayBuffer());
+
+            await sock.sendMessage(
+                jid,
+                {
+                    video: buffer,
+                    caption: '✅ TikTok sin marca'
+                },
+                {
+                    quoted: msg
+                }
+            );
+
+        } catch (error) {
+            console.error('[TIKTOK] Error:', error);
+
+            await responder.texto(
+                `❌ Error: ${error?.message || 'No se pudo descargar el video'}`
+            );
+        }
     }
-}
+};
