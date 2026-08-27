@@ -25,20 +25,33 @@ export default {
                 `https://apiyosoyyo-ofc.onrender.com/api/tts?text=${encodeURIComponent(consulta)}&apiKey=yosoyyo_sk_gincmnk3`;
 
             const res = await fetch(apiUrl, {
+                method: 'GET',
                 headers: {
+                    Accept: 'audio/wav, audio/*, application/json',
                     'User-Agent': 'Mozilla/5.0'
                 }
             });
 
             if (!res.ok) {
-                throw new Error(`Error de API: ${res.status}`);
+                throw new Error(`API respondió con HTTP ${res.status}`);
             }
 
-            const contentType = res.headers.get('content-type') || '';
+            const contentType = (
+                res.headers.get('content-type') || ''
+            ).toLowerCase();
 
-            // Si la API devuelve directamente el audio
+            /*
+             * La API puede responder:
+             * 1. Audio WAV directamente.
+             * 2. JSON con información de la generación.
+             */
+
             if (contentType.includes('audio')) {
                 const buffer = Buffer.from(await res.arrayBuffer());
+
+                if (!buffer.length) {
+                    throw new Error('La API devolvió un audio vacío');
+                }
 
                 await sock.sendMessage(
                     jid,
@@ -55,38 +68,64 @@ export default {
                 return;
             }
 
-            // Si la API devuelve JSON
             const json = await res.json();
 
-            if (json?.status && json.status !== 200) {
+            if (json?.status && Number(json.status) !== 200) {
                 throw new Error(
                     json?.message ||
                     json?.error ||
-                    'La API rechazó la solicitud'
+                    `La API respondió con estado ${json.status}`
                 );
             }
 
-            // Algunas versiones de la API pueden devolver una URL
+            /*
+             * Buscar posibles campos donde la API pueda
+             * entregar la URL o los bytes del audio.
+             */
             const audioUrl =
                 json?.data?.audio_url ||
+                json?.data?.audioUrl ||
+                json?.data?.url ||
                 json?.audio_url ||
+                json?.audioUrl ||
                 json?.url;
 
-            if (!audioUrl || audioUrl === 'STREAMING_BYTES_LOCAL') {
-                throw new Error('La API no devolvió un archivo de audio utilizable');
+            /*
+             * STREAMING_BYTES_LOCAL significa que el servidor
+             * no está entregando una URL pública en ese campo.
+             *
+             * En ese caso no intentamos hacer fetch() sobre
+             * esa cadena porque produciría otro error.
+             */
+            if (
+                !audioUrl ||
+                audioUrl === 'STREAMING_BYTES_LOCAL'
+            ) {
+                throw new Error(
+                    'La API no entregó el audio directamente ni una URL pública de descarga'
+                );
             }
 
             const audioRes = await fetch(audioUrl, {
                 headers: {
+                    Accept: 'audio/wav, audio/*',
                     'User-Agent': 'Mozilla/5.0'
                 }
             });
 
             if (!audioRes.ok) {
-                throw new Error(`Error descargando el audio: ${audioRes.status}`);
+                throw new Error(
+                    `No se pudo descargar el audio: HTTP ${audioRes.status}`
+                );
             }
 
-            const buffer = Buffer.from(await audioRes.arrayBuffer());
+            const buffer = Buffer.from(
+                await audioRes.arrayBuffer()
+            );
+
+            if (!buffer.length) {
+                throw new Error('El archivo de audio está vacío');
+            }
 
             await sock.sendMessage(
                 jid,
@@ -103,9 +142,10 @@ export default {
         } catch (error) {
             console.error('[TTS] Error:', error);
 
-            await responder.texto(
-                `❌ Error: ${error?.message || 'No se pudo generar el audio'}`
+            return await responder.texto(
+                `❌ Error TTS: ${error?.message || 'No se pudo generar el audio'}`
             );
         }
     }
 };
+```0
