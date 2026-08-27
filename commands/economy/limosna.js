@@ -1,8 +1,9 @@
-import { addDinero } from '../../lib/economia.js';
+import { getDinero, addDinero } from '../../lib/economia.js'; // <- Agregué getDinero
 
 export default {
     nombre: 'limosna',
     categoria: 'economia',
+    alias: ['mendigar', 'beg'], // por si lo quieres llamar así
     descripcion: 'Pide limosna. 1 vez cada 12h.limosna',
     cooldown: 43200000, // 12 horas
     ejecutar: async ({ sock, msg, jid }) => {
@@ -12,7 +13,7 @@ export default {
         addDinero(jugador, premio);
 
         await sock.sendMessage(jid, {
-            text: `🙏 *LIMOSNA RECIBIDA* 🙏\n\nAlguien te dio ${premio} 🪙 por lástima\nCartera: ${getDinero(jugador)} 🪙`
+            text: `🙏 *LIMOSNA RECIBIDA* 🙏\n\nAlguien te dio ${premio} 🪙 por lástima\nCartera: ${getDinero(jugador)} 🪙` // <- Ahora sí funciona
         });
     }
 }
