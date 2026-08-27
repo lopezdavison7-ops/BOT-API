@@ -9,8 +9,11 @@ export default {
 
     ejecutar: async ({ sock, msg, responder }) => {
         try {
-            // SACAR EL NOMBRE DE msg.body
-            const nombrePers = msg.body.split(' ').slice(1).join(' ').trim();
+            // Para baileys-beta: sacar el texto así
+            const type = Object.keys(msg.message || {})[0];
+            const text = msg.message[type]?.text || msg.message[type]?.caption || msg.message.conversation || '';
+
+            const nombrePers = text.split(' ').slice(1).join(' ').trim();
 
             if (!nombrePers) {
                 return await sock.sendMessage(msg.key.remoteJid, {
@@ -22,7 +25,7 @@ export default {
             const data = await fs.readFile(RUTA, 'utf-8');
             const db = JSON.parse(data);
 
-            // Buscar por key o por nombre
+            // Buscar por key exacto o por nombre
             let personaje = db[nombrePers];
             if (!personaje) {
                 personaje = Object.values(db).find(p => p.nombre?.toLowerCase() === nombrePers.toLowerCase());
