@@ -1,13 +1,8 @@
 // commands/group/despedida.js
-
 // ============================================================
+// BOT-API
 // COMANDO: DESPEDIDA
-// Activa/desactiva el sistema de despedidas por grupo.
-//
-// Uso:
-// .despedida on
-// .despedida off
-// .despedida
+// Activa/desactiva las despedidas automáticas por grupo.
 // ============================================================
 
 const despedidas = global.despedidas || (global.despedidas = new Map());
@@ -15,10 +10,10 @@ const despedidas = global.despedidas || (global.despedidas = new Map());
 export default {
     nombre: 'despedida',
     categoria: 'group',
-    alias: ['bye', 'goodbye'],
+    alias: ['bye', 'adios'],
     descripcion: 'Activa o desactiva las despedidas del grupo',
 
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
+    ejecutar: async ({ responder, msg, argumento }) => {
         const jid = msg?.key?.remoteJid;
         const consulta = argumento?.trim().toLowerCase();
 
@@ -27,10 +22,6 @@ export default {
                 '❌ Este comando solo funciona en grupos.'
             );
         }
-
-        // ========================================================
-        // MOSTRAR ESTADO
-        // ========================================================
 
         if (!consulta) {
             const estado = despedidas.get(jid) === true;
@@ -47,10 +38,6 @@ export default {
             );
         }
 
-        // ========================================================
-        // ACTIVAR
-        // ========================================================
-
         if (consulta === 'on') {
             despedidas.set(jid, true);
 
@@ -58,16 +45,12 @@ export default {
                 '╭━━〔 👋 DESPEDIDA 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🟢 Sistema activado.\n' +
-                '┃ Ahora enviaré una despedida\n' +
-                '┃ cuando alguien salga del grupo.\n' +
+                '┃ Las salidas serán anunciadas\n' +
+                '┃ automáticamente.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
-
-        // ========================================================
-        // DESACTIVAR
-        // ========================================================
 
         if (consulta === 'off') {
             despedidas.set(jid, false);
@@ -82,10 +65,6 @@ export default {
             );
         }
 
-        // ========================================================
-        // OPCIÓN INVÁLIDA
-        // ========================================================
-
         return await responder.texto(
             '❌ Opción inválida.\n\n' +
             'Usa:\n' +
@@ -97,79 +76,119 @@ export default {
 
 
 // ============================================================
-// FUNCIÓN PARA USAR DESDE EL EVENTO group-participants.update
+// MANEJADOR DE SALIDAS
 // ============================================================
 
 export async function manejarDespedida(sock, update) {
+    const { id, participants, action } = update;
+
+    if (action !== 'remove') return;
+    if (!id?.endsWith('@g.us')) return;
+    if (!Array.isArray(participants) || !participants.length) return;
+
+    if (despedidas.get(id) !== true) return;
+
+    let metadata;
+
     try {
-        const { id: jid, participants, action } = update;
+        metadata = await sock.groupMetadata(id);
+    } catch (error) {
+        console.error(
+            '[DESPEDIDA] Error obteniendo grupo:',
+            error?.message || error
+        );
+        return;
+    }
 
-        // Solo cuando alguien sale
-        if (action !== 'remove') return;
+    const nombreGrupo = metadata?.subject || 'este grupo';
 
-        // Verificar si está activado en este grupo
-        if (despedidas.get(jid) !== true) return;
+    for (const participante of participants) {
+        try {
+            const participanteJid =
+                typeof participante === 'string'
+                    ? participante
+                    : (
+                        participante?.phoneNumber ||
+                        participante?.jid ||
+                        participante?.id ||
+                        participante?.participant ||
+                        ''
+                    );
 
-        for (const participante of participants) {
-            const numero = participante.split('@')[0];
+            if (!participanteJid) continue;
+
+            const numero =
+                String(participanteJid)
+                    .split('@')[0]
+                    .split(':')[0]
+                    .replace(/\D/g, '');
+
+            const mencion = numero
+                ? `@${numero}`
+                : '@usuario';
 
             let fotoPerfil = null;
 
             try {
                 fotoPerfil = await sock.profilePictureUrl(
-                    participante,
+                    participanteJid,
                     'image'
                 );
             } catch {
                 fotoPerfil = null;
             }
 
-            const texto =
-                `╭━━〔 👋 DESPEDIDA 〕━━⬣\n` +
+            const despedida =
+                `╭━━━〔 👋 DESPEDIDA 〕━━━╮\n` +
                 `┃\n` +
-                `┃ 👤 @${numero}\n` +
-                `┃ ha salido del grupo.\n` +
+                `┃ 👤 ${mencion}\n` +
+                `┃\n` +
+                `┃ Ha salido del grupo.\n` +
                 `┃\n` +
                 `┃ 👋 ¡Hasta pronto, Quinn!\n` +
+                `┃ Te deseamos lo mejor.\n` +
                 `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`;
+                `┃ 📍 ${nombreGrupo}\n` +
+                `┃\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+                `              🤖 *BOT-API*`;
 
             if (fotoPerfil) {
                 try {
-                    const response = await fetch(fotoPerfil);
+                    const respuesta = await fetch(fotoPerfil);
 
-                    if (response.ok) {
-                        const buffer = Buffer.from(
-                            await response.arrayBuffer()
-                        );
+                    if (respuesta.ok) {
+                        const datos = await respuesta.arrayBuffer();
+                        const buffer = Buffer.from(datos);
 
-                        await sock.sendMessage(jid, {
-                            image: buffer,
-                            caption: texto,
-                            mentions: [participante]
-                        });
+                        if (buffer.length > 0) {
+                            await sock.sendMessage(id, {
+                                image: buffer,
+                                caption: despedida,
+                                mentions: [participanteJid]
+                            });
 
-                        continue;
+                            continue;
+                        }
                     }
                 } catch (error) {
                     console.error(
-                        '[DESPEDIDA] Error obteniendo foto:',
-                        error
+                        '[DESPEDIDA] Error descargando foto:',
+                        error?.message || error
                     );
                 }
             }
 
-            // Si no tiene foto, manda solamente el texto
-            await sock.sendMessage(jid, {
-                text: texto,
-                mentions: [participante]
+            await sock.sendMessage(id, {
+                text: despedida,
+                mentions: [participanteJid]
             });
-        }
 
-    } catch (error) {
-        console.error(
-            '[DESPEDIDA] Error en evento:',
-            error
-        );
+        } catch (error) {
+            console.error(
+                '[DESPEDIDA] Error procesando salida:',
+                error?.message || error
+            );
+        }
     }
 }
