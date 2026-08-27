@@ -7,7 +7,7 @@ setInterval(() => cache.clear(), 5 * 60 * 1000);
 
 const obtenerIdUsuario = (msg) => {
     const remoteJid = msg.key?.remoteJid || '';
-    return remoteJid.endsWith('@g.us')? msg.key?.participant || msg.participant || null : remoteJid || null;
+    return remoteJid.endsWith('@g.us') ? msg.key?.participant || msg.participant || null : remoteJid || null;
 };
 
 const msToTime = (ms) => {
@@ -15,40 +15,88 @@ const msToTime = (ms) => {
     return `${m}m ${s % 60}s`;
 };
 
-const MINERALES = [
-    { nombre: '🪨 Piedra', min: 100, max: 200 },
-    { nombre: '⛏️ Carbón', min: 150, max: 300 },
-    { nombre: '🥈 Plata', min: 250, max: 450 },
-    { nombre: '🥇 Oro', min: 400, max: 700 },
-    { nombre: '💎 Diamante', min: 600, max: 1000 }
-];
-
 export default {
     nombre: 'mine',
     categoria: 'economia',
     alias: ['minar'],
-    descripcion: 'Mina para ganar dinero.',
+    descripcion: 'Mina recursos en la mina.',
 
     ejecutar: async ({ msg, responder }) => {
-        const id = obtenerIdUsuario(msg);
-        let usuario = cache.get(id) || obtenerUsuario(id);
+        try {
+            const id = obtenerIdUsuario(msg);
+            if (!id) return await responder.texto('❌ Error: No se pudo identificar al usuario');
 
-        const ahora = Date.now();
-        const restante = COOLDOWN - (ahora - (usuario.ultimoMine || 0));
-        if (restante > 0) return responder.texto(`⏰ Espera *${msToTime(restante)}* para minar de nuevo`);
+            let usuario = cache.get(id) || await obtenerUsuario(id);
+            usuario.dinero = usuario.dinero || 0;
+            usuario.ultimoMine = usuario.ultimoMine || 0;
 
-        const mineral = MINERALES[Math.floor(Math.random() * MINERALES.length)];
-        const ganado = Math.floor(Math.random() * (mineral.max - mineral.min + 1)) + mineral.min;
+            const ahora = Date.now();
+            const restante = COOLDOWN - (ahora - usuario.ultimoMine);
+            
+            if (restante > 0) {
+                return await responder.texto(`⏰ Espera *${msToTime(restante)}* para minar de nuevo`);
+            }
 
-        usuario.dinero = (usuario.dinero || 0) + ganado;
-        usuario.ultimoMine = ahora;
-        cache.set(id, usuario);
-        guardarUsuario(id, usuario).catch(() => {});
+            const roll = Math.random(); // 0 a 1
+            let texto = '';
+            let ganancia = 0;
 
-        await responder.texto(`╭━━〔 ⛏️ 𝐌𝐈𝐍𝐀 〕━━⬣
-┃ Encontraste: ${mineral.nombre}
-┃ 💰 Valor: *$${ganado.toLocaleString()}*
+            const materiales = [
+                { name: '💎 Diamante', min: 1, max: 3, valor: 5000 },
+                { name: '💚 Esmeralda', min: 1, max: 2, valor: 7000 },
+                { name: '🟡 Oro', min: 2, max: 6, valor: 2000 },
+                { name: '⚪ Hierro', min: 3, max: 8, valor: 800 },
+                { name: '⚫ Carbón', min: 5, max: 15, valor: 200 },
+                { name: '🔮 Amatista', min: 1, max: 4, valor: 1500 }
+            ];
+
+            // 65% ÉXITO - ENCUENTRA MINERALES
+            if (roll > 0.35) {
+                let drop = materiales[Math.floor(Math.random() * materiales.length)];
+                let cantidad = Math.floor(Math.random() * (drop.max - drop.min + 1)) + drop.min;
+                ganancia = cantidad * drop.valor;
+                usuario.dinero += ganancia;
+
+                texto = `╭━━〔 ⛏️ 𝐌𝐈𝐍𝐀𝐃𝐎 𝐄𝐗𝐈𝐓𝐎𝐒𝐎 〕━━⬣
+┃ Encontraste minerales!
+┃ 📦 ${cantidad}x ${drop.name}
+┃ 💰 Ganancia: *$${ganancia.toLocaleString()}*
 ┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
-╰━━━━━━━━⬣`);
+╰━━━━━━━━⬣`;
+
+            // 20% ACCIDENTE LEVE - PIERDES HERRAMIENTAS
+            } else if (roll > 0.15) {
+                let perdido = Math.floor(Math.random() * 300) + 200;
+                usuario.dinero = Math.max(0, usuario.dinero - perdido);
+                
+                texto = `╭━━〔 🪨 𝐀𝐂𝐂𝐈𝐃𝐄𝐍𝐓𝐄 〕━━⬣
+┃ Se te rompió el pico minando!
+┃ 💸 Reparación: *$${perdido.toLocaleString()}*
+┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
+╰━━━━━━━━⬣`;
+
+            // 15% DERRUMBE - PIERDES MUCHO
+            } else {
+                let perdido = Math.floor(usuario.dinero * 0.4); // pierde 40%
+                if (perdido < 800) perdido = 800; // mínimo 800
+                usuario.dinero = Math.max(0, usuario.dinero - perdido);
+                
+                texto = `╭━━〔 🚨 𝐃𝐄𝐑𝐑𝐔𝐌𝐁𝐄 〕━━⬣
+┃ LA MINA COLAPSÓ!!
+┃ Corriste pero perdiste todo tu equipo
+┃ 💸 Pérdida: *$${perdido.toLocaleString()}*
+┃ 💵 Saldo restante: *$${usuario.dinero.toLocaleString()}*
+╰━━━━━━━━⬣`;
+            }
+
+            usuario.ultimoMine = ahora;
+            cache.set(id, usuario);
+            await guardarUsuario(id, usuario);
+            await responder.texto(texto);
+
+        } catch(e) {
+            console.error('Error en mine:', e);
+            await responder.texto('❌ Error al minar');
+        }
     }
 };
