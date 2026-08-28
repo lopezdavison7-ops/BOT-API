@@ -1,29 +1,30 @@
-// commands/download/tiktoksearch.js
+// commands/downloads/tiktoksearch.js
 // ============================================================
 // BOT-API
-// COMANDO: TIKTOK SEARCH
+// COMANDO: TT
 // ============================================================
-// Busca videos de TikTok directamente desde TikTok.
+// Busca videos de TikTok.
 //
 // USO:
-// .tiktoksearch motos
-// .tiktoksearch nicaragua
-// .tiktoksearch futbol
+// .tt motos
+// .tt nicaragua
+// .tt futbol
 //
-// Devuelve los primeros resultados encontrados.
+// No necesita Playwright ni Chromium.
+// Utiliza fetch, que ya está disponible en el proyecto.
 // ============================================================
 
-import { chromium } from 'playwright';
+const API_URL =
+    'https://www.tikwm.com/api/feed/search';
 
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
 
-const MAX_RESULTADOS = 10;
-const TIMEOUT = 45000;
+const MAX_RESULTS = 10;
 
 // ============================================================
-// ESCAPAR TEXTO
+// LIMPIAR TEXTO
 // ============================================================
 
 function limpiarTexto(texto) {
@@ -33,210 +34,79 @@ function limpiarTexto(texto) {
 }
 
 // ============================================================
-// SCRAPER
+// OBTENER URL DEL VIDEO
 // ============================================================
 
-async function buscarTikTok(query) {
-    let browser = null;
-    let page = null;
-
-    try {
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu'
-            ]
-        });
-
-        page = await browser.newPage({
-            viewport: {
-                width: 1366,
-                height: 768
-            },
-
-            locale: 'es-ES',
-
-            userAgent:
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-                'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                'Chrome/139.0.0.0 Safari/537.36'
-        });
-
-        const url =
-            `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`;
-
-        console.log(
-            `[TIKTOK SEARCH] Buscando: ${query}`
-        );
-
-        await page.goto(url, {
-            waitUntil: 'domcontentloaded',
-            timeout: TIMEOUT
-        });
-
-        await page.waitForTimeout(5000);
-
-        // ====================================================
-        // CARGAR MÁS RESULTADOS
-        // ====================================================
-
-        for (let i = 0; i < 4; i++) {
-            await page.mouse.wheel(0, 1800);
-            await page.waitForTimeout(1000);
-        }
-
-        // ====================================================
-        // EXTRAER VIDEOS
-        // ====================================================
-
-        const resultados =
-            await page.evaluate(() => {
-
-                const encontrados = [];
-                const vistos = new Set();
-
-                const enlaces =
-                    document.querySelectorAll(
-                        'a[href*="/video/"]'
-                    );
-
-                for (const enlace of enlaces) {
-
-                    const url = enlace.href;
-
-                    if (!url || vistos.has(url)) {
-                        continue;
-                    }
-
-                    vistos.add(url);
-
-                    const contenedor =
-                        enlace.closest(
-                            '[data-e2e]'
-                        ) ||
-                        enlace.parentElement?.parentElement ||
-                        enlace;
-
-                    const imagen =
-                        contenedor?.querySelector('img');
-
-                    const texto =
-                        contenedor?.innerText || '';
-
-                    encontrados.push({
-                        url,
-                        texto,
-                        thumbnail:
-                            imagen?.src ||
-                            imagen?.getAttribute('src') ||
-                            ''
-                    });
-                }
-
-                return encontrados;
-            });
-
-        // ====================================================
-        // PROCESAR RESULTADOS
-        // ====================================================
-
-        const salida = [];
-
-        for (
-            const resultado
-            of resultados.slice(0, MAX_RESULTADOS)
-        ) {
-
-            const texto =
-                limpiarTexto(
-                    resultado.texto
-                );
-
-            const lineas =
-                texto
-                    .split('\n')
-                    .map(limpiarTexto)
-                    .filter(Boolean);
-
-            let usuario = '';
-
-            const lineaUsuario =
-                lineas.find(
-                    linea =>
-                        linea.startsWith('@')
-                );
-
-            if (lineaUsuario) {
-                usuario =
-                    lineaUsuario.replace(
-                        /^@/,
-                        ''
-                    );
-            }
-
-            let descripcion = '';
-
-            const posiblesDescripciones =
-                lineas.filter(linea => {
-                    if (!linea) return false;
-
-                    if (
-                        linea.startsWith('@')
-                    ) {
-                        return false;
-                    }
-
-                    if (
-                        /^[\d.,]+[KMB]?$/i.test(
-                            linea
-                        )
-                    ) {
-                        return false;
-                    }
-
-                    return true;
-                });
-
-            if (
-                posiblesDescripciones.length
-            ) {
-                descripcion =
-                    posiblesDescripciones
-                        .slice(-2)
-                        .join(' ');
-            }
-
-            const videoId =
-                resultado.url.match(
-                    /\/video\/(\d+)/
-                )?.[1] || '';
-
-            salida.push({
-                id: videoId || null,
-                url: resultado.url,
-                username: usuario || null,
-                description:
-                    descripcion || null,
-                thumbnail:
-                    resultado.thumbnail || null
-            });
-        }
-
-        return salida;
-
-    } finally {
-
-        if (page) {
-            await page.close().catch(() => {});
-        }
-
-        if (browser) {
-            await browser.close().catch(() => {});
-        }
+function obtenerUrlVideo(video) {
+    if (video?.play) {
+        return video.play;
     }
+
+    if (video?.wmplay) {
+        return video.wmplay;
+    }
+
+    if (
+        video?.author?.unique_id &&
+        video?.video_id
+    ) {
+        return (
+            `https://www.tiktok.com/@` +
+            `${video.author.unique_id}/video/` +
+            `${video.video_id}`
+        );
+    }
+
+    return null;
+}
+
+// ============================================================
+// BUSCAR EN TIKTOK
+// ============================================================
+
+async function buscarTikTok(consulta) {
+    const url =
+        `${API_URL}?keywords=${encodeURIComponent(consulta)}` +
+        `&count=${MAX_RESULTS}`;
+
+    console.log(
+        `[TT] Buscando: ${consulta}`
+    );
+
+    const response =
+        await fetch(url, {
+            method: 'GET',
+            headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 ' +
+                    '(KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+
+                'Accept':
+                    'application/json,text/plain,*/*'
+            }
+        });
+
+    if (!response.ok) {
+        throw new Error(
+            `La API respondió ${response.status}`
+        );
+    }
+
+    const json =
+        await response.json();
+
+    if (
+        !json ||
+        !Array.isArray(
+            json?.data?.videos
+        )
+    ) {
+        throw new Error(
+            'La API no devolvió resultados válidos.'
+        );
+    }
+
+    return json.data.videos;
 }
 
 // ============================================================
@@ -244,45 +114,62 @@ async function buscarTikTok(query) {
 // ============================================================
 
 function crearMensaje(
-    query,
-    resultados
+    consulta,
+    videos
 ) {
-    let mensaje =
-        '╭━━〔 🔎 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
+    let texto =
+        '╭━━〔 🔎 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
         '┃\n' +
-        `┃ 🔍 Búsqueda: ${query}\n` +
-        `┃ 📊 Resultados: ${resultados.length}\n` +
+        `┃ 🔍 ${consulta}\n` +
+        `┃ 📊 ${videos.length} resultados\n` +
         '┃\n';
 
-    resultados.forEach(
-        (resultado, index) => {
+    videos.forEach(
+        (video, index) => {
 
-            mensaje +=
-                `┃ ${index + 1}. `;
+            const titulo =
+                limpiarTexto(
+                    video?.title
+                ) ||
+                'Sin título';
 
-            if (resultado.username) {
-                mensaje +=
-                    `@${resultado.username}\n`;
-            } else {
-                mensaje +=
-                    'TikTok\n';
+            const usuario =
+                video?.author?.unique_id ||
+                video?.author?.nickname ||
+                'desconocido';
+
+            const videoId =
+                video?.video_id ||
+                '';
+
+            const url =
+                video?.share_url ||
+                (
+                    videoId
+                        ? `https://www.tiktok.com/@${usuario}/video/${videoId}`
+                        : obtenerUrlVideo(video)
+                );
+
+            texto +=
+                `┃ ${index + 1}. ${titulo.slice(0, 120)}\n`;
+
+            texto +=
+                `┃ 👤 @${usuario}\n`;
+
+            if (url) {
+                texto +=
+                    `┃ 🔗 ${url}\n`;
             }
 
-            if (resultado.description) {
-                mensaje +=
-                    `┃ 📝 ${resultado.description.slice(0, 100)}\n`;
-            }
-
-            mensaje +=
-                `┃ 🔗 ${resultado.url}\n` +
+            texto +=
                 '┃\n';
         }
     );
 
-    mensaje +=
+    texto +=
         '╰━━━━━━━━━━━━━━━━⬣';
 
-    return mensaje;
+    return texto;
 }
 
 // ============================================================
@@ -291,63 +178,66 @@ function crearMensaje(
 
 export default {
 
-    nombre: 'tiktoksearch',
+    // IMPORTANTE:
+    // Este es el nombre que aparecerá como .tt
+    nombre: 'tt',
 
-    categoria: 'Descargas',
+    categoria: 'descargas',
 
     alias: [
-        'ttsearch',
-        'tsearch'
+        'tiktoksearch',
+        'ttsearch'
     ],
 
     descripcion:
-        'Busca videos de TikTok por texto.',
+        'Busca videos de TikTok.',
 
     ejecutar: async ({
+        sock,
         msg,
         responder,
-        args,
-        argumento
+        argumento,
+        args
     }) => {
 
         try {
 
             // =================================================
-            // OBTENER BÚSQUEDA
+            // OBTENER CONSULTA
             // =================================================
 
-            let query = '';
+            let consulta = '';
 
             if (
                 Array.isArray(args) &&
                 args.length
             ) {
-                query =
+                consulta =
                     args
                         .join(' ')
                         .trim();
             } else {
-                query =
+                consulta =
                     String(
                         argumento || ''
                     ).trim();
             }
 
             // =================================================
-            // SIN BÚSQUEDA
+            // VALIDACIÓN
             // =================================================
 
-            if (!query) {
+            if (!consulta) {
 
                 await responder.texto(
-                    '╭━━〔 🔎 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
+                    '╭━━〔 🔎 𝐓𝐓 〕━━⬣\n' +
                     '┃\n' +
                     '┃ ❌ Escribe algo para buscar.\n' +
                     '┃\n' +
-                    '┃ 📌 Ejemplos:\n' +
-                    '┃ • *.tiktoksearch motos*\n' +
-                    '┃ • *.tiktoksearch Nicaragua*\n' +
-                    '┃ • *.tiktoksearch futbol*\n' +
+                    '┃ Ejemplos:\n' +
+                    '┃ • *.tt motos*\n' +
+                    '┃ • *.tt Nicaragua*\n' +
+                    '┃ • *.tt futbol*\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -355,15 +245,10 @@ export default {
                 return;
             }
 
-            // =================================================
-            // LÍMITE
-            // =================================================
-
-            if (query.length > 100) {
+            if (consulta.length > 100) {
 
                 await responder.texto(
-                    '❌ La búsqueda es demasiado larga.\n' +
-                    'Máximo: 100 caracteres.'
+                    '❌ La búsqueda no puede superar 100 caracteres.'
                 );
 
                 return;
@@ -375,34 +260,26 @@ export default {
 
             await responder.texto(
                 '🔎 *Buscando en TikTok...*\n\n' +
-                `🔍 ${query}\n\n` +
+                `🔍 ${consulta}\n` +
                 '⏳ Espera un momento...'
             );
 
             // =================================================
-            // SCRAPEAR
+            // BUSCAR
             // =================================================
 
-            const resultados =
+            const videos =
                 await buscarTikTok(
-                    query
+                    consulta
                 );
 
-            console.log(
-                `[TIKTOK SEARCH] Encontrados: ${resultados.length}`
-            );
-
-            // =================================================
-            // SIN RESULTADOS
-            // =================================================
-
-            if (!resultados.length) {
+            if (!videos.length) {
 
                 await responder.texto(
-                    '╭━━〔 🔎 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
+                    '╭━━〔 🔎 𝐓𝐓 〕━━⬣\n' +
                     '┃\n' +
-                    `┃ No encontré resultados para:\n` +
-                    `┃ "${query}"\n` +
+                    `┃ ❌ No encontré resultados para:\n` +
+                    `┃ "${consulta}"\n` +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -411,27 +288,41 @@ export default {
             }
 
             // =================================================
-            // ENVIAR RESULTADOS
+            // TOMAR RESULTADOS
+            // =================================================
+
+            const resultados =
+                videos.slice(
+                    0,
+                    MAX_RESULTS
+                );
+
+            // =================================================
+            // ENVIAR
             // =================================================
 
             await responder.texto(
                 crearMensaje(
-                    query,
+                    consulta,
                     resultados
                 )
+            );
+
+            console.log(
+                `[TT] ✅ ${resultados.length} resultados enviados`
             );
 
         } catch (error) {
 
             console.error(
-                '[TIKTOK SEARCH] ❌',
+                '[TT] ❌ Error:',
                 error?.stack ||
                 error?.message ||
                 error
             );
 
             await responder.texto(
-                '╭━━〔 ❌ 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
+                '╭━━〔 ❌ 𝐓𝐓 〕━━⬣\n' +
                 '┃\n' +
                 '┃ No se pudo realizar la búsqueda.\n' +
                 '┃\n' +
