@@ -16,7 +16,7 @@ function decidirGanador(jugador, bot) {
 
 export default {
     nombre: 'ppt',
-    categoria: 'Diversion',
+    categoria: 'Diversión',
     alias: ['piedrapapeltijera'],
     descripcion: 'Piedra, papel o tijera contra el bot. ¡Ganas o pierdes 100 monedas!',
     ejecutar: async ({ msg, responder, argumento }) => {
