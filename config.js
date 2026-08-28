@@ -35,6 +35,6 @@ export default {
     YOSOYYO_API_KEY: 'yosoyyo_sk_gincmnk3',
 
     // Reservada (aún sin usar en ningún comando)
-    LEMPI_API_KEY: 'lem916'
+    LEMPI_API_KEY: 'lem_777e1c256edcd0ce3c4c31d34fc61cdba7bd465e'
 
 };
