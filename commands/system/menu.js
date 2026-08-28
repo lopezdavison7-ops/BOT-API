@@ -43,7 +43,6 @@ let handler = async (m, { conn, args, command }) => {
     global.idcanal = '120363399729727124@newsletter'
 
     const videos = [
-      "https://files.catbox.moe/vgmwfj.mp4",
       "https://files.catbox.moe/vgmwfj.mp4"
     ]
     const randomVideo = videos[Math.floor(Math.random() * videos.length)]
@@ -53,8 +52,8 @@ let handler = async (m, { conn, args, command }) => {
     // 📚 CATEGORÍAS
     let categories = {}
     Object.values(global.plugins)
-     .filter(p => p?.help)
-     .forEach(plugin => {
+    .filter(p => p?.help)
+    .forEach(plugin => {
         let tags = plugin.tags || ['Otros']
         for (let tag of tags) {
           if (!categories[tag]) categories[tag] = []
@@ -74,8 +73,8 @@ let handler = async (m, { conn, args, command }) => {
     // ❄️ Categoría seleccionada
     if (args[0] && categories[args[0]]) {
       let comandos = categories[args[0]]
-       .map(cmd => ` ✦ *.${cmd}*`)
-       .join('\n')
+      .map(cmd => ` ✦ *.${cmd}*`)
+      .join('\n')
 
       let text = `${randomBorder()}\n *BOT-API 2.0* 🚀\n${randomBorder()}
 
@@ -129,7 +128,7 @@ ${border}`
     // 📂 Lista de categorías
     const rows = Object.keys(categories).map((cat, i) => ({
       title: `📦 ${cat}`,
-      description: `${categories[cat].length} comandos - Responde con ${i+1}`,
+      description: `${categories[cat].length} comandos`,
       id: `.menu ${cat}`
     }))
 
@@ -142,7 +141,7 @@ ${border}`
     }
 
     const interactiveMessage = {
-      body: { text: `${headerText}\n\n *Elige una categoría para continuar:*\nO responde con el número` },
+      body: { text: `${headerText}\n\n *Elige una categoría:*\nO responde con el número` },
       footer: { text: "⚡ BOT-API 2.0" },
       header: {
         title: " MENÚ PRINCIPAL",
@@ -165,14 +164,14 @@ ${border}`
 
     const msgSend = generateWAMessageFromContent(
       m.chat,
-      { viewOnceMessage: { message: { interactiveMessage } },
+      { viewOnceMessage: { message: { interactiveMessage } }, // <-- AQUI ESTABA EL ERROR
       { userJid: conn.user.jid, quoted: fkontak }
     )
 
     await conn.relayMessage(m.chat, msgSend.message, { messageId: msgSend.key.id })
   } catch (e) {
     console.error(e)
-    m.reply("💥 Error en el menú.")
+    m.reply(`💥 Error en el menú: ${e.message}`)
   }
 }
 
