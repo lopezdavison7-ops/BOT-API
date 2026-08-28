@@ -1,34 +1,54 @@
 // ============================================================
-// MENU - BOT-API 2.0 CON MENCIONES CORREGIDAS
+// MENU - BOT-API 2.0 CON BOTONES INTERACTIVOS + MENCIONES
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
+import moment from 'moment-timezone';
+import {
+    prepareWAMessageMedia,
+    generateWAMessageFromContent
+} from 'baileys';
 import { obtenerStore } from '../../lib/jsonStore.js';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
+const ZONA_HORARIA = 'America/Managua';
+
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
+const VIDEO_MENU_URL = '';
+
 const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
+
+const ORDEN_CATEGORIAS = [
+    'Descargas', 'Diversión', 'Economía', 'Multimedia',
+    'Interacción', 'Grupos', 'Moderación', 'Utilidades',
+    'IA', 'Sistema', 'Owner'
+];
+
+const ICONOS = {
+    Owner: '👑', Economía: '💸', 'Diversión': '🎉', Sistema: '⚙️', Otros: '📦',
+    Descargas: '📥', Utilidades: '🛠️', IA: '🧠', Multimedia: '🎨',
+    Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
+};
 
 // ============================================================
 // OBTENER AUTOR CON MENCIONES CORRECTAS
 // ============================================================
 
 function obtenerAutor(msg) {
-    // En grupos: msg.key.participant es quien envió el mensaje
-    // En privado: msg.key.remoteJid es el usuario
     const key = msg?.key || {};
+    // En grupos: participant es quien envió el mensaje
     const candidatos = [
         key.participant,        // Grupo: el que escribió (PRIORIDAD #1)
         key.remoteJid,          // Privado: el chat
         key.senderPn,           // Número de teléfono
-        key.participantAlt      // Alternativo
+        key.participantAlt,     // Alternativo
+        key.remoteJidAlt
     ];
 
     for (const c of candidatos) {
         if (!c || typeof c !== 'string') continue;
-        // Extraer solo el número
         const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
         if (n && n.length >= 7) {
             return {
@@ -37,7 +57,6 @@ function obtenerAutor(msg) {
             };
         }
     }
-
     return null;
 }
 
@@ -51,37 +70,18 @@ function obtenerCanal() {
 }
 
 function formatUptime(s) {
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
+    const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const s2 = Math.floor(s % 60);
-    return `${d}d ${h}h ${m}m ${s2}s`;
-}
-
-function obtenerFecha() {
-    return new Intl.DateTimeFormat('es-NI', {
-        day: '2-digit', month: '2-digit', year: 'numeric'
-    }).format(new Date());
-}
-
-function obtenerHora() {
-    return new Intl.DateTimeFormat('es-NI', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-    }).format(new Date());
+    return `${h}h ${m}m ${s2}s`;
 }
 
 function normalizarCategoria(c) {
-    return String(c || 'Otros').trim().toLowerCase().replace(/^\w/, ch => ch.toUpperCase());
+    return String(c || 'Otros').trim().replace(/^\w/, ch => ch.toUpperCase());
 }
 
 function obtenerIcono(c) {
-    const i = {
-        Owner: '👑', Economia: '💰', Diversion: '🎮', Sistema: '⚙️',
-        Otros: '📦', Descargas: '📥', Utilidades: '🛠️', Multimedia: '🎨',
-        Grupos: '👥', Interaccion: '🎭', Moderacion: '🛡️', IA: '🧠',
-        Stickers: '🎭', Diversión: '🎉'
-    };
-    return i[c] || '📦';
+    return ICONOS[c] || '📦';
 }
 
 function organizarComandos(lista) {
@@ -95,6 +95,18 @@ function organizarComandos(lista) {
     return cats;
 }
 
+function ordenarCategorias(categorias) {
+    const claves = Object.keys(categorias);
+    return claves.sort((a, b) => {
+        const ia = ORDEN_CATEGORIAS.indexOf(a);
+        const ib = ORDEN_CATEGORIAS.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+    });
+}
+
 // ============================================================
 // COMANDO MENU
 // ============================================================
@@ -104,24 +116,18 @@ export default {
     categoria: 'Sistema',
     alias: ['ayuda', 'help'],
 
-    async ejecutar({ sock, msg, listaComandos, prefijo }) {
+    async ejecutar({ sock, msg, args, listaComandos, prefijo }) {
         try {
-            const autor = obtenerAutor(msg);
             const jid = msg?.key?.remoteJid;
-
-            // Texto de mención: DEBE contener @numero literal para que WhatsApp lo reconozca
-            const mencionTexto = autor ? `@${autor.num}` : '@usuario';
-            // Array de JIDs completos para el campo mentions
-            const menciones = autor ? [autor.jid] : [];
-
+            const autor = obtenerAutor(msg);
             const categorias = organizarComandos(listaComandos);
             const canal = obtenerCanal();
+            const categoriaPedida = args?.[0];
 
-            const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-            const args = textoMsg.split(' ').slice(1);
-            const categoriaPedida = args[0];
+            // Texto de mención y array de JIDs
+            const mencionTexto = autor ? `@${autor.num}` : '@usuario';
+            const menciones = autor ? [autor.jid] : [];
 
-            // Si pidió una categoría específica
             if (categoriaPedida) {
                 const catNormal = normalizarCategoria(categoriaPedida);
                 if (categorias[catNormal]) {
@@ -132,64 +138,102 @@ export default {
                 }
             }
 
-            // ========== MENÚ PRINCIPAL ==========
+            const botName = global.botname || 'BOT-API 2.0';
+            const totalCmds = listaComandos.length;
+            const totalCats = Object.keys(categorias).length;
 
-            let numero = 1;
-            let listaCategorias = '';
-            const mapaNumeros = {};
+            // ========== TEXTO DEL MENÚ PRINCIPAL CON MENCIÓN ==========
+            const headerText = `┏━━━ ⋆⋅☆⋅⋆ ━━━┓
+   🌸 *${botName}* 🌸
+┗━━━ ⋆⋅☆⋅⋆ ━━━┛
 
-            for (const cat of Object.keys(categorias)) {
-                listaCategorias += `┃ ${numero}. ${obtenerIcono(cat)} *${cat}*\n`;
-                mapaNumeros[numero] = cat;
-                numero++;
-            }
+👋 ¡Hola ${mencionTexto}! ✨
+
+╭─❍ *INFORMACIÓN*
+│ 👨‍💻 Creador ➤ ${CREADOR}
+│ 📦 Versión ➤ ${VERSION}
+│ 📚 Comandos ➤ ${totalCmds}
+│ 🗂️ Categorías ➤ ${totalCats}
+│ 🔧 Prefijo ➤ ${prefijo}
+│ ⏱️ Uptime ➤ ${formatUptime(process.uptime())}
+│ 📅 ${moment.tz(ZONA_HORARIA).format('DD/MM/YYYY')} 🕐 ${moment.tz(ZONA_HORARIA).format('HH:mm:ss')}
+╰──────────────`;
+
+            const rows = ordenarCategorias(categorias).map(cat => ({
+                title: `${obtenerIcono(cat)} ${cat}`,
+                description: `${categorias[cat].length} comando(s) · toca para abrir`,
+                id: `${prefijo}menu ${cat}`
+            }));
 
             if (canal) {
-                listaCategorias += `┃ ${numero}. 📢 *VER CANAL*\n`;
+                rows.push({
+                    title: '📢 Canal Oficial',
+                    description: 'Únete a nuestro canal de WhatsApp',
+                    id: `${prefijo}canal`
+                });
             }
 
-            const texto =
-                `╭━━〔 🚀 𝐁𝐎𝐓-𝐀𝐏𝐈 2.0 〕━━⬣\n` +
-                `┃\n` +
-                `┃ 👋 𝐇𝐎𝐋𝐀 ${mencionTexto}\n` +
-                `┃ 📅 ${obtenerFecha()} | 🕐 ${obtenerHora()}\n` +
-                `╰━━━━⬣\n\n` +
-                `╭━━〔 ⚡ 𝐈𝐍𝐅𝐎 〕━━⬣\n` +
-                `┃ 👨‍💻 ${CREADOR} | 📦 ${VERSION}\n` +
-                `┃ 📚 ${listaComandos.length} cmds | 🔧 ${prefijo}\n` +
-                `┃ ⏱️ ${formatUptime(process.uptime())}\n` +
-                `╰━━━━⬣\n\n` +
-                `╭━━〔 📋 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐀𝐒 〕━━⬣\n` +
-                `${listaCategorias}` +
-                `┃\n` +
-                `┃ Responde con el número. Ej: *${prefijo}menu 1*\n` +
-                `╰━━━━⬣`;
-
-            // Enviar con mentions explícito
-            if (fs.existsSync(FOTO_MENU)) {
-                await sock.sendMessage(
-                    jid,
-                    {
-                        image: { url: FOTO_MENU },
-                        caption: texto,
-                        mentions: menciones
-                    },
-                    { quoted: msg }
-                );
-            } else {
-                await sock.sendMessage(
-                    jid,
-                    {
-                        text: texto,
-                        mentions: menciones
-                    },
-                    { quoted: msg }
-                );
+            // ========== HEADER CON IMAGEN/VIDEO ==========
+            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
+            try {
+                if (VIDEO_MENU_URL) {
+                    const media = await prepareWAMessageMedia(
+                        { video: { url: VIDEO_MENU_URL }, gifPlayback: false },
+                        { upload: sock.waUploadToServer }
+                    );
+                    header = {
+                        title: '🌸 MENÚ PRINCIPAL 🌸',
+                        hasMediaAttachment: true,
+                        videoMessage: media.videoMessage
+                    };
+                } else if (fs.existsSync(FOTO_MENU)) {
+                    const media = await prepareWAMessageMedia(
+                        { image: { url: FOTO_MENU } },
+                        { upload: sock.waUploadToServer }
+                    );
+                    header = {
+                        title: '🌸 MENÚ PRINCIPAL 🌸',
+                        hasMediaAttachment: true,
+                        imageMessage: media.imageMessage
+                    };
+                }
+            } catch (e) {
+                console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // Guardar mapa en memoria temporal para respuestas numéricas
-            global.menuMap = global.menuMap || {};
-            global.menuMap[jid] = mapaNumeros;
+            // ========== MENSAJE INTERACTIVO ==========
+            const interactiveMessage = {
+                body: {
+                    text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨`
+                },
+                footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
+                header,
+                nativeFlowMessage: {
+                    buttons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: '📂 Ver categorías',
+                            sections: [{
+                                title: '✦ Categorías disponibles ✦',
+                                rows
+                            }]
+                        })
+                    }],
+                    messageParamsJson: ''
+                }
+            };
+
+            const msgSend = generateWAMessageFromContent(
+                jid,
+                { viewOnceMessage: { message: { interactiveMessage } } },
+                {
+                    userJid: sock.user.id,
+                    quoted: msg,
+                    mentions: menciones  // <-- MENCIÓN AQUÍ
+                }
+            );
+
+            await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
@@ -203,33 +247,49 @@ export default {
 };
 
 // ============================================================
-// ENVIAR MENÚ DE CATEGORÍA
+// ENVIAR MENÚ DE CATEGORÍA CON BOTÓN VOLVER
 // ============================================================
 
 async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo, mencionTexto, menciones) {
     const icono = obtenerIcono(categoria);
 
-    let texto =
-        `╭━━〔 ${icono} 𝐌𝐄𝐍Ú ${categoria.toUpperCase()} 〕━━⬣\n` +
-        `┃\n` +
-        `┃ 👋 Hola ${mencionTexto}\n` +
-        `┃\n`;
+    let texto = `┏━━━ ⋆⋅☆⋅⋆ ━━━┓
+   ${icono} *${categoria.toUpperCase()}* ${icono}
+┗━━━ ⋆⋅☆⋅⋆ ━━━┛
+
+👋 Hola ${mencionTexto}\n\n`;
 
     for (const cmd of comandos) {
-        texto += `┃ ✦ *${prefijo}${cmd.nombre}*\n┃ ↳ ${cmd.descripcion || 'Sin descripción'}\n`;
+        texto += `✦ *${prefijo}${cmd.nombre}*\n ↳ ${cmd.descripcion || 'Sin descripción'}\n\n`;
     }
 
-    texto +=
-        `┃\n` +
-        `╰━━━━⬣\n\n` +
-        `Para volver: *${prefijo}menu*`;
+    texto += `───────────────`;
 
-    await sock.sendMessage(
+    const interactiveMessage = {
+        body: { text: texto },
+        footer: { text: '⬅️ Toca para volver al menú principal' },
+        header: { title: `${icono} ${categoria}`, hasMediaAttachment: false },
+        nativeFlowMessage: {
+            buttons: [{
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                    display_text: '⬅️ Volver al menú',
+                    id: `${prefijo}menu`
+                })
+            }],
+            messageParamsJson: ''
+        }
+    };
+
+    const msgSend = generateWAMessageFromContent(
         jid,
+        { viewOnceMessage: { message: { interactiveMessage } } },
         {
-            text: texto,
-            mentions: menciones
-        },
-        { quoted: msg }
+            userJid: sock.user.id,
+            quoted: msg,
+            mentions: menciones  // <-- MENCIÓN AQUÍ
+        }
     );
+
+    await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
 }
