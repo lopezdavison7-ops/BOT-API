@@ -1,5 +1,5 @@
 // ============================================================
-// MENU - BOT-API 2.0 CON BOTONES INTERACTIVOS (estilo Senku)
+// MENU - BOT-API 2.0 CON BOTONES INTERACTIVOS
 // ============================================================
 
 import fs from 'fs';
@@ -23,22 +23,28 @@ const VIDEO_MENU_URL = ''; // ej: 'https://files.catbox.moe/xxxxx.mp4'
 const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
 
 // ============================================================
-// ICONOS POR CATEGORÍA
+// ORDEN + ICONOS POR CATEGORÍA
+// (una carpeta = una categoría, ya normalizado en cada comando)
 // ============================================================
+const ORDEN_CATEGORIAS = [
+    'Descargas', 'Diversión', 'Economía', 'Multimedia',
+    'Interacción', 'Grupos', 'Moderación', 'Utilidades',
+    'IA', 'Sistema', 'Owner'
+];
+
 const ICONOS = {
     Owner: '👑',
-    Economia: '💰',
-    Diversion: '🎮',
-    'Diversión': '🎮',
+    Economía: '💸',
+    'Diversión': '🎉',
     Sistema: '⚙️',
     Otros: '📦',
     Descargas: '📥',
     Utilidades: '🛠️',
-    Ai: '🤖',
-    Sticker: '🖼️',
-    Group: '👥',
-    Interaction: '🎭',
-    Gacha: '🎰'
+    IA: '🧠',
+    Multimedia: '🎨',
+    Grupos: '👥',
+    Interacción: '🎭',
+    Moderación: '🛡️'
 };
 
 // ============================================================
@@ -90,6 +96,18 @@ function organizarComandos(lista) {
     return cats;
 }
 
+function ordenarCategorias(categorias) {
+    const claves = Object.keys(categorias);
+    return claves.sort((a, b) => {
+        const ia = ORDEN_CATEGORIAS.indexOf(a);
+        const ib = ORDEN_CATEGORIAS.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+    });
+}
+
 // ============================================================
 // COMANDO
 // ============================================================
@@ -102,7 +120,6 @@ export default {
         try {
             const jid = msg?.key?.remoteJid;
             const autor = obtenerAutor(msg);
-            const menciones = autor ? [autor.jid] : [];
             const categorias = organizarComandos(listaComandos);
             const canal = obtenerCanal();
 
@@ -113,7 +130,7 @@ export default {
             if (categoriaPedida) {
                 const catNormal = normalizarCategoria(categoriaPedida);
                 if (categorias[catNormal]) {
-                    return await enviarMenuCategoria(sock, jid, msg, catNormal, categorias[catNormal], prefijo, menciones);
+                    return await enviarMenuCategoria(sock, jid, msg, catNormal, categorias[catNormal], prefijo);
                 }
             }
 
@@ -121,32 +138,37 @@ export default {
             // CABECERA
             // ----------------------------------------------------
             const botName = global.botname || 'BOT-API 2.0';
+            const totalCmds = listaComandos.length;
+            const totalCats = Object.keys(categorias).length;
 
-            const headerText = `╭━━〔 🚀 *${botName}* 〕━━⬣
-┃
-┃ 👋 Hola${autor ? ` @${autor.num}` : ''}
-┃ 👨‍💻 Creador: ${CREADOR}
-┃ 📦 Versión: ${VERSION}
-┃ 📚 Comandos: ${listaComandos.length}
-┃ 🔧 Prefijo: ${prefijo}
-┃ ⏱️ Uptime: ${formatUptime(process.uptime())}
-┃ 📅 ${moment.tz(ZONA_HORARIA).format('DD/MM/YYYY')} | 🕐 ${moment.tz(ZONA_HORARIA).format('HH:mm:ss')}
-╰━━━━⬣`;
+            const headerText = `┏━━━ ⋆⋅☆⋅⋆ ━━━┓
+   🌸 *${botName}* 🌸
+┗━━━ ⋆⋅☆⋅⋆ ━━━┛
+
+👋 ¡Hola${autor ? `, @${autor.num}` : ''}!  ✨
+
+╭─❍  *INFORMACIÓN*
+│ 👨‍💻 Creador  ➤ ${CREADOR}
+│ 📦 Versión   ➤ ${VERSION}
+│ 📚 Comandos  ➤ ${totalCmds}
+│ 🗂️ Categorías ➤ ${totalCats}
+│ 🔧 Prefijo   ➤ ${prefijo}
+│ ⏱️ Uptime    ➤ ${formatUptime(process.uptime())}
+│ 📅 ${moment.tz(ZONA_HORARIA).format('DD/MM/YYYY')}  🕐 ${moment.tz(ZONA_HORARIA).format('HH:mm:ss')}
+╰──────────────`;
 
             // ----------------------------------------------------
             // FILAS DEL LISTADO (una por categoría)
             // ----------------------------------------------------
-            const rows = Object.keys(categorias)
-                .sort()
-                .map(cat => ({
-                    title: `${obtenerIcono(cat)} ${cat}`,
-                    description: `${categorias[cat].length} comando(s) disponibles`,
-                    id: `${prefijo}menu ${cat}`
-                }));
+            const rows = ordenarCategorias(categorias).map(cat => ({
+                title: `${obtenerIcono(cat)}  ${cat}`,
+                description: `${categorias[cat].length} comando(s) · toca para abrir`,
+                id: `${prefijo}menu ${cat}`
+            }));
 
             if (canal) {
                 rows.push({
-                    title: '📢 Canal Oficial',
+                    title: '📢  Canal Oficial',
                     description: 'Únete a nuestro canal de WhatsApp',
                     id: `${prefijo}canal`
                 });
@@ -155,7 +177,7 @@ export default {
             // ----------------------------------------------------
             // MEDIA DE CABECERA (video si hay, si no imagen, si no nada)
             // ----------------------------------------------------
-            let header = { title: '📋 MENÚ PRINCIPAL', hasMediaAttachment: false };
+            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
 
             try {
                 if (VIDEO_MENU_URL) {
@@ -163,25 +185,25 @@ export default {
                         { video: { url: VIDEO_MENU_URL }, gifPlayback: false },
                         { upload: sock.waUploadToServer }
                     );
-                    header = { title: '📋 MENÚ PRINCIPAL', hasMediaAttachment: true, videoMessage: media.videoMessage };
+                    header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: true, videoMessage: media.videoMessage };
                 } else if (fs.existsSync(FOTO_MENU)) {
                     const media = await prepareWAMessageMedia(
                         { image: { url: FOTO_MENU } },
                         { upload: sock.waUploadToServer }
                     );
-                    header = { title: '📋 MENÚ PRINCIPAL', hasMediaAttachment: true, imageMessage: media.imageMessage };
+                    header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: true, imageMessage: media.imageMessage };
                 }
             } catch (e) {
                 console.error('[MENU] No se pudo preparar el media de cabecera:', e?.message || e);
-                header = { title: '📋 MENÚ PRINCIPAL', hasMediaAttachment: false };
+                header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
             }
 
             // ----------------------------------------------------
             // MENSAJE INTERACTIVO CON BOTONES (single_select)
             // ----------------------------------------------------
             const interactiveMessage = {
-                body: { text: `${headerText}\n\n✨ *Elige una categoría para ver sus comandos:*` },
-                footer: { text: canal ? '📢 Toca una opción para continuar' : '⚙️ Toca una opción para continuar' },
+                body: { text: `${headerText}\n\n✨ *Elige una categoría para ver sus comandos* ✨` },
+                footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
                 header,
                 nativeFlowMessage: {
                     buttons: [
@@ -189,7 +211,7 @@ export default {
                             name: 'single_select',
                             buttonParamsJson: JSON.stringify({
                                 title: '📂 Ver categorías',
-                                sections: [{ title: 'Categorías disponibles', rows }]
+                                sections: [{ title: '✦ Categorías disponibles ✦', rows }]
                             })
                         }
                     ],
@@ -217,14 +239,18 @@ export default {
 // ============================================================
 // MENÚ DE UNA CATEGORÍA (con botón para volver)
 // ============================================================
-async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo, menciones) {
+async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo) {
     const icono = obtenerIcono(categoria);
 
-    let texto = `╭━━〔 ${icono} 𝐌𝐄𝐍Ú ${categoria.toUpperCase()} 〕━━⬣\n┃\n`;
+    let texto = `┏━━━ ⋆⋅☆⋅⋆ ━━━┓
+   ${icono} *${categoria.toUpperCase()}* ${icono}
+┗━━━ ⋆⋅☆⋅⋆ ━━━┛\n\n`;
+
     for (const cmd of comandos) {
-        texto += `┃ ✦ *${prefijo}${cmd.nombre}*\n┃ ↳ ${cmd.descripcion || 'Sin descripción'}\n┃\n`;
+        texto += `✦ *${prefijo}${cmd.nombre}*\n   ↳ ${cmd.descripcion || 'Sin descripción'}\n\n`;
     }
-    texto += `╰━━━━⬣`;
+
+    texto += `───────────────`;
 
     const interactiveMessage = {
         body: { text: texto },
