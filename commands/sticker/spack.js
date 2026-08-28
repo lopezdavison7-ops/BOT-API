@@ -4,9 +4,9 @@ import sharp from 'sharp';
 import config from '../../config.js';
 
 export default {
-    nombre: 'brat',
+    nombre: '',
     categoria: 'Multimedia',
-    alias: ['bratwhite'],
+    alias: ['bratwh'],
     descripcion: 'Genera un sticker BRAT en blanco con créditos',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
