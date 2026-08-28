@@ -131,7 +131,7 @@ export default {
             `╭〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊𝐒𝐄𝐀𝐑𝐂𝐇 〕⬣\n` +
             `┃\n` +
             `┃ Buscando: *${consulta}*\n` +
-            `┃ 🔎 En Lempi API...\n` +
+            `┃ 🔎 En Tiktok...\n` +
             `┃\n` +
             `╰━━━━━━━━━━━━━━━━⬣`
         );
