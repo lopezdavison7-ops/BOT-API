@@ -3,22 +3,43 @@
 // BOT-API
 // COMANDO: BRAT
 // ============================================================
-// Genera stickers BRAT con color personalizado.
+// Genera stickers BRAT usando la API de YO SOY YO.
 //
-// Ejemplos:
+// USO:
+//
 // .brat hola
 // .brat hola red
 // .brat hola blue
 // .brat hola mundo pink
 // .brat hola #ff0000
 //
-// El último argumento se utiliza como color.
-// Si no se especifica color, usa blanco.
+// El último argumento puede ser un color.
+// Si no se especifica color, se utiliza blanco.
+//
+// IMPORTANTE:
+// La API /api/brat devuelve JSON con data.url.
+// Primero obtenemos ese JSON y después descargamos
+// la imagen real desde data.url.
 // ============================================================
 
 import fetch from 'node-fetch';
 import sharp from 'sharp';
 import config from '../../config.js';
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+
+const API_BASE =
+    'https://apiyosoyyo-ofc.onrender.com';
+
+const API_ENDPOINT =
+    `${API_BASE}/api/brat`;
+
+const MAX_TEXT_LENGTH = 50;
+
+const MAX_STICKER_SIZE =
+    500 * 1024;
 
 // ============================================================
 // COLORES
@@ -67,9 +88,10 @@ const COLORES = {
 // ============================================================
 
 function obtenerColor(valor) {
-    const color = String(valor || '')
-        .trim()
-        .toLowerCase();
+    const color =
+        String(valor || '')
+            .trim()
+            .toLowerCase();
 
     // HEX completo
     if (/^#[0-9a-f]{6}$/i.test(color)) {
@@ -115,62 +137,89 @@ function ayuda() {
 }
 
 // ============================================================
-// GENERAR BRAT DESDE LA API
+// OBTENER API KEY
 // ============================================================
 
-async function descargarBrat(texto, color, apiKey) {
-    const parametros = new URLSearchParams();
+function obtenerApiKey() {
+    return (
+        config?.YO_SOY_YO_API_KEY ||
+        config?.YOSOYYO_API_KEY ||
+        config?.YT_API_KEY ||
+        process.env.YO_SOY_YO_API_KEY ||
+        process.env.YOSOYYO_API_KEY ||
+        process.env.YT_API_KEY ||
+        ''
+    );
+}
 
-    parametros.set('text', texto);
-    parametros.set('color', color);
+// ============================================================
+// GENERAR URL DE LA API
+// ============================================================
+
+function construirUrlApi(
+    texto,
+    color,
+    apiKey
+) {
+    const params =
+        new URLSearchParams();
+
+    params.set(
+        'text',
+        texto
+    );
+
+    params.set(
+        'color',
+        color
+    );
 
     if (apiKey) {
-        parametros.set('apiKey', apiKey);
+        params.set(
+            'apiKey',
+            apiKey
+        );
     }
 
-    const apiUrl =
-        `https://apiyosoyyo-ofc.onrender.com/api/brat?${parametros.toString()}`;
+    return `${API_ENDPOINT}?${params.toString()}`;
+}
 
-    console.log(
-        `[BRAT] Texto: "${texto}"`
-    );
+// ============================================================
+// DESCARGAR IMAGEN
+// ============================================================
 
-    console.log(
-        `[BRAT] Color: "${color}"`
-    );
-
-    const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-            Accept: 'image/png,image/*'
-        }
-    });
+async function descargarImagen(url) {
+    const response =
+        await fetch(url, {
+            method: 'GET',
+            headers: {
+                Accept:
+                    'image/png,image/jpeg,image/webp,image/*'
+            }
+        });
 
     if (!response.ok) {
-        let detalle = '';
-
-        try {
-            detalle = await response.text();
-        } catch {}
-
         throw new Error(
-            `API respondió con ${response.status}` +
-            (
-                detalle
-                    ? `: ${detalle.slice(0, 150)}`
-                    : ''
-            )
+            `No se pudo descargar la imagen (${response.status}).`
         );
     }
 
     const contentType =
-        response.headers.get('content-type') || '';
+        response.headers.get(
+            'content-type'
+        ) || '';
 
-    if (!contentType.includes('image')) {
-        const respuesta = await response.text();
+    if (
+        !contentType.includes('image')
+    ) {
+        const texto =
+            await response.text();
 
         throw new Error(
-            `La API no devolvió una imagen: ${respuesta.slice(0, 150)}`
+            `La URL no devolvió una imagen: ${texto.slice(
+                0,
+                150
+            )}`
         );
     }
 
@@ -182,7 +231,7 @@ async function descargarBrat(texto, color, apiKey) {
 
     if (!buffer.length) {
         throw new Error(
-            'La API devolvió una imagen vacía.'
+            'La imagen recibida está vacía.'
         );
     }
 
@@ -190,13 +239,170 @@ async function descargarBrat(texto, color, apiKey) {
 }
 
 // ============================================================
-// CONVERTIR A STICKER WEBP
+// LLAMAR A LA API
 // ============================================================
 
-async function convertirASticker(buffer) {
-    const MAX_SIZE = 500 * 1024;
+async function generarBrat(
+    texto,
+    color,
+    apiKey
+) {
+    const apiUrl =
+        construirUrlApi(
+            texto,
+            color,
+            apiKey
+        );
 
-    // Intentamos conservar la mejor calidad posible.
+    console.log(
+        `[BRAT] API → ${apiUrl}`
+    );
+
+    const response =
+        await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                Accept:
+                    'application/json,image/*'
+            }
+        });
+
+    if (!response.ok) {
+        let detalle = '';
+
+        try {
+            detalle =
+                await response.text();
+        } catch {}
+
+        throw new Error(
+            `La API respondió ${response.status}` +
+            (
+                detalle
+                    ? `: ${detalle.slice(0, 200)}`
+                    : ''
+            )
+        );
+    }
+
+    const contentType =
+        response.headers.get(
+            'content-type'
+        ) || '';
+
+    // ========================================================
+    // CASO 1:
+    // La API devuelve directamente una imagen.
+    // ========================================================
+
+    if (
+        contentType.includes('image')
+    ) {
+        const arrayBuffer =
+            await response.arrayBuffer();
+
+        const buffer =
+            Buffer.from(arrayBuffer);
+
+        if (!buffer.length) {
+            throw new Error(
+                'La API devolvió una imagen vacía.'
+            );
+        }
+
+        return buffer;
+    }
+
+    // ========================================================
+    // CASO 2:
+    // La API devuelve JSON.
+    //
+    // Ejemplo real:
+    //
+    // {
+    //   "status": 200,
+    //   "creador": "YO SOY YO",
+    //   "tool": "brat_generator",
+    //   "data": {
+    //      "url": "/api/brat?text=...&color=white&apiKey=...",
+    //      "text": "brat ",
+    //      "color": "white"
+    //   }
+    // }
+    // ========================================================
+
+    let json;
+
+    try {
+        json =
+            await response.json();
+    } catch {
+        throw new Error(
+            'La API no devolvió un JSON válido.'
+        );
+    }
+
+    console.log(
+        '[BRAT] Respuesta JSON:',
+        JSON.stringify(json)
+    );
+
+    if (
+        json?.status &&
+        Number(json.status) !== 200
+    ) {
+        throw new Error(
+            json?.message ||
+            json?.error ||
+            `API status ${json.status}`
+        );
+    }
+
+    const imagenUrl =
+        json?.data?.url ||
+        json?.url;
+
+    if (!imagenUrl) {
+        throw new Error(
+            'La API respondió correctamente pero no proporcionó data.url.'
+        );
+    }
+
+    // ========================================================
+    // Convertir URL relativa en absoluta.
+    //
+    // La API devuelve:
+    //
+    // /api/brat?text=...&color=...
+    //
+    // Por eso agregamos el dominio.
+    // ========================================================
+
+    const urlFinal =
+        imagenUrl.startsWith('http://') ||
+        imagenUrl.startsWith('https://')
+            ? imagenUrl
+            : new URL(
+                imagenUrl,
+                API_BASE
+            ).toString();
+
+    console.log(
+        `[BRAT] Imagen → ${urlFinal}`
+    );
+
+    return await descargarImagen(
+        urlFinal
+    );
+}
+
+// ============================================================
+// CONVERTIR A WEBP
+// ============================================================
+
+async function convertirASticker(
+    buffer
+) {
     const calidades = [
         100,
         95,
@@ -209,61 +415,94 @@ async function convertirASticker(buffer) {
 
     let resultado = null;
 
-    for (const quality of calidades) {
-        resultado = await sharp(buffer)
-            .rotate()
-            .resize(512, 512, {
-                fit: 'contain',
-                background: {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    alpha: 0
-                },
-                withoutEnlargement: false
-            })
-            .webp({
-                quality,
-                effort: 6,
-                smartSubsample: true
-            })
-            .toBuffer();
+    for (
+        const quality of calidades
+    ) {
+        resultado =
+            await sharp(buffer)
+                .rotate()
+
+                // 512x512 estándar para sticker.
+                // contain evita deformar o recortar
+                // innecesariamente la imagen.
+                .resize(
+                    512,
+                    512,
+                    {
+                        fit: 'contain',
+
+                        background: {
+                            r: 0,
+                            g: 0,
+                            b: 0,
+                            alpha: 0
+                        },
+
+                        withoutEnlargement:
+                            false
+                    }
+                )
+
+                .webp({
+                    quality,
+                    effort: 6,
+                    smartSubsample: true
+                })
+
+                .toBuffer();
 
         console.log(
-            `[BRAT] Calidad ${quality}: ${Math.round(
+            `[BRAT] WebP calidad ${quality}: ${Math.round(
                 resultado.length / 1024
             )} KB`
         );
 
-        if (resultado.length <= MAX_SIZE) {
+        if (
+            resultado.length <=
+            MAX_STICKER_SIZE
+        ) {
             return resultado;
         }
     }
 
-    // Último intento.
-    resultado = await sharp(buffer)
-        .rotate()
-        .resize(512, 512, {
-            fit: 'contain',
-            background: {
-                r: 0,
-                g: 0,
-                b: 0,
-                alpha: 0
-            },
-            withoutEnlargement: false
-        })
-        .webp({
-            quality: 60,
-            effort: 6
-        })
-        .toBuffer();
+    // ========================================================
+    // ÚLTIMO INTENTO
+    // ========================================================
 
-    if (resultado.length > MAX_SIZE) {
+    resultado =
+        await sharp(buffer)
+            .rotate()
+            .resize(
+                512,
+                512,
+                {
+                    fit: 'contain',
+
+                    background: {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        alpha: 0
+                    },
+
+                    withoutEnlargement:
+                        false
+                }
+            )
+            .webp({
+                quality: 60,
+                effort: 6
+            })
+            .toBuffer();
+
+    if (
+        resultado.length >
+        MAX_STICKER_SIZE
+    ) {
         throw new Error(
-            `El sticker es demasiado pesado: ${Math.round(
+            `El sticker pesa demasiado: ${Math.round(
                 resultado.length / 1024
-            )} KB`
+            )} KB.`
         );
     }
 
@@ -279,10 +518,10 @@ export default {
 
     categoria: 'Multimedia',
 
-    alias: ['bratwhite'],
+    alias: [],
 
     descripcion:
-        'Genera un sticker BRAT con color personalizado.',
+        'Genera stickers BRAT con color personalizado.',
 
     ejecutar: async ({
         msg,
@@ -294,24 +533,36 @@ export default {
 
         try {
             // =================================================
-            // IMPORTANTE:
-            // El handler ya separa los argumentos.
+            // USAR args DEL HANDLER
             //
             // .brat hola red
             //
-            // args =
+            // args:
             // ['hola', 'red']
             //
-            // Por eso NO usamos solamente "argumento"
-            // para detectar el color.
+            // Esto permite separar correctamente el color.
             // =================================================
 
-            const listaArgs = Array.isArray(args)
-                ? args
-                : String(argumento || '')
-                    .trim()
-                    .split(/\s+/)
-                    .filter(Boolean);
+            let listaArgs;
+
+            if (
+                Array.isArray(args) &&
+                args.length
+            ) {
+                listaArgs = [...args];
+            } else {
+                listaArgs =
+                    String(
+                        argumento || ''
+                    )
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean);
+            }
+
+            // =================================================
+            // SIN TEXTO
+            // =================================================
 
             if (!listaArgs.length) {
                 await responder.texto(
@@ -323,12 +574,19 @@ export default {
 
             // =================================================
             // DETECTAR COLOR
+            //
+            // El último argumento es color únicamente
+            // cuando coincide con un color válido.
             // =================================================
 
             let color = 'white';
 
             const ultimoArgumento =
-                listaArgs[listaArgs.length - 1];
+                String(
+                    listaArgs[
+                        listaArgs.length - 1
+                    ] || ''
+                ).trim();
 
             const colorDetectado =
                 obtenerColor(
@@ -336,20 +594,25 @@ export default {
                 );
 
             if (colorDetectado) {
-                color = colorDetectado;
+                color =
+                    colorDetectado;
 
-                // Quitamos el color de los argumentos.
+                // Quitar color del texto.
                 listaArgs.pop();
             }
 
             // =================================================
-            // TEXTO
+            // TEXTO FINAL
             // =================================================
 
             const texto =
                 listaArgs
                     .join(' ')
                     .trim();
+
+            // =================================================
+            // VALIDAR TEXTO
+            // =================================================
 
             if (!texto) {
                 await responder.texto(
@@ -359,67 +622,29 @@ export default {
                 return;
             }
 
-            // =================================================
-            // LÍMITE DE TEXTO
-            // =================================================
-
-            if (texto.length > 50) {
+            if (
+                texto.length >
+                MAX_TEXT_LENGTH
+            ) {
                 await responder.texto(
                     '❌ *BRAT*\n\n' +
-                    'El texto debe tener máximo 50 caracteres.'
+                    `El texto puede tener máximo ${MAX_TEXT_LENGTH} caracteres.`
                 );
 
                 return;
             }
 
             // =================================================
-            // SI PARECE QUE QUISIERON PONER UN COLOR
-            // PERO ES INVÁLIDO
+            // HEX INVÁLIDO
             // =================================================
 
-            const ultimo =
-                String(
-                    ultimoArgumento || ''
-                ).toLowerCase();
-
-            const posiblesColores =
-                [
-                    'white',
-                    'blanco',
-                    'black',
-                    'negro',
-                    'red',
-                    'rojo',
-                    'blue',
-                    'azul',
-                    'green',
-                    'verde',
-                    'yellow',
-                    'amarillo',
-                    'pink',
-                    'rosa',
-                    'rosado',
-                    'purple',
-                    'morado',
-                    'violeta',
-                    'orange',
-                    'naranja',
-                    'cyan',
-                    'celeste',
-                    'gray',
-                    'grey',
-                    'gris'
-                ];
-
-            // Si el último argumento empieza con # pero
-            // no es un HEX válido, avisamos.
             if (
-                ultimo.startsWith('#') &&
+                ultimoArgumento.startsWith('#') &&
                 !colorDetectado
             ) {
                 await responder.texto(
                     '❌ *Color HEX no válido.*\n\n' +
-                    'Ejemplo correcto:\n' +
+                    'Ejemplo:\n' +
                     '*.brat hola #ff0000*'
                 );
 
@@ -431,17 +656,36 @@ export default {
             // =================================================
 
             const apiKey =
-                config?.YO_SOY_YO_API_KEY ||
-                config?.YT_API_KEY ||
-                process.env.YO_SOY_YO_API_KEY ||
-                process.env.YT_API_KEY;
+                obtenerApiKey();
+
+            if (!apiKey) {
+                console.warn(
+                    '[BRAT] ⚠️ No se encontró API Key.'
+                );
+            }
 
             // =================================================
-            // GENERAR IMAGEN
+            // LOG
             // =================================================
 
-            const pngBuffer =
-                await descargarBrat(
+            console.log(
+                '================================================'
+            );
+
+            console.log(
+                `[BRAT] Texto: "${texto}"`
+            );
+
+            console.log(
+                `[BRAT] Color: "${color}"`
+            );
+
+            // =================================================
+            // GENERAR
+            // =================================================
+
+            const imagenBuffer =
+                await generarBrat(
                     texto,
                     color,
                     apiKey
@@ -449,22 +693,22 @@ export default {
 
             console.log(
                 `[BRAT] Imagen recibida: ${Math.round(
-                    pngBuffer.length / 1024
+                    imagenBuffer.length / 1024
                 )} KB`
             );
 
             // =================================================
-            // CONVERTIR A WEBP
+            // CONVERTIR
             // =================================================
 
-            const webpBuffer =
+            const sticker =
                 await convertirASticker(
-                    pngBuffer
+                    imagenBuffer
                 );
 
             console.log(
                 `[BRAT] Sticker final: ${Math.round(
-                    webpBuffer.length / 1024
+                    sticker.length / 1024
                 )} KB`
             );
 
@@ -475,7 +719,7 @@ export default {
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    sticker: webpBuffer
+                    sticker
                 },
                 {
                     quoted: msg
@@ -483,7 +727,15 @@ export default {
             );
 
             console.log(
-                `[BRAT] ✅ Enviado | Texto: "${texto}" | Color: ${color}`
+                `[BRAT] ✅ Enviado correctamente`
+            );
+
+            console.log(
+                `[BRAT] Texto: "${texto}" | Color: "${color}"`
+            );
+
+            console.log(
+                '================================================'
             );
 
         } catch (error) {
