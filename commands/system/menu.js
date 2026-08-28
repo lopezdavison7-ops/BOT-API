@@ -1,79 +1,105 @@
-import moment from "moment-timezone"
+// ============================================================
+// MENU - BOT-API 2.0 SIN BOTONES - 100% ESTABLE
+// ============================================================
 
-const borders = ["🌌🔭🧪🔬👨‍💻👩‍💻", "🌌⚛️🧪⚗️🔬🔭", "⚛️⚗️🧪🔬🌌⚛️", "👨‍💻🔭⚛️🔬⚗️👩‍💻", "🧪⚗️🔬👨‍💻👩‍💻⚛️🔭"]
-const randomBorder = () => borders[Math.floor(Math.random() * borders.length)]
+import fs from 'fs';
+import path from 'path';
+import { obtenerStore } from '../../lib/jsonStore.js';
 
-let handler = async (m, { conn, usedPrefix }) => {
-    let uptime = process.uptime()
-    let h = Math.floor(uptime / 3600)
-    let mnt = Math.floor((uptime % 3600) / 60)
-    let s = Math.floor(uptime % 60)
+const VERSION = '2.0.0';
+const CREADOR = 'Luis González';
+const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
+const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
 
-    let totalcmd = Object.values(global.plugins).filter(p => p.help && p.tags).length
-
-    const border = randomBorder()
-
-    let txt = `${border}
-*💻 BOT-API ⚡*
-${border}
-
-👑 *Creador:* Luis González
-🤖 *Bot:* BOT-API ⚡
-⚡ *Uptime:* ${h}h ${mnt}m ${s}s
-🕒 *Hora:* ${moment.tz('America/Bogota').format('HH:mm:ss')}
-📅 *Fecha:* ${moment.tz('America/Bogota').format('DD/MM/YYYY')}
-📚 *Total Comandos:* ${totalcmd}
-🔧 *Prefijo:* ${usedPrefix}
-
-📢 *Canal:* BOT-API ⚡
-🔗 https://whatsapp.com/channel/
-${border}
-
-*🗂️ LISTA DE CATEGORIAS*
-${border}
-`.trim()
-
-    let categories = {}
-    const blockedTags = ['nsfw', 'anime', 'convert', 'rpg'] // <-- BLOQUEADAS
-    Object.values(global.plugins).filter(p => p.help && p.tags).forEach(plugin => {
-        for (let tag of plugin.tags) {
-            if (!blockedTags.includes(tag.toLowerCase())) { 
-                if (!categories[tag]) categories[tag] = []
-            }
-        }
-    })
-
-    // Emojis por categoría chidos
-    const catEmojis = {
-        'main': '🏠',
-        'system': '⚙️',
-        'downloader': '📥',
-        'sticker': '🎭',
-        'tools': '🛠️',
-        'fun': '🎮',
-        'owner': '👑',
-        'game': '🎲',
-        'info': 'ℹ️',
-        'search': '🔍',
-        'group': '👥',
-        'ai': '🧠',
-        'economy': '💰',
-        'store': '🛍️',
-        'Otros': '📦'
-    }
-
-    for (let cat of Object.keys(categories).sort()) {
-        let emoji = catEmojis[cat.toLowerCase()] || '📦'
-        txt += `${emoji} *${cat}*\n`
-    }
-
-    txt += `\n${border}\n💡 *Usa:* ${usedPrefix}menu <categoria>\n📌 *Ejemplo:* ${usedPrefix}menu downloader\n${border}`
-
-    await conn.sendMessage(m.chat, { text: txt }, { quoted: m })
+function obtenerAutor(msg) {
+    const key = msg?.key || {};
+    const candidatos = [key.senderPn, key.participantAlt, key.remoteJidAlt, key.participant, key.remoteJid];
+    for (const c of candidatos) { if (!c) continue; const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, ''); if (n) return { jid: c, num: n }; }
+    return null;
 }
+function crearMencion(jid) { if (!jid) return '@usuario'; const n = String(jid).split('@')[0].split(':')[0].replace(/\D/g, ''); return `@${n}`; }
+function obtenerCanal() { try { const d = obtenerStore(CANAL_FILE, { url: '' }); return typeof d.url === 'string'? d.url.trim() : ''; } catch { return ''; } }
+function formatUptime(s) { const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600); const m = Math.floor((s % 3600) / 60); const s2 = Math.floor(s % 60); return `${d}d ${h}h ${m}m ${s2}s`; }
+function obtenerFecha() { return new Intl.DateTimeFormat('es-NI', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date()); }
+function obtenerHora() { return new Intl.DateTimeFormat('es-NI', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date()); }
+function normalizarCategoria(c) { return String(c || 'Otros').trim().toLowerCase().replace(/^\w/, c => c.toUpperCase()); }
+function obtenerIcono(c) { const i = { Owner: '👑', Economia: '💰', Diversion: '🎮', Sistema: '⚙️', Otros: '📦', Descargas: '📥', Utilidades: '🛠️' }; return i[c] || '📦'; }
+function organizarComandos(lista) { const cats = {}; for (const cmd of lista || []) { if (!cmd ||!cmd.nombre) continue; const cat = normalizarCategoria(cmd.categoria); if (!cats[cat]) cats[cat] = []; cats[cat].push(cmd); } return cats; }
 
-handler.help = ['menu']
-handler.tags = ['main']
-handler.command = /^(menu|menú|\?)$/i
+export default {
+    nombre: 'menu',
+    categoria: 'Sistema',
+    alias: ['ayuda', 'help'],
+    async ejecutar({ sock, msg, listaComandos, prefijo }) {
+        try {
+            const autor = obtenerAutor(msg);
+            const jid = msg?.key?.remoteJid;
+            const mencionTexto = autor? `@${autor.num}` : '@usuario';
+            const menciones = autor? [autor.jid] : [];
+            const categorias = organizarComandos(listaComandos);
+            const canal = obtenerCanal();
 
-export default handler
+            const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+            const args = textoMsg.split(' ').slice(1);
+            const categoriaPedida = args[0];
+
+            if (categoriaPedida) {
+                const catNormal = normalizarCategoria(categoriaPedida);
+                if (categorias[catNormal]) {
+                    return await enviarMenuCategoria(sock, jid, msg, catNormal, categorias[catNormal], prefijo, menciones);
+                }
+            }
+
+            let numero = 1;
+            let listaCategorias = '';
+            const mapaNumeros = {};
+
+            for (const cat of Object.keys(categorias)) {
+                listaCategorias += `┃ ${numero}. ${obtenerIcono(cat)} *${cat}*\n`;
+                mapaNumeros[numero] = cat;
+                numero++;
+            }
+
+            if (canal) listaCategorias += `┃ ${numero}. 📢 *VER CANAL*\n`;
+
+            const texto = `╭━━〔 🚀 𝐁𝐎𝐓-𝐀𝐏𝐈 2.0 〕━━⬣
+┃
+┃ 👋 𝐇𝐎𝐋𝐀 ${mencionTexto}
+┃ 📅 ${obtenerFecha()} | 🕐 ${obtenerHora()}
+╰━━━━⬣
+
+╭━━〔 ⚡ 𝐈𝐍𝐅𝐎 〕━━⬣
+┃ 👨‍💻 ${CREADOR} | 📦 ${VERSION}
+┃ 📚 ${listaComandos.length} cmds | 🔧 ${prefijo}
+┃ ⏱️ ${formatUptime(process.uptime())}
+╰━━━━⬣
+
+╭━━〔 📋 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐀𝐒 〕━━⬣
+${listaCategorias}┃
+┃ Responde con el número. Ej: *${prefijo}menu 1*
+╰━━━━⬣`;
+
+            if (fs.existsSync(FOTO_MENU)) {
+                await sock.sendMessage(jid, { image: { url: FOTO_MENU }, caption: texto, mentions: menciones }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, { text: texto, mentions: menciones }, { quoted: msg });
+            }
+
+            // Guardar mapa en memoria temporal
+            global.menuMap = global.menuMap || {};
+            global.menuMap[jid] = mapaNumeros;
+
+        } catch (error) {
+            console.error('[MENU] Error:', error);
+        }
+    }
+};
+
+async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo, menciones) {
+    const icono = obtenerIcono(categoria);
+    let texto = `╭━━〔 ${icono} 𝐌𝐄𝐍Ú ${categoria.toUpperCase()} 〕━━⬣\n┃\n`;
+    for (const cmd of comandos) { texto += `┃ ✦ *${prefijo}${cmd.nombre}*\n┃ ↳ ${cmd.descripcion || 'Sin descripción'}\n`; }
+    texto += `┃\n╰━━━━⬣\n\nPara volver: *${prefijo}menu*`;
+
+    await sock.sendMessage(jid, { text: texto, mentions: menciones }, { quoted: msg });
+}
