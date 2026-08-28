@@ -2,34 +2,6 @@
 import ytdl from '@distube/ytdl-core';
 import { Readable } from 'stream';
 
-// ============================================================
-// DESCARGAR VIDEO CON YTDL-CORE
-// ============================================================
-
-async function descargarVideo(url) {
-    const info = await ytdl.getInfo(url);
-    const stream = ytdl(url, {
-        quality: 'highestvideo',
-        filter: 'videoandaudio'
-    });
-
-    // Convertir stream a buffer
-    const chunks = [];
-    for await (const chunk of stream) {
-        chunks.push(chunk);
-    }
-
-    return {
-        buffer: Buffer.concat(chunks),
-        titulo: info.videoDetails.title,
-        duracion: info.videoDetails.lengthSeconds
-    };
-}
-
-// ============================================================
-// COMANDO PLAY2
-// ============================================================
-
 export default {
     nombre: 'play2',
     categoria: 'Descargas',
@@ -53,16 +25,27 @@ export default {
             // Mensaje de espera
             await responder.texto('⏳ *DESCARGANDO...*\n\n⏬ Obteniendo video de YouTube...');
 
-            // Descargar el video
-            const video = await descargarVideo(url);
+            // Descargar el video directamente con ytdl-core
+            const info = await ytdl.getInfo(url);
+            const stream = ytdl(url, {
+                quality: 'highestvideo',
+                filter: 'videoandaudio'
+            });
+
+            // Convertir stream a buffer
+            const chunks = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+            const buffer = Buffer.concat(chunks);
 
             // Enviar el video MP4
             const caption = `
 ╭〔 🎬 𝐏𝐋𝐀𝐘𝟐 〕⬣
 ┃
-┃ 🎬 Título: ${video.titulo}
+┃ 🎬 Título: ${info.videoDetails.title}
 ┃
-┃ ⏱️ Duración: ${video.duracion} segundos
+┃ ⏱️ Duración: ${info.videoDetails.lengthSeconds} segundos
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
@@ -72,7 +55,7 @@ export default {
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    video: video.buffer,
+                    video: buffer,
                     mimetype: 'video/mp4',
                     caption
                 },
