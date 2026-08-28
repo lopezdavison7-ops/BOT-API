@@ -1,7 +1,15 @@
 // commands/downloads/spotify.js
 // ============================================================
-// COMANDO: SPOTIFY — Parte 1 (Config + Utilidades + Pipelines)
+// COMANDO: SPOTIFY
 // BOT-API
+//
+// Descarga música de Spotify/YouTube en formato MP3.
+// Usa Cobalt API (api.cobalt.tools) como downloader principal.
+//
+// Uso:
+//   .spotify <url de spotify>
+//   .spotify <nombre de canción>
+//   .spotify <url de playlist>
 // ============================================================
 
 import axios from 'axios';
@@ -10,27 +18,21 @@ import axios from 'axios';
 // CONFIGURACIÓN
 // ============================================================
 
+const COBALT_API = 'https://api.cobalt.tools';
 const SPOTIFYDOWN_API = 'https://api.spotifydown.com';
-const Y2MATE_ANALYZE = 'https://corsproxy.io/?https://www.y2mate.com/mates/analyzeV2/ajax';
-const Y2MATE_CONVERT = 'https://corsproxy.io/?https://www.y2mate.com/mates/convertV2/index';
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-const HEADERS = {
+const COBALT_HEADERS = {
+    'User-Agent': USER_AGENT,
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+};
+
+const SPOTIFYDOWN_HEADERS = {
     'User-Agent': USER_AGENT,
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Origin': 'https://spotifydown.com',
-    'Referer': 'https://spotifydown.com/',
-    'sec-ch-ua': '"Not_A Brand";v="99", "Google Chrome";v="120", "Chromium";v="120"',
-    'sec-fetch-mode': 'cors'
-};
-
-const Y2MATE_HEADERS = {
-    'User-Agent': USER_AGENT,
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Content-Type': 'application/x-www-form-urlencoded',
     'Origin': 'https://spotifydown.com',
     'Referer': 'https://spotifydown.com/',
     'sec-ch-ua': '"Not_A Brand";v="99", "Google Chrome";v="120", "Chromium";v="120"',
@@ -149,13 +151,84 @@ async function buscarEnYouTube(query) {
 }
 
 // ============================================================
+// COBALT API — DOWNLOADER PRINCIPAL
+// ============================================================
+
+async function descargarConCobalt(youtubeUrl, modo = 'audio') {
+    try {
+        const body = {
+            url: youtubeUrl,
+            downloadMode: modo,
+            audioFormat: 'mp3',
+            audioBitrate: '128',
+            filenameStyle: 'pretty',
+            disableMetadata: false
+        };
+
+        const res = await axios.post(`${COBALT_API}/`, body, {
+            headers: COBALT_HEADERS,
+            timeout: 30000
+        });
+
+        const data = res.data;
+
+        if (data.status === 'error') {
+            return { exito: false, error: data.text || 'Error de Cobalt' };
+        }
+
+        if (data.url) {
+            const buffer = await descargarBuffer(data.url);
+            if (buffer) {
+                return {
+                    exito: true,
+                    buffer,
+                    titulo: data.filename || 'audio'
+                };
+            }
+        }
+
+        if (data.status === 'tunnel') {
+            const tunnelUrl = `${COBALT_API}${data.url}`;
+            const buffer = await descargarBuffer(tunnelUrl);
+            if (buffer) {
+                return {
+                    exito: true,
+                    buffer,
+                    titulo: data.filename || 'audio'
+                };
+            }
+        }
+
+        return { exito: false, error: 'Respuesta inesperada de Cobalt.' };
+    } catch (e) {
+        console.error('[COBALT] Error:', e.message);
+        return { exito: false, error: `Cobalt: ${e.message}` };
+    }
+}
+
+async function descargarBuffer(url) {
+    try {
+        const res = await axios.get(url, {
+            responseType: 'arraybuffer',
+            headers: { 'User-Agent': USER_AGENT },
+            timeout: 60000,
+            maxContentLength: 50 * 1024 * 1024
+        });
+        return Buffer.from(res.data);
+    } catch (e) {
+        console.error('[DOWNLOAD BUFFER] Error:', e.message);
+        return null;
+    }
+}
+
+// ============================================================
 // SPOTIFYDOWN PIPELINE
 // ============================================================
 
 async function obtenerYoutubeId(trackId) {
     try {
         const res = await axios.get(`${SPOTIFYDOWN_API}/getId/${trackId}`, {
-            headers: HEADERS,
+            headers: SPOTIFYDOWN_HEADERS,
             timeout: 15000
         });
         return res.data?.id || null;
@@ -169,66 +242,13 @@ async function obtenerTracklist(tipo, id) {
     try {
         const url = `${SPOTIFYDOWN_API}/trackList/${tipo}/${id}`;
         const res = await axios.get(url, {
-            headers: HEADERS,
+            headers: SPOTIFYDOWN_HEADERS,
             timeout: 15000
         });
         return res.data?.trackList || [];
     } catch (e) {
         console.error('[SPOTIFYDOWN trackList] Error:', e.message);
         return [];
-    }
-}
-
-// ============================================================
-// Y2MATE PIPELINE
-// ============================================================
-
-async function analizarY2Mate(youtubeId) {
-    try {
-        const res = await axios.post(Y2MATE_ANALYZE, {
-            k_query: `https://www.youtube.com/watch?v=${youtubeId}`,
-            k_page: 'home',
-            hl: 'en',
-            q_auto: 0
-        }, {
-            headers: Y2MATE_HEADERS,
-            timeout: 15000
-        });
-        return res.data;
-    } catch (e) {
-        console.error('[Y2MATE analyze] Error:', e.message);
-        return null;
-    }
-}
-
-async function convertirY2Mate(vid, k) {
-    try {
-        const res = await axios.post(Y2MATE_CONVERT, {
-            vid,
-            k
-        }, {
-            headers: Y2MATE_HEADERS,
-            timeout: 20000
-        });
-        return res.data?.dlink || null;
-    } catch (e) {
-        console.error('[Y2MATE convert] Error:', e.message);
-        return null;
-    }
-}
-
-async function descargarAudio(url) {
-    try {
-        const res = await axios.get(url, {
-            responseType: 'arraybuffer',
-            headers: { 'User-Agent': USER_AGENT },
-            timeout: 60000,
-            maxContentLength: 50 * 1024 * 1024
-        });
-        return Buffer.from(res.data);
-    } catch (e) {
-        console.error('[DOWNLOAD] Error:', e.message);
-        return null;
     }
 }
 
@@ -242,27 +262,16 @@ async function descargarDesdeSpotify(trackId, metadatos = null) {
         return { exito: false, error: 'No se pudo resolver el track en YouTube.' };
     }
 
-    const analisis = await analizarY2Mate(youtubeId);
-    if (!analisis || !analisis.links?.mp3?.mp3128?.k) {
-        return { exito: false, error: 'No se pudo analizar el audio en Y2Mate.' };
+    const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+    const resultado = await descargarConCobalt(youtubeUrl, 'audio');
+    if (resultado.exito) {
+        resultado.titulo = metadatos
+            ? `${metadatos.artista} - ${metadatos.titulo}`
+            : resultado.titulo;
+        resultado.info = metadatos;
     }
 
-    const downloadUrl = await convertirY2Mate(analisis.vid, analisis.links.mp3.mp3128.k);
-    if (!downloadUrl) {
-        return { exito: false, error: 'No se pudo generar el link de descarga.' };
-    }
-
-    const buffer = await descargarAudio(downloadUrl);
-    if (!buffer) {
-        return { exito: false, error: 'No se pudo descargar el archivo.' };
-    }
-
-    return {
-        exito: true,
-        buffer,
-        titulo: metadatos ? `${metadatos.artista} - ${metadatos.titulo}` : 'Audio',
-        info: metadatos
-    };
+    return resultado;
 }
 
 // ============================================================
@@ -270,30 +279,16 @@ async function descargarDesdeSpotify(trackId, metadatos = null) {
 // ============================================================
 
 async function descargarDesdeYouTube(videoId, titulo = 'Audio') {
-    const analisis = await analizarY2Mate(videoId);
-    if (!analisis || !analisis.links?.mp3?.mp3128?.k) {
-        return { exito: false, error: 'No se pudo analizar el audio en Y2Mate.' };
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const resultado = await descargarConCobalt(youtubeUrl, 'audio');
+    if (resultado.exito) {
+        resultado.titulo = titulo;
     }
-
-    const downloadUrl = await convertirY2Mate(analisis.vid, analisis.links.mp3.mp3128.k);
-    if (!downloadUrl) {
-        return { exito: false, error: 'No se pudo generar el link de descarga.' };
-    }
-
-    const buffer = await descargarAudio(downloadUrl);
-    if (!buffer) {
-        return { exito: false, error: 'No se pudo descargar el archivo.' };
-    }
-
-    return {
-        exito: true,
-        buffer,
-        titulo: titulo
-    };
+    return resultado;
 }
+
 // ============================================================
-// COMANDO: SPOTIFY — Parte 2 (Export + Lógica del comando)
-// Pegá esto DEBAJO de la Parte 1 en el mismo archivo.
+// COMANDO
 // ============================================================
 
 export default {
@@ -373,7 +368,7 @@ export default {
                     `╭〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
                     `┃\n` +
                     `┃ 🎤 *${tituloDisplay}*\n` +
-                    `┃ ⏳ Resolviendo en SpotifyDown...\n` +
+                    `┃ ⏳ Descargando audio...\n` +
                     `┃\n` +
                     `╰━━━━━━━━━━━━━━━━⬣`
                 );
