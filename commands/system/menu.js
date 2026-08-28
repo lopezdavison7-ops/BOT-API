@@ -33,35 +33,22 @@ const ICONOS = {
 };
 
 // ============================================================
-// OBTENER AUTOR CON MENCIONES CORRECTAS
+// OBTENER AUTOR CON MENCIONES CORRECTAS (maneja LID)
 // ============================================================
 
 function obtenerAutor(msg) {
     const key = msg?.key || {};
-    // En grupos: participant es quien envió el mensaje
-    const candidatos = [
-        key.participant,        // Grupo: el que escribió (PRIORIDAD #1)
-        key.remoteJid,          // Privado: el chat
-        key.senderPn,           // Número de teléfono
-        key.participantAlt,     // Alternativo
-        key.remoteJidAlt
-    ];
+    const sender = key.participant || key.remoteJid;
+    if (!sender || typeof sender !== 'string') return null;
 
-    for (const c of candidatos) {
-        if (!c || typeof c !== 'string') continue;
-        const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
-        if (n && n.length >= 7) {
-            let jid = c.includes('@') ? c : `${c}@s.whatsapp.net`;
-            if (jid.endsWith('@lid')) {
-                jid = jid.replace('@lid', '@s.whatsapp.net');
-            }
-            return {
-                jid,
-                num: n
-            };
-        }
+    const num = String(sender).split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (!num || num.length < 7) return null;
+
+    let jid = sender.includes('@') ? sender : `${sender}@s.whatsapp.net`;
+    if (jid.endsWith('@lid')) {
+        jid = jid.replace('@lid', '@s.whatsapp.net');
     }
-    return null;
+    return { jid, num };
 }
 
 function obtenerCanal() {
