@@ -23,6 +23,11 @@ seleccionar-gacha.sh.bak
 .env
 .env.*
 !.env.example
+config.js
+
+# Base de datos (datos de usuarios)
+database/*.json
+!database/*.example.json
 
 # Sesión de WhatsApp
 auth_info/

@@ -51,8 +51,12 @@ function obtenerAutor(msg) {
         if (!c || typeof c !== 'string') continue;
         const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
         if (n && n.length >= 7) {
+            let jid = c.includes('@') ? c : `${c}@s.whatsapp.net`;
+            if (jid.endsWith('@lid')) {
+                jid = jid.replace('@lid', '@s.whatsapp.net');
+            }
             return {
-                jid: c.includes('@') ? c : `${c}@s.whatsapp.net`,
+                jid,
                 num: n
             };
         }
