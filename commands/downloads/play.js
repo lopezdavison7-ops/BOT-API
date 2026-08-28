@@ -1,597 +1,242 @@
 // commands/downloads/play.js
 // ============================================================
-// BOT-API
 // COMANDO: PLAY
-// ============================================================
-// YouTube → búsqueda → thumbnail → MP3
+// BOT-API
 //
-// Optimizado para:
-// - Menos peticiones
-// - Descarga mediante stream
-// - Audios largos
-// - Thumbnail de la API
-// - Menos mensajes intermedios
-// - Mayor tolerancia a errores de subida
+// Busca y descarga música de YouTube en MP3/M4A.
+// Usa Lempi API para búsqueda y descarga.
 // ============================================================
 
-// Se carga aquí directamente (y no solo en index.js) para que
-// este comando SIEMPRE tenga su API key sin importar cómo se
-// arranque el proceso (node index.js, panel de hosting, pm2,
-// etc.) ni el orden en que se importen los demás comandos.
 import 'dotenv/config';
 import config from '../../config.js';
 import { Readable } from 'stream';
 
-const API_BASE =
-    'https://apiyosoyyo-ofc.onrender.com';
-
-const API_KEY =
-    config.YT_API_KEY ||
-    process.env.YT_API_KEY;
-
-const API_SEARCH =
-    `${API_BASE}/api/ytsearch`;
-
-const API_YOUTUBE =
-    `${API_BASE}/api/youtube/v2`;
+const LEMPI_API = 'https://api.lempi.lat';
+const API_KEY = config.LEMPI_API_KEY || '';
 
 const TIMEOUT_BUSQUEDA = 30000;
 const TIMEOUT_API = 45000;
-
 const MEDIA_TIMEOUT = 300000;
 
-// ============================================================
-// FETCH CON TIMEOUT
-// ============================================================
-
-async function fetchConTimeout(
-    url,
-    opciones = {},
-    timeout = 30000
-) {
-    const controller =
-        new AbortController();
-
-    const temporizador =
-        setTimeout(
-            () => controller.abort(),
-            timeout
-        );
+async function fetchConTimeout(url, opciones = {}, timeout = 30000) {
+    const controller = new AbortController();
+    const temporizador = setTimeout(() => controller.abort(), timeout);
 
     try {
-        return await fetch(
-            url,
-            {
-                ...opciones,
-                signal:
-                    controller.signal
-            }
-        );
+        return await fetch(url, { ...opciones, signal: controller.signal });
     } finally {
-        clearTimeout(
-            temporizador
-        );
+        clearTimeout(temporizador);
     }
 }
-
-// ============================================================
-// LIMPIAR TEXTO
-// ============================================================
 
 function limpiarTexto(texto = '') {
-    return String(texto)
-        .replace(/\s+/g, ' ')
-        .trim();
+    return String(texto).replace(/\s+/g, ' ').trim();
 }
 
-// ============================================================
-// LIMPIAR NOMBRE
-// ============================================================
-
-function limpiarNombre(
-    nombre = 'Alex Bot'
-) {
+function limpiarNombre(nombre = 'Audio') {
     return String(nombre)
-        .replace(
-            /[\\/:*?"<>|]/g,
-            ''
-        )
-        .replace(
-            /\s+/g,
-            ' '
-        )
+        .replace(/[\\/:*?"<>|]/g, '')
+        .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 80)
-        || 'Alex Bot';
+        .slice(0, 80) || 'Audio';
 }
 
-// ============================================================
-// FORMATEAR VISTAS
-// ============================================================
+function formatearVistas(vistas) {
+    const str = String(vistas || '0').replace(/[^\d.]/g, '');
+    const numero = Number(str);
 
-function formatearVistas(
-    vistas
-) {
-    const numero =
-        Number(vistas);
-
-    if (
-        !Number.isFinite(numero)
-    ) {
-        return 'No disponible';
-    }
-
-    if (
-        numero >= 1000000000
-    ) {
-        return `${(
-            numero / 1000000000
-        ).toFixed(1)}B`;
-    }
-
-    if (
-        numero >= 1000000
-    ) {
-        return `${(
-            numero / 1000000
-        ).toFixed(1)}M`;
-    }
-
-    if (
-        numero >= 1000
-    ) {
-        return `${(
-            numero / 1000
-        ).toFixed(1)}K`;
-    }
-
-    return numero.toLocaleString(
-        'es-ES'
-    );
+    if (!Number.isFinite(numero)) return 'No disponible';
+    if (numero >= 1000000000) return `${(numero / 1000000000).toFixed(1)}B`;
+    if (numero >= 1000000) return `${(numero / 1000000).toFixed(1)}M`;
+    if (numero >= 1000) return `${(numero / 1000).toFixed(1)}K`;
+    return numero.toLocaleString('es-ES');
 }
 
-// ============================================================
-// REACCIÓN
-// ============================================================
-
-async function reaccionar(
-    sock,
-    jid,
-    key,
-    emoji
-) {
+async function reaccionar(sock, jid, key, emoji) {
     try {
-        await sock.sendMessage(
-            jid,
-            {
-                react: {
-                    text: emoji,
-                    key
-                }
-            }
-        );
-    } catch {
-        // Las reacciones nunca deben romper PLAY.
-    }
+        await sock.sendMessage(jid, { react: { text: emoji, key } });
+    } catch {}
 }
 
 // ============================================================
 // CACHÉ DE BÚSQUEDAS
 // ============================================================
-// Con muchos usuarios pidiendo canciones populares al mismo
-// tiempo (o la misma persona repitiendo), no tiene sentido
-// golpear la API de búsqueda una y otra vez por lo mismo.
-// Se guarda el resultado en memoria por unos minutos.
-// ============================================================
 
-const CACHE_BUSQUEDA_TTL_MS = 10 * 60 * 1000; // 10 minutos
+const CACHE_BUSQUEDA_TTL_MS = 10 * 60 * 1000;
 const cacheBusquedas = new Map();
-
-// Búsquedas EN CURSO (todavía no terminan). Si dos usuarios
-// piden lo mismo casi al mismo tiempo, la segunda no dispara
-// otra llamada a la API: espera el resultado de la primera.
 const busquedasEnCurso = new Map();
 
 function normalizarConsulta(consulta) {
-    return String(consulta)
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
+    return String(consulta).trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function obtenerDeCache(consulta) {
     const clave = normalizarConsulta(consulta);
     const entrada = cacheBusquedas.get(clave);
-
-    if (!entrada) {
-        return null;
-    }
-
+    if (!entrada) return null;
     if (Date.now() > entrada.expira) {
         cacheBusquedas.delete(clave);
         return null;
     }
-
     return entrada.resultado;
 }
 
 function guardarEnCache(consulta, resultado) {
     const clave = normalizarConsulta(consulta);
-
-    cacheBusquedas.set(clave, {
-        resultado,
-        expira: Date.now() + CACHE_BUSQUEDA_TTL_MS
-    });
-
-    // Evitar que el caché crezca sin límite en un bot muy activo.
+    cacheBusquedas.set(clave, { resultado, expira: Date.now() + CACHE_BUSQUEDA_TTL_MS });
     if (cacheBusquedas.size > 300) {
-        const primeraClave =
-            cacheBusquedas.keys().next().value;
+        const primeraClave = cacheBusquedas.keys().next().value;
         cacheBusquedas.delete(primeraClave);
     }
 }
 
 // ============================================================
-// BUSCAR YOUTUBE
+// BUSCAR YOUTUBE (LEMPI API)
 // ============================================================
 
-async function buscarYouTube(
-    consulta
-) {
-    const enCache =
-        obtenerDeCache(consulta);
-
+async function buscarYouTube(consulta) {
+    const enCache = obtenerDeCache(consulta);
     if (enCache) {
-        console.log(
-            `[PLAY] ⚡ Búsqueda desde caché: ${consulta}`
-        );
+        console.log(`[PLAY] ⚡ Búsqueda desde caché: ${consulta}`);
         return enCache;
     }
 
-    const clave =
-        normalizarConsulta(consulta);
-
-    // Si ya hay una búsqueda idéntica en curso, se engancha a
-    // esa misma promesa en vez de disparar otra llamada a la
-    // API (evita duplicados cuando varios piden lo mismo casi
-    // al mismo tiempo).
+    const clave = normalizarConsulta(consulta);
     if (busquedasEnCurso.has(clave)) {
-
-        console.log(
-            `[PLAY] 🔗 Enganchado a búsqueda en curso: ${consulta}`
-        );
-
+        console.log(`[PLAY] 🔗 Enganchado a búsqueda en curso: ${consulta}`);
         return busquedasEnCurso.get(clave);
-
     }
 
-    const promesa =
-        buscarYouTubeEnApi(consulta)
-            .finally(() => {
-                busquedasEnCurso.delete(clave);
-            });
+    const promesa = buscarYouTubeEnApi(consulta).finally(() => {
+        busquedasEnCurso.delete(clave);
+    });
 
     busquedasEnCurso.set(clave, promesa);
-
     return promesa;
 }
 
-async function buscarYouTubeEnApi(
-    consulta
-) {
+async function buscarYouTubeEnApi(consulta) {
     if (!API_KEY) {
-        throw new Error(
-            'YT_API_KEY no está configurada en el servidor.'
-        );
+        throw new Error('LEMPI_API_KEY no está configurada.');
     }
 
-    const parametros =
-        new URLSearchParams({
-            q: consulta,
-            apiKey: API_KEY
-        });
+    const endpoint = `${LEMPI_API}/s/youtube?query=${encodeURIComponent(consulta)}&apikey=${API_KEY}`;
+    console.log(`[PLAY] 🔎 Buscando: ${consulta}`);
 
-    const endpoint =
-        `${API_SEARCH}?${parametros}`;
-
-    console.log(
-        `[PLAY] 🔎 Buscando: ${consulta}`
-    );
-
-    const respuesta =
-        await fetchConTimeout(
-            endpoint,
-            {
-                headers: {
-                    Accept:
-                        'application/json',
-                    'User-Agent':
-                        'BOT-API/2.0'
-                }
-            },
-            TIMEOUT_BUSQUEDA
-        );
+    const respuesta = await fetchConTimeout(endpoint, {
+        headers: { Accept: 'application/json', 'User-Agent': 'BOT-API/2.0' }
+    }, TIMEOUT_BUSQUEDA);
 
     if (!respuesta.ok) {
-        throw new Error(
-            `Búsqueda HTTP ${respuesta.status}`
-        );
+        throw new Error(`Búsqueda HTTP ${respuesta.status}`);
     }
 
-    const datos =
-        await respuesta.json();
+    const datos = await respuesta.json();
 
-    if (!datos?.status) {
-        throw new Error(
-            datos?.message ||
-            'La búsqueda fue rechazada.'
-        );
+    if (!datos?.status || !datos?.datos?.ok) {
+        throw new Error(datos?.message || 'La búsqueda fue rechazada.');
     }
 
-    const resultados =
-        Array.isArray(
-            datos.result
-        )
-            ? datos.result
-            : [];
-
-    const primero =
-        resultados.find(
-            item =>
-                item?.videoUrl
-        );
-
-    if (!primero) {
-        throw new Error(
-            'No encontré resultados.'
-        );
+    const videos = datos.datos?.results?.videos;
+    if (!Array.isArray(videos) || videos.length === 0) {
+        throw new Error('No encontré resultados.');
     }
+
+    const primero = videos[0];
 
     const resultado = {
-        titulo:
-            limpiarTexto(
-                primero.title ||
-                'Audio'
-            ),
-
-        videoUrl:
-            primero.videoUrl,
-
-        thumbnail:
-            primero.thumbnailUrl ||
-            null,
-
-        canal:
-            limpiarTexto(
-                primero.channelName ||
-                'No disponible'
-            ),
-
-        duracion:
-            limpiarTexto(
-                primero.duration ||
-                'No disponible'
-            ),
-
-        vistas:
-            primero.views,
-
-        publicado:
-            limpiarTexto(
-                primero.publishedAgo ||
-                'No disponible'
-            )
+        titulo: limpiarTexto(primero.title || 'Audio'),
+        videoUrl: primero.url,
+        thumbnail: `https://img.youtube.com/vi/${primero.id}/maxresdefault.jpg`,
+        canal: limpiarTexto(primero.channel || 'No disponible'),
+        duracion: limpiarTexto(primero.duration || 'No disponible'),
+        vistas: primero.views,
+        publicado: limpiarTexto(primero.published || 'No disponible')
     };
 
     guardarEnCache(consulta, resultado);
-
     return resultado;
 }
 
 // ============================================================
-// OBTENER MP3
+// OBTENER MP3 (LEMPI API)
 // ============================================================
 
-async function obtenerMP3(
-    videoUrl
-) {
+async function obtenerMP3(videoUrl) {
     if (!API_KEY) {
-        throw new Error(
-            'YT_API_KEY no está configurada.'
-        );
+        throw new Error('LEMPI_API_KEY no está configurada.');
     }
 
-    const parametros =
-        new URLSearchParams({
-            url: videoUrl,
-            format: 'mp3',
-            apiKey: API_KEY
-        });
+    const endpoint = `${LEMPI_API}/dl/yta?url=${encodeURIComponent(videoUrl)}&apikey=${API_KEY}`;
+    console.log('[PLAY] ⚡ Solicitando audio...');
 
-    const endpoint =
-        `${API_YOUTUBE}?${parametros}`;
-
-    console.log(
-        '[PLAY] ⚡ Solicitando MP3...'
-    );
-
-    const respuesta =
-        await fetchConTimeout(
-            endpoint,
-            {
-                headers: {
-                    Accept:
-                        'application/json',
-                    'User-Agent':
-                        'BOT-API/2.0'
-                }
-            },
-            TIMEOUT_API
-        );
+    const respuesta = await fetchConTimeout(endpoint, {
+        headers: { Accept: 'application/json', 'User-Agent': 'BOT-API/2.0' }
+    }, TIMEOUT_API);
 
     if (!respuesta.ok) {
-        throw new Error(
-            `API YouTube HTTP ${respuesta.status}`
-        );
+        throw new Error(`API Download HTTP ${respuesta.status}`);
     }
 
-    const datos =
-        await respuesta.json();
+    const datos = await respuesta.json();
 
-    if (!datos?.status) {
-        throw new Error(
-            datos?.message ||
-            'La API no pudo generar el MP3.'
-        );
+    if (!datos?.status || !datos?.datos?.url) {
+        throw new Error(datos?.message || 'La API no pudo generar el audio.');
     }
 
-    const resultados =
-        datos?.result?.results;
-
-    if (
-        !Array.isArray(resultados)
-    ) {
-        throw new Error(
-            'La API no devolvió formatos.'
-        );
-    }
-
-    // --------------------------------------------------------
-    // PRIORIZAR 128KBPS
-    // --------------------------------------------------------
-
-    const audios =
-        resultados.filter(
-            item =>
-                item?.type === 'audio' &&
-                item?.download
-        );
-
-    if (!audios.length) {
-        throw new Error(
-            'La API no devolvió un MP3.'
-        );
-    }
-
-    const audio =
-        audios.find(
-            item =>
-                String(
-                    item.quality
-                ).toLowerCase()
-                === '128kbps'
-        ) ||
-        audios[0];
-
-    console.log(
-        `[PLAY] 🎧 Audio: ${
-            audio.quality ||
-            'MP3'
-        }`
-    );
+    console.log(`[PLAY] 🎧 Audio: ${datos.datos.calidad || 'MP3'}`);
 
     return {
-        download:
-            audio.download,
-
-        titulo:
-            audio.title ||
-            datos?.result?.title ||
-            'Audio',
-
-        calidad:
-            audio.quality ||
-            'MP3',
-
-        thumbnail:
-            audio.thumbnail ||
-            datos?.result?.thumbnail ||
-            null
+        download: datos.datos.url,
+        titulo: datos.titulo || 'Audio',
+        calidad: datos.datos.calidad || 'MP3',
+        tamaño: datos.datos.tamaño || 'Desconocido',
+        thumbnail: datos.miniatura || null,
+        canal: datos.canal || null
     };
 }
 
 // ============================================================
-// OBTENER STREAM DEL MP3
+// OBTENER STREAM DEL AUDIO
 // ============================================================
 
-async function obtenerStream(
-    url
-) {
-    console.log(
-        '[PLAY] 🚀 Abriendo stream del MP3...'
-    );
+async function obtenerStream(url) {
+    console.log('[PLAY] 🚀 Abriendo stream del audio...');
 
-    const respuesta =
-        await fetchConTimeout(
-            url,
-            {
-                headers: {
-                    Accept:
-                        'audio/mpeg,*/*',
-                    'User-Agent':
-                        'BOT-API/2.0'
-                }
-            },
-            MEDIA_TIMEOUT
-        );
+    const respuesta = await fetchConTimeout(url, {
+        headers: {
+            Accept: 'audio/mpeg,audio/mp4,*/*',
+            'User-Agent': 'BOT-API/2.0'
+        }
+    }, MEDIA_TIMEOUT);
 
     if (!respuesta.ok) {
-        throw new Error(
-            `Servidor MP3 HTTP ${respuesta.status}`
-        );
+        throw new Error(`Servidor audio HTTP ${respuesta.status}`);
     }
 
     if (!respuesta.body) {
-        throw new Error(
-            'El servidor MP3 no devolvió un stream.'
-        );
+        throw new Error('El servidor no devolvió un stream.');
     }
 
-    // fetch() nativo de Node devuelve un stream "Web"
-    // (ReadableStream), pero Baileys espera un stream clásico
-    // de Node.js (el que tiene .destroy(), .pipe(), etc.).
-    // Se convierte aquí para evitar "stream.destroy is not
-    // a function" al mandarlo con sock.sendMessage.
-    return Readable.fromWeb(
-        respuesta.body
-    );
+    return Readable.fromWeb(respuesta.body);
 }
 
 // ============================================================
 // DESCARGAR THUMBNAIL
 // ============================================================
 
-async function obtenerThumbnail(
-    url
-) {
-    if (!url) {
-        return null;
-    }
+async function obtenerThumbnail(url) {
+    if (!url) return null;
 
     try {
-        const respuesta =
-            await fetchConTimeout(
-                url,
-                {
-                    headers: {
-                        'User-Agent':
-                            'BOT-API/2.0'
-                    }
-                },
-                15000
-            );
+        const respuesta = await fetchConTimeout(url, {
+            headers: { 'User-Agent': 'BOT-API/2.0' }
+        }, 15000);
 
-        if (!respuesta.ok) {
-            return null;
-        }
+        if (!respuesta.ok) return null;
 
-        const arrayBuffer =
-            await respuesta.arrayBuffer();
-
-        return Buffer.from(
-            arrayBuffer
-        );
-
+        const arrayBuffer = await respuesta.arrayBuffer();
+        return Buffer.from(arrayBuffer);
     } catch {
         return null;
     }
@@ -601,9 +246,7 @@ async function obtenerThumbnail(
 // INFORMACIÓN
 // ============================================================
 
-function crearInformacion(
-    resultado
-) {
+function crearInformacion(resultado) {
     return (
         '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
         '┃\n' +
@@ -622,10 +265,6 @@ function crearInformacion(
 
 // ============================================================
 // DESCARGAS ACTIVAS POR USUARIO
-// ============================================================
-// Evita que la misma persona dispare varias descargas al
-// mismo tiempo (spam de .play). Además de ahorrar recursos en
-// un bot con muchos participantes, evita mensajes duplicados.
 // ============================================================
 
 const descargasActivas = new Map();
@@ -657,11 +296,9 @@ export default {
         argumento
     }) => {
 
-        const consulta =
-            argumento?.trim();
+        const consulta = argumento?.trim();
 
         if (!consulta) {
-
             await responder.texto(
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
@@ -672,31 +309,15 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
-
             return;
         }
 
-        const jid =
-            msg?.key?.remoteJid;
+        const jid = msg?.key?.remoteJid;
+        if (!jid) return;
 
-        if (!jid) {
-            return;
-        }
-
-        // =================================================
-        // BLOQUEO: DESCARGA PENDIENTE
-        // =================================================
-        // Identifica a quien pidió la canción (en grupos, el
-        // participante; en privado, el propio chat).
-        // =================================================
-
-        const remitente =
-            msg?.key?.participant ||
-            msg?.key?.participantAlt ||
-            jid;
+        const remitente = msg?.key?.participant || msg?.key?.participantAlt || jid;
 
         if (descargasActivas.has(remitente)) {
-
             await responder.texto(
                 '╭━━〔 ⏳ 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
@@ -708,236 +329,81 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
-
             return;
-
         }
 
-        descargasActivas.set(
-            remitente,
-            consulta
-        );
+        descargasActivas.set(remitente, consulta);
 
-        console.log(
-            '================================================'
-        );
+        console.log('================================================');
+        console.log(`[PLAY] 🎵 ${consulta}`);
 
-        console.log(
-            `[PLAY] 🎵 ${consulta}`
-        );
-
-        await reaccionar(
-            sock,
-            jid,
-            msg.key,
-            '⏳'
-        );
+        await reaccionar(sock, jid, msg.key, '⏳');
 
         try {
 
-            // =================================================
-            // 1. BÚSQUEDA
-            // =================================================
+            const resultado = await buscarYouTube(consulta);
 
-            const resultado =
-                await buscarYouTube(
-                    consulta
-                );
+            const promesaThumbnail = obtenerThumbnail(resultado.thumbnail);
+            const promesaMp3 = obtenerMP3(resultado.videoUrl);
 
-            // =================================================
-            // 2. PEDIR MP3 + THUMBNAIL EN PARALELO
-            // =================================================
-            // Ambas peticiones son independientes entre sí, así
-            // que se lanzan al mismo tiempo en vez de una
-            // detrás de la otra.
-            // =================================================
-
-            const promesaThumbnail =
-                obtenerThumbnail(
-                    resultado.thumbnail
-                );
-
-            const promesaMp3 =
-                obtenerMP3(
-                    resultado.videoUrl
-                );
-
-            // =================================================
-            // 3. ENVIAR FOTO + TÍTULO + INFO (un solo mensaje)
-            // =================================================
-            // Se manda en cuanto el thumbnail está listo, sin
-            // esperar al MP3 (que sigue trabajando en paralelo
-            // por debajo).
-            // =================================================
-
-            let thumbnail =
-                await promesaThumbnail;
+            let thumbnail = await promesaThumbnail;
 
             if (thumbnail) {
-
-                await responder.imagen(
-                    thumbnail,
-                    crearInformacion(
-                        resultado
-                    )
-                );
-
+                await responder.imagen(thumbnail, crearInformacion(resultado));
             } else {
-
-                // Sin miniatura disponible: se manda solo texto
-                // como respaldo, para no perder la información.
-                await responder.texto(
-                    crearInformacion(
-                        resultado
-                    )
-                );
-
+                await responder.texto(crearInformacion(resultado));
             }
 
-            // =================================================
-            // 4. ESPERAR EL MP3
-            // =================================================
-            // Como ya venía trabajando en paralelo desde el
-            // paso 2, para cuando la foto terminó de enviarse
-            // normalmente ya avanzó bastante o está listo.
-            // =================================================
+            const mp3 = await promesaMp3;
 
-            const mp3 =
-                await promesaMp3;
-
-            // Si no había thumbnail en la búsqueda pero el
-            // MP3 trae uno propio y distinto, se intenta ese
-            // como último recurso (no bloquea el audio si falla).
-            if (
-                !thumbnail &&
-                mp3.thumbnail &&
-                mp3.thumbnail !== resultado.thumbnail
-            ) {
-
-                thumbnail =
-                    await obtenerThumbnail(
-                        mp3.thumbnail
-                    );
-
+            if (!thumbnail && mp3.thumbnail && mp3.thumbnail !== resultado.thumbnail) {
+                thumbnail = await obtenerThumbnail(mp3.thumbnail);
             }
 
-            // =================================================
-            // 5. STREAM
-            // =================================================
+            const stream = await obtenerStream(mp3.download);
+            const titulo = limpiarNombre(mp3.titulo || resultado.titulo);
 
-            const stream =
-                await obtenerStream(
-                    mp3.download
-                );
-
-            const titulo =
-                limpiarNombre(
-                    mp3.titulo ||
-                    resultado.titulo
-                );
-
-            console.log(
-                `[PLAY] 📤 Enviando: ${titulo}`
-            );
-
-            // =================================================
-            // 6. ENVIAR AUDIO
-            // =================================================
+            console.log(`[PLAY] 📤 Enviando: ${titulo}`);
 
             const contenido = {
-
-                audio: {
-                    stream
-                },
-
-                mimetype:
-                    'audio/mpeg',
-
-                fileName:
-                    `${titulo}.mp3`,
-
+                audio: { stream },
+                mimetype: 'audio/mpeg',
+                fileName: `${titulo}.mp3`,
                 ptt: false
             };
 
-            // Thumbnail opcional
-            // No bloqueamos el audio si falla.
-
             if (thumbnail) {
-                contenido.jpegThumbnail =
-                    thumbnail;
+                contenido.jpegThumbnail = thumbnail;
             }
 
-            await sock.sendMessage(
-                jid,
-                contenido,
-                {
-                    quoted: msg,
+            await sock.sendMessage(jid, contenido, {
+                quoted: msg,
+                mediaUploadTimeoutMs: MEDIA_TIMEOUT,
+                waitForAck: false
+            });
 
-                    mediaUploadTimeoutMs:
-                        MEDIA_TIMEOUT,
-
-                    waitForAck:
-                        false
-                }
-            );
-
-            // =================================================
-            // 7. ÉXITO
-            // =================================================
-
-            await reaccionar(
-                sock,
-                jid,
-                msg.key,
-                '✅'
-            );
-
-            console.log(
-                `[PLAY] ✅ Audio enviado: ${titulo}`
-            );
-
-            console.log(
-                '================================================'
-            );
+            await reaccionar(sock, jid, msg.key, '✅');
+            console.log(`[PLAY] ✅ Audio enviado: ${titulo}`);
+            console.log('================================================');
 
         } catch (error) {
 
-            console.error(
-                '[PLAY] ❌ Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
+            console.error('[PLAY] ❌ Error:', error?.stack || error?.message || error);
 
-            await reaccionar(
-                sock,
-                jid,
-                msg.key,
-                '❌'
-            );
+            await reaccionar(sock, jid, msg.key, '❌');
 
             await responder.texto(
                 '╭━━〔 ❌ 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ No pude obtener el audio.\n' +
                 '┃\n' +
-                `┃ ⚠️ ${
-                    error?.message ||
-                    'Error desconocido.'
-                }\n` +
+                `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
 
         } finally {
-
-            // Se libera SIEMPRE, sin importar si terminó bien
-            // o con error, para no dejar al usuario bloqueado.
-            descargasActivas.delete(
-                remitente
-            );
-
+            descargasActivas.delete(remitente);
         }
     }
 };
-        
