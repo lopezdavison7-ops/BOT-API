@@ -1,21 +1,10 @@
 // commands/downloads/spotify.js
 // ============================================================
-// COMANDO: SPOTIFY
+// COMANDO: SPOTIFY — Parte 1 (Config + Utilidades + Pipelines)
 // BOT-API
-//
-// Descarga música de Spotify en formato MP3.
-// Soporta links de track, playlist y álbum.
-// Usa scraping de api.spotifydown.com + y2mate para obtener
-// los archivos de audio.
-//
-// Uso:
-//   .spotify <url de spotify>
-//   .spotify <nombre de canción>
-//   .spotify <url de playlist>
 // ============================================================
 
 import axios from 'axios';
-import config from '../../config.js';
 
 // ============================================================
 // CONFIGURACIÓN
@@ -37,22 +26,27 @@ const HEADERS = {
     'sec-fetch-mode': 'cors'
 };
 
+const Y2MATE_HEADERS = {
+    'User-Agent': USER_AGENT,
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Origin': 'https://spotifydown.com',
+    'Referer': 'https://spotifydown.com/',
+    'sec-ch-ua': '"Not_A Brand";v="99", "Google Chrome";v="120", "Chromium";v="120"',
+    'sec-fetch-mode': 'cors'
+};
+
 // ============================================================
 // UTILIDADES
 // ============================================================
 
 function extraerSpotifyId(url) {
-    // Soporta:
-    // https://open.spotify.com/track/ID
-    // https://open.spotify.com/playlist/ID
-    // https://open.spotify.com/album/ID
-    // spotify:track:ID
     const match = url.match(/(?:track|playlist|album)[/:]([a-zA-Z0-9]{22})/);
     return match ? match[1] : null;
 }
 
 function extraerTipoUrl(url) {
-    if (url.includes('track')) return 'track';
     if (url.includes('playlist')) return 'playlist';
     if (url.includes('album')) return 'album';
     return 'track';
@@ -62,90 +56,100 @@ function esUrlSpotify(texto) {
     return /open\.spotify\.com|spotify:/.test(texto);
 }
 
-function formatearDuracion(ms) {
-    const minutos = Math.floor(ms / 60000);
-    const segundos = Math.floor((ms % 60000) / 1000);
-    return `${minutos}:${segundos.toString().padStart(2, '0')}`;
-}
-
 function sanitizarNombre(nombre) {
     return String(nombre)
-        .replace(/[<>:"/\\|?*]/g, '')
+        .replace(/[<>:\"/\\|?*]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
         .substring(0, 100);
 }
 
 // ============================================================
-// SPOTIFY METADATA (API pública sin auth)
+// METADATOS SPOTIFY (oEmbed — API pública, sin auth)
 // ============================================================
 
-async function buscarEnSpotify(query) {
+async function obtenerOembed(trackId) {
     try {
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`;
-        // Usar token embedido de Spotify (público, puede expirar)
-        const tokenRes = await axios.get('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
-            headers: { 'User-Agent': USER_AGENT },
-            timeout: 10000
-        });
-        const token = tokenRes.data?.accessToken;
-        if (!token) return null;
+        const res = await axios.get(
+            `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`,
+            { headers: { 'User-Agent': USER_AGENT }, timeout: 10000 }
+        );
+        const data = res.data;
+        const partes = String(data.title || '').split(' - ');
+        return {
+            titulo: partes[0] || 'Desconocido',
+            artista: partes[1] || 'Desconocido',
+            imagen: data.thumbnail_url || null,
+            exito: true
+        };
+    } catch (e) {
+        console.error('[SPOTIFY oEmbed] Error:', e.message);
+        return { exito: false };
+    }
+}
 
+// ============================================================
+// BÚSQUEDA EN YOUTUBE (para búsqueda por nombre)
+// ============================================================
+
+async function buscarEnYouTube(query) {
+    try {
+        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ==`;
         const res = await axios.get(url, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            timeout: 10000
-        });
-
-        const track = res.data?.tracks?.items?.[0];
-        if (!track) return null;
-
-        return {
-            id: track.id,
-            titulo: track.name,
-            artista: track.artists.map(a => a.name).join(', '),
-            album: track.album.name,
-            imagen: track.album.images?.[0]?.url,
-            duracion: track.duration_ms,
-            url: track.external_urls?.spotify
-        };
-    } catch (e) {
-        console.error('[SPOTIFY] Error buscando:', e.message);
-        return null;
-    }
-}
-
-async function obtenerInfoTrack(trackId) {
-    try {
-        const tokenRes = await axios.get('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
             headers: { 'User-Agent': USER_AGENT },
-            timeout: 10000
+            timeout: 15000
         });
-        const token = tokenRes.data?.accessToken;
-        if (!token) return null;
+        const html = res.data;
 
-        const res = await axios.get(`https://api.spotify.com/v1/tracks/${trackId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            timeout: 10000
-        });
+        let videoId = null;
 
-        const track = res.data;
-        return {
-            id: track.id,
-            titulo: track.name,
-            artista: track.artists.map(a => a.name).join(', '),
-            album: track.album.name,
-            imagen: track.album.images?.[0]?.url,
-            duracion: track.duration_ms,
-            url: track.external_urls?.spotify
-        };
+        const match1 = html.match(/"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/);
+        if (match1) videoId = match1[1];
+
+        if (!videoId) {
+            const match2 = html.match(/var ytInitialData = (.+?);<\/script>/);
+            if (match2) {
+                try {
+                    const data = JSON.parse(match2[1]);
+                    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+                    if (contents && Array.isArray(contents)) {
+                        for (const section of contents) {
+                            const items = section?.itemSectionRenderer?.contents;
+                            if (items && Array.isArray(items)) {
+                                for (const item of items) {
+                                    if (item.videoRenderer) {
+                                        videoId = item.videoRenderer.videoId;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (videoId) break;
+                        }
+                    }
+                } catch (e) {}
+            }
+        }
+
+        if (!videoId) {
+            const match3 = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+            if (match3) videoId = match3[1];
+        }
+
+        if (!videoId) return null;
+
+        let titulo = query;
+        const titleMatch = html.match(/"title":\{"runs":\[\{"text":"([^"]+)"\}\]/);
+        if (titleMatch) titulo = titleMatch[1];
+
+        return { videoId, titulo };
     } catch (e) {
-        console.error('[SPOTIFY] Error obteniendo info:', e.message);
+        console.error('[YOUTUBE SEARCH] Error:', e.message);
         return null;
     }
 }
 
 // ============================================================
-// SCRAPER: SPOTIFYDOWN → Y2MATE
+// SPOTIFYDOWN PIPELINE
 // ============================================================
 
 async function obtenerYoutubeId(trackId) {
@@ -156,71 +160,10 @@ async function obtenerYoutubeId(trackId) {
         });
         return res.data?.id || null;
     } catch (e) {
-        console.error('[SPOTIFYDOWN] Error getId:', e.message);
+        console.error('[SPOTIFYDOWN getId] Error:', e.message);
         return null;
     }
 }
-
-async function analizarY2Mate(youtubeId) {
-    try {
-        const res = await axios.post(Y2MATE_ANALYZE, {
-            k_query: `https://www.youtube.com/watch?v=${youtubeId}`,
-            k_page: 'home',
-            hl: 'en',
-            q_auto: 0
-        }, {
-            headers: {
-                ...HEADERS,
-                'authority': 'corsproxy.io',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout: 15000
-        });
-        return res.data;
-    } catch (e) {
-        console.error('[Y2MATE] Error analizando:', e.message);
-        return null;
-    }
-}
-
-async function convertirY2Mate(vid, k) {
-    try {
-        const res = await axios.post(Y2MATE_CONVERT, {
-            vid,
-            k
-        }, {
-            headers: {
-                ...HEADERS,
-                'authority': 'corsproxy.io',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout: 20000
-        });
-        return res.data?.dlink || null;
-    } catch (e) {
-        console.error('[Y2MATE] Error convirtiendo:', e.message);
-        return null;
-    }
-}
-
-async function descargarAudio(url) {
-    try {
-        const res = await axios.get(url, {
-            responseType: 'arraybuffer',
-            headers: { 'User-Agent': USER_AGENT },
-            timeout: 60000,
-            maxContentLength: 50 * 1024 * 1024 // 50MB max
-        });
-        return Buffer.from(res.data);
-    } catch (e) {
-        console.error('[DOWNLOAD] Error descargando:', e.message);
-        return null;
-    }
-}
-
-// ============================================================
-// PLAYLIST / ALBUM
-// ============================================================
 
 async function obtenerTracklist(tipo, id) {
     try {
@@ -231,35 +174,84 @@ async function obtenerTracklist(tipo, id) {
         });
         return res.data?.trackList || [];
     } catch (e) {
-        console.error('[SPOTIFYDOWN] Error tracklist:', e.message);
+        console.error('[SPOTIFYDOWN trackList] Error:', e.message);
         return [];
     }
 }
 
 // ============================================================
-// DESCARGA COMPLETA DE UN TRACK
+// Y2MATE PIPELINE
 // ============================================================
 
-async function descargarTrack(trackInfo) {
-    // Paso 1: Obtener YouTube ID desde SpotifyDown
-    const youtubeId = await obtenerYoutubeId(trackInfo.id);
+async function analizarY2Mate(youtubeId) {
+    try {
+        const res = await axios.post(Y2MATE_ANALYZE, {
+            k_query: `https://www.youtube.com/watch?v=${youtubeId}`,
+            k_page: 'home',
+            hl: 'en',
+            q_auto: 0
+        }, {
+            headers: Y2MATE_HEADERS,
+            timeout: 15000
+        });
+        return res.data;
+    } catch (e) {
+        console.error('[Y2MATE analyze] Error:', e.message);
+        return null;
+    }
+}
+
+async function convertirY2Mate(vid, k) {
+    try {
+        const res = await axios.post(Y2MATE_CONVERT, {
+            vid,
+            k
+        }, {
+            headers: Y2MATE_HEADERS,
+            timeout: 20000
+        });
+        return res.data?.dlink || null;
+    } catch (e) {
+        console.error('[Y2MATE convert] Error:', e.message);
+        return null;
+    }
+}
+
+async function descargarAudio(url) {
+    try {
+        const res = await axios.get(url, {
+            responseType: 'arraybuffer',
+            headers: { 'User-Agent': USER_AGENT },
+            timeout: 60000,
+            maxContentLength: 50 * 1024 * 1024
+        });
+        return Buffer.from(res.data);
+    } catch (e) {
+        console.error('[DOWNLOAD] Error:', e.message);
+        return null;
+    }
+}
+
+// ============================================================
+// DESCARGA DESDE SPOTIFY URL
+// ============================================================
+
+async function descargarDesdeSpotify(trackId, metadatos = null) {
+    const youtubeId = await obtenerYoutubeId(trackId);
     if (!youtubeId) {
         return { exito: false, error: 'No se pudo resolver el track en YouTube.' };
     }
 
-    // Paso 2: Analizar en Y2Mate
     const analisis = await analizarY2Mate(youtubeId);
     if (!analisis || !analisis.links?.mp3?.mp3128?.k) {
-        return { exito: false, error: 'No se pudo analizar el audio.' };
+        return { exito: false, error: 'No se pudo analizar el audio en Y2Mate.' };
     }
 
-    // Paso 3: Convertir
     const downloadUrl = await convertirY2Mate(analisis.vid, analisis.links.mp3.mp3128.k);
     if (!downloadUrl) {
         return { exito: false, error: 'No se pudo generar el link de descarga.' };
     }
 
-    // Paso 4: Descargar
     const buffer = await descargarAudio(downloadUrl);
     if (!buffer) {
         return { exito: false, error: 'No se pudo descargar el archivo.' };
@@ -268,13 +260,40 @@ async function descargarTrack(trackInfo) {
     return {
         exito: true,
         buffer,
-        titulo: `${trackInfo.artista} - ${trackInfo.titulo}`,
-        info: trackInfo
+        titulo: metadatos ? `${metadatos.artista} - ${metadatos.titulo}` : 'Audio',
+        info: metadatos
     };
 }
 
 // ============================================================
-// COMANDO
+// DESCARGA DESDE YOUTUBE DIRECTO
+// ============================================================
+
+async function descargarDesdeYouTube(videoId, titulo = 'Audio') {
+    const analisis = await analizarY2Mate(videoId);
+    if (!analisis || !analisis.links?.mp3?.mp3128?.k) {
+        return { exito: false, error: 'No se pudo analizar el audio en Y2Mate.' };
+    }
+
+    const downloadUrl = await convertirY2Mate(analisis.vid, analisis.links.mp3.mp3128.k);
+    if (!downloadUrl) {
+        return { exito: false, error: 'No se pudo generar el link de descarga.' };
+    }
+
+    const buffer = await descargarAudio(downloadUrl);
+    if (!buffer) {
+        return { exito: false, error: 'No se pudo descargar el archivo.' };
+    }
+
+    return {
+        exito: true,
+        buffer,
+        titulo: titulo
+    };
+}
+// ============================================================
+// COMANDO: SPOTIFY — Parte 2 (Export + Lógica del comando)
+// Pegá esto DEBAJO de la Parte 1 en el mismo archivo.
 // ============================================================
 
 export default {
@@ -290,7 +309,7 @@ export default {
     ],
 
     descripcion:
-        'Descarga música de Spotify en MP3. Uso: .spotify <url> | .spotify <nombre>',
+        'Descarga música de Spotify/YouTube en MP3. Uso: .spotify <url> | .spotify <nombre>',
 
     ejecutar: async ({
         sock,
@@ -300,10 +319,6 @@ export default {
     }) => {
 
         const chatJid = msg.key.remoteJid;
-
-        // -------------------------------------------------------
-        // VALIDAR ARGUMENTO
-        // -------------------------------------------------------
 
         if (!argumento.trim()) {
             await responder.texto(
@@ -324,17 +339,14 @@ export default {
         }
 
         const input = argumento.trim();
-        let trackInfo = null;
-        let tipo = 'track';
-        let spotifyId = null;
 
         // -------------------------------------------------------
-        // DETECTAR SI ES URL O BÚSQUEDA
+        // MODO URL DE SPOTIFY
         // -------------------------------------------------------
 
         if (esUrlSpotify(input)) {
-            spotifyId = extraerSpotifyId(input);
-            tipo = extraerTipoUrl(input);
+            const spotifyId = extraerSpotifyId(input);
+            const tipo = extraerTipoUrl(input);
 
             if (!spotifyId) {
                 await responder.texto(
@@ -350,29 +362,69 @@ export default {
                 return;
             }
 
-            // Obtener info del track
+            // === TRACK INDIVIDUAL ===
             if (tipo === 'track') {
-                trackInfo = await obtenerInfoTrack(spotifyId);
+                const metadatos = await obtenerOembed(spotifyId);
+                const tituloDisplay = metadatos.exito
+                    ? `${metadatos.artista} - ${metadatos.titulo}`
+                    : 'Track de Spotify';
+
+                await responder.texto(
+                    `╭〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
+                    `┃\n` +
+                    `┃ 🎤 *${tituloDisplay}*\n` +
+                    `┃ ⏳ Resolviendo en SpotifyDown...\n` +
+                    `┃\n` +
+                    `╰━━━━━━━━━━━━━━━━⬣`
+                );
+
+                const resultado = await descargarDesdeSpotify(spotifyId, metadatos.exito ? metadatos : null);
+
+                if (!resultado.exito) {
+                    await responder.texto(
+                        `╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
+                        `┃\n` +
+                        `┃ No se pudo descargar.\n` +
+                        `┃ 📝 ${resultado.error}\n` +
+                        `┃\n` +
+                        `┃ 💡 Intenta con otro link o nombre.\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━━━━━⬣`
+                    );
+                    return;
+                }
+
+                try {
+                    await sock.sendMessage(chatJid, {
+                        audio: resultado.buffer,
+                        mimetype: 'audio/mpeg',
+                        fileName: `${sanitizarNombre(resultado.titulo)}.mp3`,
+                        ptt: false
+                    }, { quoted: msg });
+
+                    await responder.texto(
+                        `╭〔 ✅ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
+                        `┃\n` +
+                        `┃ 🎵 *${tituloDisplay}*\n` +
+                        `┃ ✅ Descarga completada\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━━━━━⬣`
+                    );
+                } catch (e) {
+                    console.error('[SPOTIFY] Error enviando:', e.message);
+                    await responder.texto(
+                        '╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                        '┃\n' +
+                        '┃ Error al enviar el audio.\n' +
+                        '┃ El archivo puede ser muy grande.\n' +
+                        '┃\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣'
+                    );
+                }
+                return;
             }
-        } else {
-            // Búsqueda por nombre
-            await responder.texto(
-                '╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
-                '┃\n' +
-                `┃ Buscando: *${input}*\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
 
-            trackInfo = await buscarEnSpotify(input);
-            tipo = 'track';
-        }
-
-        // -------------------------------------------------------
-        // MODO PLAYLIST / ALBUM
-        // -------------------------------------------------------
-
-        if (tipo === 'playlist' || tipo === 'album') {
+            // === PLAYLIST / ALBUM ===
             await responder.texto(
                 '╭〔 📂 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
                 '┃\n' +
@@ -394,7 +446,6 @@ export default {
                 return;
             }
 
-            // Limitar a 5 canciones para no saturar
             const limite = Math.min(tracks.length, 5);
             const seleccionados = tracks.slice(0, limite);
 
@@ -414,12 +465,8 @@ export default {
                 const t = seleccionados[i];
                 const info = {
                     id: t.id,
-                    titulo: t.title || t.name,
-                    artista: t.artists || 'Desconocido',
-                    album: t.album || '',
-                    imagen: t.cover || t.image,
-                    duracion: 0,
-                    url: `https://open.spotify.com/track/${t.id}`
+                    titulo: t.title || t.name || 'Desconocido',
+                    artista: t.artists || 'Desconocido'
                 };
 
                 try {
@@ -432,7 +479,7 @@ export default {
                         `╰━━━━━━━━━━━━━━━━⬣`
                     );
 
-                    const resultado = await descargarTrack(info);
+                    const resultado = await descargarDesdeSpotify(info.id, info);
                     if (resultado.exito) {
                         await sock.sendMessage(chatJid, {
                             audio: resultado.buffer,
@@ -457,7 +504,6 @@ export default {
                     console.error('[SPOTIFY] Error en track:', e.message);
                 }
 
-                // Delay entre descargas para no saturar
                 if (i < seleccionados.length - 1) {
                     await new Promise(r => setTimeout(r, 3000));
                 }
@@ -476,38 +522,41 @@ export default {
         }
 
         // -------------------------------------------------------
-        // MODO TRACK INDIVIDUAL
+        // MODO BÚSQUEDA POR NOMBRE (YouTube)
         // -------------------------------------------------------
 
-        if (!trackInfo) {
+        await responder.texto(
+            `╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
+            `┃\n` +
+            `┃ Buscando: *${input}*\n` +
+            `┃ 🔎 En YouTube...\n` +
+            `┃\n` +
+            `╰━━━━━━━━━━━━━━━━⬣`
+        );
+
+        const busqueda = await buscarEnYouTube(input);
+        if (!busqueda) {
             await responder.texto(
                 '╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
                 '┃\n' +
-                '┃ No se encontró la canción.\n' +
-                '┃ Intenta con otro nombre o URL.\n' +
+                '┃ No se encontró la canción en YouTube.\n' +
+                '┃ Intenta con otro nombre o URL de Spotify.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
             return;
         }
 
-        // Mostrar info mientras descarga
-        const duracionStr = formatearDuracion(trackInfo.duracion);
         await responder.texto(
             `╭〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
             `┃\n` +
-            `┃ 🎤 *${trackInfo.titulo}*\n` +
-            `┃ 👤 ${trackInfo.artista}\n` +
-            `┃ 💿 ${trackInfo.album}\n` +
-            `┃ ⏱️ ${duracionStr}\n` +
-            `┃\n` +
+            `┃ 🎤 *${busqueda.titulo}*\n` +
             `┃ ⏳ Descargando audio...\n` +
             `┃\n` +
             `╰━━━━━━━━━━━━━━━━⬣`
         );
 
-        // Descargar
-        const resultado = await descargarTrack(trackInfo);
+        const resultado = await descargarDesdeYouTube(busqueda.videoId, busqueda.titulo);
 
         if (!resultado.exito) {
             await responder.texto(
@@ -516,14 +565,13 @@ export default {
                 `┃ No se pudo descargar.\n` +
                 `┃ 📝 ${resultado.error}\n` +
                 `┃\n` +
-                `┃ 💡 Intenta con otra canción.\n` +
+                `┃ 💡 Intenta con otro nombre o URL.\n` +
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━⬣`
             );
             return;
         }
 
-        // Enviar audio
         try {
             await sock.sendMessage(chatJid, {
                 audio: resultado.buffer,
@@ -535,8 +583,7 @@ export default {
             await responder.texto(
                 `╭〔 ✅ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
                 `┃\n` +
-                `┃ 🎵 *${trackInfo.titulo}*\n` +
-                `┃ 👤 ${trackInfo.artista}\n` +
+                `┃ 🎵 *${busqueda.titulo}*\n` +
                 `┃ ✅ Descarga completada\n` +
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━⬣`
