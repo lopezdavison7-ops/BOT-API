@@ -176,7 +176,7 @@ export default {
 
         texto +=
             `┃ 💡 *Para descargar:*\n` +
-            `┃ Usa .tiktok <link> o .play <link>\n` +
+            `┃ Usa .tiktok <link> \n` +
             `┃\n` +
             `╰〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣`;
 
