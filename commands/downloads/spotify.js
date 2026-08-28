@@ -149,7 +149,7 @@ export default {
                 '┃ 📌 *Uso:* .spotify Anuel AA\n' +
                 '┃ 📌 *Uso:* .spotify https://open.spotify.com/track/...\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '╰━━━━━━━━💻BOT-API⚡━━━━━━━━⬣'
             );
             return;
         }
@@ -176,7 +176,7 @@ export default {
                 `╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
                 `┃\n` +
                 `┃ Buscando: *${input}*\\n` +
-                `┃ 🔎 En Lempi API...\\n` +
+                `┃ 🔎 En Spotify💻...\\n` +
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━⬣`
             );
