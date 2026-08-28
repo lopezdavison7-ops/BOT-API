@@ -33,18 +33,39 @@ const ICONOS = {
 };
 
 // ============================================================
-// OBTENER AUTOR CON MENCIONES CORRECTAS (maneja LID)
+// OBTENER AUTOR CON MENCIONES CORRECTAS (usa groupMetadata para JID real)
 // ============================================================
 
-function obtenerAutor(msg) {
+async function obtenerAutor(sock, msg) {
     const key = msg?.key || {};
-    const sender = key.participant || key.remoteJid;
-    if (!sender || typeof sender !== 'string') return null;
+    const chatId = key.remoteJid;
+    const esGrupo = chatId?.endsWith('@g.us');
 
-    const num = String(sender).split('@')[0].split(':')[0].replace(/\D/g, '');
+    // Remitente en bruto (puede ser LID)
+    const rawSender = key.participant || key.remoteJid;
+    if (!rawSender || typeof rawSender !== 'string') return null;
+
+    const num = String(rawSender).split('@')[0].split(':')[0].replace(/\D/g, '');
     if (!num || num.length < 7) return null;
 
-    let jid = sender.includes('@') ? sender : `${sender}@s.whatsapp.net`;
+    // Si es grupo, buscar el JID real en metadata
+    if (esGrupo) {
+        try {
+            const metadata = await sock.groupMetadata(chatId);
+            const participante = metadata.participants?.find(
+                p => String(p.id).split('@')[0].split(':')[0].replace(/\D/g, '') === num
+            );
+            if (participante?.id) {
+                return {
+                    jid: participante.id,  // JID real @s.whatsapp.net
+                    num
+                };
+            }
+        } catch {}
+    }
+
+    // Fallback: convertir LID a JID normal
+    let jid = rawSender.includes('@') ? rawSender : `${rawSender}@s.whatsapp.net`;
     if (jid.endsWith('@lid')) {
         jid = jid.replace('@lid', '@s.whatsapp.net');
     }
@@ -110,7 +131,7 @@ export default {
     async ejecutar({ sock, msg, args, listaComandos, prefijo }) {
         try {
             const jid = msg?.key?.remoteJid;
-            const autor = obtenerAutor(msg);
+            const autor = await obtenerAutor(sock, msg);
             const categorias = organizarComandos(listaComandos);
             const canal = obtenerCanal();
             const categoriaPedida = args?.[0];
