@@ -1,5 +1,5 @@
 // ============================================================
-// MENU - BOT-API 2.0 
+// MENU - BOT-API 2.0 MENÚ AESTHETIC (ESPACIADO CORREGIDO)
 // ============================================================
 
 import fs from 'fs';
@@ -130,7 +130,7 @@ async function obtenerMencionesFijas() {
 }
 
 // ============================================================
-// GENERAR TEXTO DEL MENÚ AESTHETIC
+// GENERAR TEXTO DEL MENÚ AESTHETIC (ESPACIADO)
 // ============================================================
 
 function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
@@ -138,7 +138,10 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
-    let texto = `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
+    let texto = ``;
+
+    // ═════ HEADER ═════
+    texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
     texto += `\n`;
     texto += `              🌸  *${botName}*  🌸\n`;
     texto += `           · · ·  𝑀𝐸𝒩𝒰  · · ·\n`;
@@ -147,48 +150,67 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
     texto += `\n`;
     texto += `  ◇ Hola ${mencionTexto} ✨\n`;
     texto += `\n`;
-    texto += `  ━━━ *INFO* ━━━\n`;
-    texto += `  Creador  ▸ ${CREADOR}\n`;
-    texto += `  Versión  ▸ ${VERSION}\n`;
-    texto += `  Comandos ▸ ${totalCmds}\n`;
-    texto += `  Cats     ▸ ${totalCats}\n`;
-    texto += `  Prefijo  ▸ ${prefijo}\n`;
-    texto += `  Uptime   ▸ ${formatUptime(process.uptime())}\n`;
-    texto += `  ━━━━━━━━━━━━━━\n`;
-    texto += `  ${now.format('DD/MM/YYYY')}  ·  ${now.format('HH:mm:ss')}\n`;
+
+    // ═════ INFO BOX ═════
+    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `         📊  *I N F O R M A C I Ó N*  📊\n`;
+    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `\n`;
+    texto += `  👨‍💻  Creador    ▸  ${CREADOR}\n`;
+    texto += `  📦  Versión    ▸  ${VERSION}\n`;
+    texto += `  📚  Comandos   ▸  ${totalCmds}\n`;
+    texto += `  🗂️  Categorías ▸  ${totalCats}\n`;
+    texto += `  🔧  Prefijo    ▸  ${prefijo}\n`;
+    texto += `  ⏱️  Uptime     ▸  ${formatUptime(process.uptime())}\n`;
+    texto += `\n`;
+    texto += `  📅  ${now.format('DD/MM/YYYY')}\n`;
+    texto += `  🕐  ${now.format('HH:mm:ss')}\n`;
+    texto += `\n`;
+    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     texto += `\n`;
 
+    // ═════ CATEGORÍAS ═════
     const catsOrdenadas = ordenarCategorias(categorias);
 
     for (const cat of catsOrdenadas) {
         const icono = obtenerIcono(cat);
         const cmds = categorias[cat];
 
-        texto += `  ──── ⋆ ${icono} *${cat.toUpperCase()}* ${icono} ⋆ ────\n`;
+        // Título de categoría con espacio arriba y abajo
+        texto += `\n`;
+        texto += `  ────── ⋆  ${icono}  *${cat.toUpperCase()}*  ${icono}  ⋆ ──────\n`;
         texto += `\n`;
 
+        // Comandos de la categoría
         for (const cmd of cmds) {
-            const alias = cmd.alias && cmd.alias.length ? ` (${cmd.alias.join(', ')})` : '';
-            texto += `  ⟡ *${prefijo}${cmd.nombre}*${alias}\n`;
-            texto += `  > ${cmd.descripcion || 'Sin descripción'}\n`;
+            const alias = cmd.alias && cmd.alias.length ? `  (${cmd.alias.join(', ')})` : '';
+            
+            texto += `  ⟡  *${prefijo}${cmd.nombre}*${alias}\n`;
+            texto += `  >  ${cmd.descripcion || 'Sin descripción'}\n`;
             texto += `\n`;
         }
 
-        texto += `  ─────────────────────────\n`;
-        texto += `\n`;
+        // Separador final de categoría
+        texto += `  ─────────────────────────────────────\n`;
     }
 
+    // ═════ FOOTER ═════
+    texto += `\n`;
+    
     const canal = obtenerCanal();
     if (canal) {
-        texto += `  ━━━ *CANAL* ━━━\n`;
+        texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        texto += `  📢  *Canal Oficial*\n`;
         texto += `  ${canal}\n`;
+        texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
         texto += `\n`;
     }
 
-    texto += `  💡 Usa *${prefijo}menu <cmd>* para más info\n`;
+    texto += `  💡  Usa  *${prefijo}menu <comando>*  para más info\n`;
     texto += `\n`;
     texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
-    texto += `       _${botName}_ · ${now.format('HH:mm')}`;
+    texto += `\n`;
+    texto += `       _${botName}_  ·  ${now.format('HH:mm')}`;
 
     return texto;
 }
