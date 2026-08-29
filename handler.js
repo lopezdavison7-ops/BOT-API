@@ -1,5 +1,6 @@
 // handler.js
 import { loadCommands } from './controllers/cmdManager.js';
+import { procesarMinijuegos } from './lib/minijuegos.js';
 
 const PREFIJO = '.';
 
@@ -28,6 +29,16 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const jid = msg.key.remoteJid;
         const fromMe = msg.key.fromMe;
         const isGroup = jid.endsWith('@g.us');
+
+        // ============================================
+        // MINIJUEGOS (texto libre, SIN el prefijo del bot)
+        // ============================================
+        // Si algún minijuego activo (TTT, Trivia, Adivinanza,
+        // Preguntas Hot...) reclama este mensaje como una jugada
+        // o respuesta suya, se detiene aquí — no sigue como
+        // comando normal.
+        const fueMinijuego = await procesarMinijuegos(sock, msg);
+        if (fueMinijuego) return;
 
         // ============================================
         // SACAR TEXTO - AHORA LEE BOTONES INTERACTIVOS
