@@ -185,14 +185,14 @@ export default {
             }
 
             // ========== HEADER CON IMAGEN/VIDEO ==========
-            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false, imageMessage: undefined, videoMessage: undefined };
+            let interactiveHeader = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
             try {
                 if (VIDEO_MENU_URL) {
                     const media = await prepareWAMessageMedia(
                         { video: { url: VIDEO_MENU_URL }, gifPlayback: false },
                         { upload: sock.waUploadToServer }
                     );
-                    header = {
+                    interactiveHeader = {
                         title: '🌸 MENÚ PRINCIPAL 🌸',
                         hasMediaAttachment: true,
                         videoMessage: media.videoMessage
@@ -202,7 +202,7 @@ export default {
                         { image: { url: FOTO_MENU } },
                         { upload: sock.waUploadToServer }
                     );
-                    header = {
+                    interactiveHeader = {
                         title: '🌸 MENÚ PRINCIPAL 🌸',
                         hasMediaAttachment: true,
                         imageMessage: media.imageMessage
@@ -217,7 +217,7 @@ export default {
                 interactiveMessage: {
                     body: { text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨` },
                     footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
-                    header,
+                    header: interactiveHeader,
                     nativeFlowMessage: {
                         buttons: [{
                             name: 'single_select',
