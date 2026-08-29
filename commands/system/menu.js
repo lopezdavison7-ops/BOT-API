@@ -221,10 +221,26 @@ export default {
                 }, { quoted: msg, mentions: menciones });
             }
 
-            // Enviar menú completo como texto simple (sin lista interactiva)
-            await sock.sendMessage(jid, {
-                text: menuTexto
-            }, { quoted: msg });
+            // Enviar menú con imagen/video si existe
+            if (header.hasMediaAttachment) {
+                if (header.imageMessage) {
+                    await sock.sendMessage(jid, {
+                        image: { url: FOTO_MENU },
+                        caption: menuTexto
+                    }, { quoted: msg });
+                } else if (header.videoMessage) {
+                    await sock.sendMessage(jid, {
+                        video: { url: VIDEO_MENU_URL },
+                        caption: menuTexto,
+                        gifPlayback: false
+                    }, { quoted: msg });
+                }
+            } else {
+                // Solo texto
+                await sock.sendMessage(jid, {
+                    text: menuTexto
+                }, { quoted: msg });
+            }
 
         } catch (error) {
             console.error('[MENU] Error:', error);
