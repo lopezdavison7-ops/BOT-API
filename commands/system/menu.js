@@ -6,8 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import {
-    prepareWAMessageMedia,
-    generateWAMessageFromContent
+    prepareWAMessageMedia
 } from 'baileys';
 import { obtenerStore } from '../../lib/jsonStore.js';
 
@@ -186,7 +185,7 @@ export default {
             }
 
             // ========== HEADER CON IMAGEN/VIDEO ==========
-            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
+            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false, imageMessage: undefined, videoMessage: undefined };
             try {
                 if (VIDEO_MENU_URL) {
                     const media = await prepareWAMessageMedia(
@@ -213,39 +212,30 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // ========== MENSAJE INTERACTIVO ==========
-            const interactiveMessage = {
-                body: {
-                    text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨`
-                },
-                footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
-                header,
-                nativeFlowMessage: {
-                    buttons: [{
-                        name: 'single_select',
-                        buttonParamsJson: JSON.stringify({
-                            title: '📂 Ver categorías',
-                            sections: [{
-                                title: '✦ Categorías disponibles ✦',
-                                rows
-                            }]
-                        })
-                    }],
-                    messageParamsJson: ''
+            // ========== MENSAJE INTERACTIVO (usando sendMessage para que mentions funcione) ==========
+            await sock.sendMessage(jid, {
+                interactiveMessage: {
+                    body: { text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨` },
+                    footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
+                    header,
+                    nativeFlowMessage: {
+                        buttons: [{
+                            name: 'single_select',
+                            buttonParamsJson: JSON.stringify({
+                                title: '📂 Ver categorías',
+                                sections: [{
+                                    title: '✦ Categorías disponibles ✦',
+                                    rows
+                                }]
+                            })
+                        }],
+                        messageParamsJson: ''
+                    }
                 }
-            };
-
-            const msgSend = generateWAMessageFromContent(
-                jid,
-                { viewOnceMessage: { message: { interactiveMessage } } },
-                {
-                    userJid: sock.user.id,
-                    quoted: msg,
-                    mentions: menciones  // <-- MENCIÓN AQUÍ
-                }
-            );
-
-            await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
+            }, {
+                quoted: msg,
+                mentions: menciones
+            });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
@@ -277,31 +267,24 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
 
     texto += `───────────────`;
 
-    const interactiveMessage = {
-        body: { text: texto },
-        footer: { text: '⬅️ Toca para volver al menú principal' },
-        header: { title: `${icono} ${categoria}`, hasMediaAttachment: false },
-        nativeFlowMessage: {
-            buttons: [{
-                name: 'quick_reply',
-                buttonParamsJson: JSON.stringify({
-                    display_text: '⬅️ Volver al menú',
-                    id: `${prefijo}menu`
-                })
-            }],
-            messageParamsJson: ''
+    await sock.sendMessage(jid, {
+        interactiveMessage: {
+            body: { text: texto },
+            footer: { text: '⬅️ Toca para volver al menú principal' },
+            header: { title: `${icono} ${categoria}`, hasMediaAttachment: false },
+            nativeFlowMessage: {
+                buttons: [{
+                    name: 'quick_reply',
+                    buttonParamsJson: JSON.stringify({
+                        display_text: '⬅️ Volver al menú',
+                        id: `${prefijo}menu`
+                    })
+                }],
+                messageParamsJson: ''
+            }
         }
-    };
-
-    const msgSend = generateWAMessageFromContent(
-        jid,
-        { viewOnceMessage: { message: { interactiveMessage } } },
-        {
-            userJid: sock.user.id,
-            quoted: msg,
-            mentions: menciones  // <-- MENCIÓN AQUÍ
-        }
-    );
-
-    await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
+    }, {
+        quoted: msg,
+        mentions: menciones
+    });
 }
