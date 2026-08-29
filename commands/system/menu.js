@@ -6,7 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import {
-    prepareWAMessageMedia
+    prepareWAMessageMedia,
+    generateWAMessageFromContent
 } from 'baileys';
 import { obtenerStore } from '../../lib/jsonStore.js';
 
@@ -185,14 +186,14 @@ export default {
             }
 
             // ========== HEADER CON IMAGEN/VIDEO ==========
-            let interactiveHeader = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
+            let header = { title: '🌸 MENÚ PRINCIPAL 🌸', hasMediaAttachment: false };
             try {
                 if (VIDEO_MENU_URL) {
                     const media = await prepareWAMessageMedia(
                         { video: { url: VIDEO_MENU_URL }, gifPlayback: false },
                         { upload: sock.waUploadToServer }
                     );
-                    interactiveHeader = {
+                    header = {
                         title: '🌸 MENÚ PRINCIPAL 🌸',
                         hasMediaAttachment: true,
                         videoMessage: media.videoMessage
@@ -202,7 +203,7 @@ export default {
                         { image: { url: FOTO_MENU } },
                         { upload: sock.waUploadToServer }
                     );
-                    interactiveHeader = {
+                    header = {
                         title: '🌸 MENÚ PRINCIPAL 🌸',
                         hasMediaAttachment: true,
                         imageMessage: media.imageMessage
@@ -212,30 +213,39 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // ========== MENSAJE INTERACTIVO (usando sendMessage para que mentions funcione) ==========
-            await sock.sendMessage(jid, {
-                interactiveMessage: {
-                    body: { text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨` },
-                    footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
-                    header: interactiveHeader,
-                    nativeFlowMessage: {
-                        buttons: [{
-                            name: 'single_select',
-                            buttonParamsJson: JSON.stringify({
-                                title: '📂 Ver categorías',
-                                sections: [{
-                                    title: '✦ Categorías disponibles ✦',
-                                    rows
-                                }]
-                            })
-                        }],
-                        messageParamsJson: ''
-                    }
+            // ========== MENSAJE INTERACTIVO ==========
+            const interactiveMessage = {
+                body: {
+                    text: headerText + `\n\n✨ *Elige una categoría para ver sus comandos* ✨`
+                },
+                footer: { text: '🌙 Toca el botón de abajo para navegar 🌙' },
+                header,
+                nativeFlowMessage: {
+                    buttons: [{
+                        name: 'single_select',
+                        buttonParamsJson: JSON.stringify({
+                            title: '📂 Ver categorías',
+                            sections: [{
+                                title: '✦ Categorías disponibles ✦',
+                                rows
+                            }]
+                        })
+                    }],
+                    messageParamsJson: ''
                 }
-            }, {
-                quoted: msg,
-                mentions: menciones
-            });
+            };
+
+            const msgSend = generateWAMessageFromContent(
+                jid,
+                { viewOnceMessage: { message: { interactiveMessage } } },
+                {
+                    userJid: sock.user.id,
+                    quoted: msg,
+                    mentions: menciones
+                }
+            );
+
+            await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
@@ -267,24 +277,31 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
 
     texto += `───────────────`;
 
-    await sock.sendMessage(jid, {
-        interactiveMessage: {
-            body: { text: texto },
-            footer: { text: '⬅️ Toca para volver al menú principal' },
-            header: { title: `${icono} ${categoria}`, hasMediaAttachment: false },
-            nativeFlowMessage: {
-                buttons: [{
-                    name: 'quick_reply',
-                    buttonParamsJson: JSON.stringify({
-                        display_text: '⬅️ Volver al menú',
-                        id: `${prefijo}menu`
-                    })
-                }],
-                messageParamsJson: ''
-            }
+    const interactiveMessage = {
+        body: { text: texto },
+        footer: { text: '⬅️ Toca para volver al menú principal' },
+        header: { title: `${icono} ${categoria}`, hasMediaAttachment: false },
+        nativeFlowMessage: {
+            buttons: [{
+                name: 'quick_reply',
+                buttonParamsJson: JSON.stringify({
+                    display_text: '⬅️ Volver al menú',
+                    id: `${prefijo}menu`
+                })
+            }],
+            messageParamsJson: ''
         }
-    }, {
-        quoted: msg,
-        mentions: menciones
-    });
+    };
+
+    const msgSend = generateWAMessageFromContent(
+        jid,
+        { viewOnceMessage: { message: { interactiveMessage } } },
+        {
+            userJid: sock.user.id,
+            quoted: msg,
+            mentions: menciones
+        }
+    );
+
+    await sock.relayMessage(jid, msgSend.message, { messageId: msgSend.key.id });
 }
