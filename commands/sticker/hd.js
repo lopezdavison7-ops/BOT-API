@@ -67,6 +67,39 @@ function parsearMultiplicador(argumento) {
 }
 
 // ============================================================
+// BUSCAR CUALQUIER URL DENTRO DE UN OBJETO (recursivo)
+// ============================================================
+// La API puede llamar al campo de distintas formas (image_url,
+// output, link, hd, enhanced...). En vez de adivinar cada
+// nombre posible, se recorre todo el JSON y se toma el primer
+// valor que sea un string con pinta de URL de imagen.
+// ============================================================
+function buscarUrlEnObjeto(objeto, profundidad = 0) {
+    if (!objeto || profundidad > 4) return null;
+
+    if (typeof objeto === 'string') {
+        return /^https?:\/\/\S+$/i.test(objeto) ? objeto : null;
+    }
+
+    if (Array.isArray(objeto)) {
+        for (const item of objeto) {
+            const encontrado = buscarUrlEnObjeto(item, profundidad + 1);
+            if (encontrado) return encontrado;
+        }
+        return null;
+    }
+
+    if (typeof objeto === 'object') {
+        for (const valor of Object.values(objeto)) {
+            const encontrado = buscarUrlEnObjeto(valor, profundidad + 1);
+            if (encontrado) return encontrado;
+        }
+    }
+
+    return null;
+}
+
+// ============================================================
 // LLAMAR A LA API (intenta el campo "image", y si falla "file")
 // ============================================================
 async function llamarUpscaler(buffer, multiplier, apiKey) {
@@ -111,15 +144,27 @@ async function llamarUpscaler(buffer, multiplier, apiKey) {
                 continue;
             }
 
+            // Primero se intenta con los nombres más comunes...
             const urlResultado =
                 data?.resultado?.url ||
                 data?.result?.url ||
                 data?.data?.url ||
-                data?.url;
+                data?.url ||
+                // ...y si no, se busca CUALQUIER URL dentro de todo
+                // el JSON, sin importar cómo se llame el campo.
+                buscarUrlEnObjeto(data);
 
             if (urlResultado) {
                 return { url: urlResultado };
             }
+
+            // No se encontró ninguna URL: se deja constancia de la
+            // respuesta completa en la consola del servidor para
+            // poder ajustar el nombre del campo si hace falta.
+            console.error(
+                `[HD] Respuesta sin URL reconocible (campo "${campo}"):`,
+                JSON.stringify(data)
+            );
 
             ultimoError = `La API respondió sin imagen ni URL (campo "${campo}")`;
 
