@@ -1,5 +1,5 @@
 // ============================================================
-// MENU - BOT-API 2.0 MENÚ AESTHETIC (ESPACIADO CORREGIDO)
+// MENU - BOT-API 2.0 MENÚ AESTHETIC (CORREGIDO)
 // ============================================================
 
 import fs from 'fs';
@@ -130,15 +130,22 @@ async function obtenerMencionesFijas() {
 }
 
 // ============================================================
-// GENERAR TEXTO DEL MENÚ AESTHETIC (ESPACIADO)
+// GENERAR TEXTO DEL MENÚ (TODO EN UN SOLO MENSAJE)
 // ============================================================
 
-function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
+function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, extra = {}) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
     let texto = ``;
+
+    // ═════ SALUDO ARRIBA (INTEGRADO EN EL MENÚ) ═════
+    texto += `👋 ¡Hola ${mencionTexto}! ✨\n`;
+    if (extra.mencionesTexto) {
+        texto += `\n👥 *Menciones:* ${extra.mencionesTexto}\n`;
+    }
+    texto += `\n`;
 
     // ═════ HEADER ═════
     texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
@@ -147,8 +154,6 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
     texto += `           · · ·  𝑀𝐸𝒩𝒰  · · ·\n`;
     texto += `\n`;
     texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
-    texto += `\n`;
-    texto += `  ◇ Hola ${mencionTexto} ✨\n`;
     texto += `\n`;
 
     // ═════ INFO BOX ═════
@@ -167,7 +172,6 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
     texto += `  🕐  ${now.format('HH:mm:ss')}\n`;
     texto += `\n`;
     texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    texto += `\n`;
 
     // ═════ CATEGORÍAS ═════
     const catsOrdenadas = ordenarCategorias(categorias);
@@ -176,17 +180,28 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
         const icono = obtenerIcono(cat);
         const cmds = categorias[cat];
 
-        // Título de categoría con espacio arriba y abajo
+        // Separador arriba de la categoría
+        texto += `\n`;
         texto += `\n`;
         texto += `  ────── ⋆  ${icono}  *${cat.toUpperCase()}*  ${icono}  ⋆ ──────\n`;
         texto += `\n`;
 
-        // Comandos de la categoría
+        // Comandos con ESPACIADO para que no se peguen
         for (const cmd of cmds) {
-            const alias = cmd.alias && cmd.alias.length ? `  (${cmd.alias.join(', ')})` : '';
+            const alias = cmd.alias && cmd.alias.length ? `(${cmd.alias.join(', ')})` : '';
             
-            texto += `  ⟡  *${prefijo}${cmd.nombre}*${alias}\n`;
-            texto += `  >  ${cmd.descripcion || 'Sin descripción'}\n`;
+            // Línea del comando
+            if (alias) {
+                texto += `  ◇ *${prefijo}${cmd.nombre}* ${alias}\n`;
+            } else {
+                texto += `  ◇ *${prefijo}${cmd.nombre}*\n`;
+            }
+            
+            // Descripción en línea nueva con >
+            texto += `  > ${cmd.descripcion || 'Sin descripción'}\n`;
+            
+            // LÍNEA EN BLANCO IMPORTANTE entre cada comando
+            // Esto evita que se peguen cuando WhatsApp rompe líneas largas
             texto += `\n`;
         }
 
@@ -206,7 +221,7 @@ function generarMenuAesthetic(categorias, prefijo, mencionTexto, botName) {
         texto += `\n`;
     }
 
-    texto += `  💡  Usa  *${prefijo}menu <comando>*  para más info\n`;
+    texto += `  💡  Usa *${prefijo}menu <comando>* para más info\n`;
     texto += `\n`;
     texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
     texto += `\n`;
@@ -261,22 +276,12 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // ========== GENERAR MENÚ ==========
-            const menuTexto = generarMenuAesthetic(categorias, prefijo, mencionTexto, botName);
+            // ========== GENERAR MENÚ COMPLETO (UN SOLO MENSAJE) ==========
+            const menuTexto = generarMenuCompleto(categorias, prefijo, mencionTexto, botName, {
+                mencionesTexto: textoMenciones
+            });
 
-            // ========== ENVIAR ==========
-            // 1. Saludo con menciones (siempre del grupo fijo + autor)
-            if (todasLasMenciones.length > 0) {
-                let saludo = `👋 ¡Hola ${mencionTexto}! ✨`;
-                if (textoMenciones) {
-                    saludo += `\n\n👥 *Menciones:*\n${textoMenciones}`;
-                }
-                await sock.sendMessage(jid, { text: saludo }, { quoted: msg, mentions: todasLasMenciones });
-            }
-
-            await new Promise(r => setTimeout(r, 400));
-
-            // 2. Menú principal
+            // ========== ENVIAR TODO EN UN SOLO MENSAJE ==========
             if (header.hasMediaAttachment) {
                 if (header.imageMessage) {
                     await sock.sendMessage(jid, {
@@ -293,6 +298,7 @@ export default {
                     }, { quoted: msg });
                 }
             } else {
+                // Solo texto - TODO EN UN SOLO MENSAJE
                 await sock.sendMessage(jid, {
                     text: menuTexto,
                     mentions: todasLasMenciones
