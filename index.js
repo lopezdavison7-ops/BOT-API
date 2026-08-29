@@ -17,9 +17,6 @@ import readline from 'readline';
 
 import { handleMessage } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
-import { manejarMensajeTTT } from './lib/ttt.js';
-import { manejarMensajeTrivia } from './lib/trivia.js';
-import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import { manejarDespedida } from './commands/group/despedida.js';
 
 const baileys = baileysNS.default ?? baileysNS;
@@ -419,36 +416,6 @@ async function iniciarBot() {
             const m = messages[0];
 
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
-
-            try {
-                const fueMovimientoTTT = await manejarMensajeTTT(sock, m);
-
-                if (fueMovimientoTTT) {
-                    return;
-                }
-            } catch (error) {
-                console.error('[TTT] Error procesando mensaje:', error?.message || error);
-            }
-
-            try {
-                const fueRespuestaTrivia = await manejarMensajeTrivia(sock, m);
-
-                if (fueRespuestaTrivia) {
-                    return;
-                }
-            } catch (error) {
-                console.error('[TRIVIA] Error procesando mensaje:', error?.message || error);
-            }
-
-            try {
-                const fueRespuestaAdivinanza = await manejarMensajeAdivinanza(sock, m);
-
-                if (fueRespuestaAdivinanza) {
-                    return;
-                }
-            } catch (error) {
-                console.error('[ADIVINANZA] Error procesando mensaje:', error?.message || error);
-            }
 
             const listaComandos = Array.from(comandos.values())
                 .filter((v, i, self) => self.indexOf(v) === i);
