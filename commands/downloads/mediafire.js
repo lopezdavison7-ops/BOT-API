@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 
-const API_BASE = '/api/downloader/mediafire';
+const API_BASE = 'https://api.neosoft.best/api/downloader/mediafire';
 
 export default {
     nombre: 'mf',
@@ -21,25 +21,44 @@ export default {
             const url = args.join(' ').trim();
             if (!url || !url.includes('mediafire.com')) {
                 return await sock.sendMessage(jid, {
-                    text: `❌ *URL inválida*\n\n> Usa: *${prefijo}mf <link de MediaFire>*`
+                    text: `❌ *URL inválida*
+
+> Usa: *${prefijo}mf <link de MediaFire>*`
                 }, { quoted: msg });
             }
 
             // ── MENSAJE DE ESPERA ──
-            const esperaTexto = `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n` +
-                `              📥  *MEDIAFIRE*  📥\n` +
-                `           · · ·  𝐷𝐸𝒮𝒞𝒜𝑅𝒢𝒜  · · ·\n\n` +
-                `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n` +
-                `  ⏳  Procesando enlace...\n` +
-                `  🔗  ${url.slice(0, 50)}...\n\n` +
-                `  💬  *Descargando...*\n\n` +
+            const esperaTexto = `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+
+` +
+                `              📥  *MEDIAFIRE*  📥
+` +
+                `           · · ·  𝐷𝐸𝒮𝒞𝒜𝑅𝒢𝒜  · · ·
+
+` +
+                `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+
+` +
+                `  ⏳  Procesando enlace...
+` +
+                `  🔗  ${url.slice(0, 45)}...
+
+` +
+                `  💬  *Descargando...*
+
+` +
                 `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰`;
 
-            const esperaMsg = await sock.sendMessage(jid, { text: esperaTexto }, { quoted: msg });
+            await sock.sendMessage(jid, { text: esperaTexto }, { quoted: msg });
 
             // ── LLAMAR API ──
             const encodedUrl = encodeURIComponent(url);
             const res = await fetch(`${API_BASE}?url=${encodedUrl}`);
+
+            if (!res.ok) {
+                throw new Error(`API respondió ${res.status}`);
+            }
+
             const data = await res.json();
 
             if (!data.status || !data.directDownloadUrl) {
@@ -52,21 +71,40 @@ export default {
             const tempDir = path.join(process.cwd(), 'tmp');
             if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-            const filePath = path.join(tempDir, fileName || `mediafire_${Date.now()}.${fileExtension || 'rar'}`);
+            const safeName = fileName || `archivo_${Date.now()}.${fileExtension || 'rar'}`;
+            const filePath = path.join(tempDir, safeName);
 
             const fileRes = await fetch(directDownloadUrl);
+
+            if (!fileRes.ok) {
+                throw new Error('Error al descargar el archivo');
+            }
+
             const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
             fs.writeFileSync(filePath, fileBuffer);
 
-            // ── MENSAJE FINAL CON ARCHIVO ──
-            const finalTexto = `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n` +
-                `              ✅  *COMPLETADO*  ✅\n` +
-                `           · · ·  𝐿𝐼𝒮𝒯𝒪  · · ·\n\n` +
-                `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n\n` +
-                `  📄  *Nombre*    ▸  ${fileName}\n` +
-                `  📦  *Tamaño*    ▸  ${fileSize}\n` +
-                `  🗂️  *Formato*   ▸  ${fileExtension}\n\n` +
-                `  💾  *Archivo enviado abajo* ⬇️\n\n` +
+            // ── MENSAJE FINAL ──
+            const finalTexto = `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+
+` +
+                `              ✅  *COMPLETADO*  ✅
+` +
+                `           · · ·  𝐿𝐼𝒮𝒯𝒪  · · ·
+
+` +
+                `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+
+` +
+                `  📄  *Nombre*    ▸  ${safeName}
+` +
+                `  📦  *Tamaño*    ▸  ${fileSize || 'Desconocido'}
+` +
+                `  🗂️  *Formato*   ▸  ${fileExtension || 'Desconocido'}
+
+` +
+                `  💾  *Archivo enviado abajo* ⬇️
+
+` +
                 `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰`;
 
             // Enviar mensaje de confirmación
@@ -75,9 +113,10 @@ export default {
             // Enviar el archivo como documento
             await sock.sendMessage(jid, {
                 document: fs.readFileSync(filePath),
-                fileName: fileName,
+                fileName: safeName,
                 mimetype: 'application/octet-stream',
-                caption: `📥 *${fileName}*\n> Tamaño: ${fileSize}`
+                caption: `📥 *${safeName}*
+> Tamaño: ${fileSize || 'Desconocido'}`
             }, { quoted: msg });
 
             // Limpiar temporal
@@ -86,7 +125,11 @@ export default {
         } catch (error) {
             console.error('[MF] Error:', error);
             await sock.sendMessage(jid, {
-                text: `❌ *Error al descargar*\n\n> ${error.message}\n\n💡 Usa: *${prefijo}mf <link de MediaFire>*`
+                text: `❌ *Error al descargar*
+
+> ${error.message}
+
+💡 Usa: *${prefijo}mf <link de MediaFire>*`
             }, { quoted: msg });
         }
     }
