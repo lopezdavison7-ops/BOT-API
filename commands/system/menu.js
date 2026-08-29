@@ -1,5 +1,5 @@
 // ============================================================
-// MENU - BOT-API 2.0 MENÚ AESTHETIC (CORREGIDO)
+// MENU - BOT-API 2.0 MENÚ AESTHETIC (ESPACIADO FINAL)
 // ============================================================
 
 import fs from 'fs';
@@ -110,6 +110,16 @@ function ordenarCategorias(categorias) {
     });
 }
 
+// ── ACORTAR DESCRIPCIÓN PARA QUE NO SE VEA PEGADA ──
+function acortarDesc(texto) {
+    if (!texto) return 'Sin descripción';
+    const limpio = String(texto).trim();
+    // Si es corto, lo dejamos tal cual
+    if (limpio.length <= 40) return limpio;
+    // Si es largo, cortamos a 40 y ponemos ...
+    return limpio.slice(0, 40).trim() + '...';
+}
+
 // ── OBTENER MENCIONES DEL GRUPO FIJO ──
 async function obtenerMencionesFijas() {
     try {
@@ -140,10 +150,10 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, extra =
 
     let texto = ``;
 
-    // ═════ SALUDO ARRIBA (INTEGRADO EN EL MENÚ) ═════
+    // ═════ SALUDO ARRIBA ═════
     texto += `👋 ¡Hola ${mencionTexto}! ✨\n`;
     if (extra.mencionesTexto) {
-        texto += `\n👥 *Menciones:* ${extra.mencionesTexto}\n`;
+        texto += `\n👥 ${extra.mencionesTexto}\n`;
     }
     texto += `\n`;
 
@@ -180,38 +190,35 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, extra =
         const icono = obtenerIcono(cat);
         const cmds = categorias[cat];
 
-        // Separador arriba de la categoría
         texto += `\n`;
         texto += `\n`;
         texto += `  ────── ⋆  ${icono}  *${cat.toUpperCase()}*  ${icono}  ⋆ ──────\n`;
         texto += `\n`;
 
-        // Comandos con ESPACIADO para que no se peguen
         for (const cmd of cmds) {
             const alias = cmd.alias && cmd.alias.length ? `(${cmd.alias.join(', ')})` : '';
-            
-            // Línea del comando
+            const desc = acortarDesc(cmd.descripcion);
+
+            // Comando en negrita
             if (alias) {
                 texto += `  ◇ *${prefijo}${cmd.nombre}* ${alias}\n`;
             } else {
                 texto += `  ◇ *${prefijo}${cmd.nombre}*\n`;
             }
-            
-            // Descripción en línea nueva con >
-            texto += `  > ${cmd.descripcion || 'Sin descripción'}\n`;
-            
-            // LÍNEA EN BLANCO IMPORTANTE entre cada comando
-            // Esto evita que se peguen cuando WhatsApp rompe líneas largas
+
+            // Descripción corta y limpia
+            texto += `  > ${desc}\n`;
+
+            // ESPACIO DOBLE entre comandos (para que no se peguen)
             texto += `\n`;
         }
 
-        // Separador final de categoría
         texto += `  ─────────────────────────────────────\n`;
     }
 
     // ═════ FOOTER ═════
     texto += `\n`;
-    
+
     const canal = obtenerCanal();
     if (canal) {
         texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -251,9 +258,7 @@ export default {
             const mencionTexto = autor ? `@${autor.num}` : '@usuario';
             const mencionesAutor = autor ? [autor.jid] : [];
 
-            // Combinar autor + menciones fijas del grupo
             const todasLasMenciones = [...new Set([...mencionesAutor, ...mencionesFijas])];
-
             const botName = global.botname || 'BOT-API 2.0';
 
             // ========== HEADER CON IMAGEN/VIDEO ==========
@@ -276,7 +281,7 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // ========== GENERAR MENÚ COMPLETO (UN SOLO MENSAJE) ==========
+            // ========== GENERAR MENÚ COMPLETO ==========
             const menuTexto = generarMenuCompleto(categorias, prefijo, mencionTexto, botName, {
                 mencionesTexto: textoMenciones
             });
@@ -298,7 +303,6 @@ export default {
                     }, { quoted: msg });
                 }
             } else {
-                // Solo texto - TODO EN UN SOLO MENSAJE
                 await sock.sendMessage(jid, {
                     text: menuTexto,
                     mentions: todasLasMenciones
