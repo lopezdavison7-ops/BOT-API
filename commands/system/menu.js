@@ -213,6 +213,15 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
+            // ========== ENVIAR MENCIÓN PRIMERO (texto simple) + MENÚ INTERACTIVO ==========
+            // WhatsApp no renderiza menciones en viewOnceMessage + interactiveMessage
+            // Workaround: enviar texto con mención primero, luego el menú
+            if (menciones.length > 0) {
+                await sock.sendMessage(jid, {
+                    text: `👋 ¡Hola ${mencionTexto}! ✨`
+                }, { quoted: msg, mentions: menciones });
+            }
+
             // ========== MENSAJE INTERACTIVO ==========
             const interactiveMessage = {
                 body: {
@@ -240,8 +249,7 @@ export default {
                 { viewOnceMessage: { message: { interactiveMessage } } },
                 {
                     userJid: sock.user.id,
-                    quoted: msg,
-                    mentions: menciones
+                    quoted: msg
                 }
             );
 
@@ -277,6 +285,13 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
 
     texto += `───────────────`;
 
+    // Enviar mención primero (workaround para viewOnceMessage)
+    if (menciones.length > 0) {
+        await sock.sendMessage(jid, {
+            text: `👋 Hola ${mencionTexto}`
+        }, { quoted: msg, mentions: menciones });
+    }
+
     const interactiveMessage = {
         body: { text: texto },
         footer: { text: '⬅️ Toca para volver al menú principal' },
@@ -298,8 +313,7 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
         { viewOnceMessage: { message: { interactiveMessage } } },
         {
             userJid: sock.user.id,
-            quoted: msg,
-            mentions: menciones
+            quoted: msg
         }
     );
 
