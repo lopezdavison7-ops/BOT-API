@@ -33,43 +33,31 @@ const ICONOS = {
 };
 
 // ============================================================
-// OBTENER AUTOR CON MENCIONES CORRECTAS (usa groupMetadata para JID real)
+// OBTENER AUTOR CON MENCIONES CORRECTAS
 // ============================================================
 
-async function obtenerAutor(sock, msg) {
+function obtenerAutor(msg) {
     const key = msg?.key || {};
-    const chatId = key.remoteJid;
-    const esGrupo = chatId?.endsWith('@g.us');
+    // En grupos: participant es quien envió el mensaje
+    const candidatos = [
+        key.participant,        // Grupo: el que escribió (PRIORIDAD #1)
+        key.remoteJid,          // Privado: el chat
+        key.senderPn,           // Número de teléfono
+        key.participantAlt,     // Alternativo
+        key.remoteJidAlt
+    ];
 
-    // Remitente en bruto (puede ser LID)
-    const rawSender = key.participant || key.remoteJid;
-    if (!rawSender || typeof rawSender !== 'string') return null;
-
-    const num = String(rawSender).split('@')[0].split(':')[0].replace(/\D/g, '');
-    if (!num || num.length < 7) return null;
-
-    // Si es grupo, buscar el JID real en metadata
-    if (esGrupo) {
-        try {
-            const metadata = await sock.groupMetadata(chatId);
-            const participante = metadata.participants?.find(
-                p => String(p.id).split('@')[0].split(':')[0].replace(/\D/g, '') === num
-            );
-            if (participante?.id) {
-                return {
-                    jid: participante.id,  // JID real @s.whatsapp.net
-                    num
-                };
-            }
-        } catch {}
+    for (const c of candidatos) {
+        if (!c || typeof c !== 'string') continue;
+        const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (n && n.length >= 7) {
+            return {
+                jid: c.includes('@') ? c : `${c}@s.whatsapp.net`,
+                num: n
+            };
+        }
     }
-
-    // Fallback: convertir LID a JID normal
-    let jid = rawSender.includes('@') ? rawSender : `${rawSender}@s.whatsapp.net`;
-    if (jid.endsWith('@lid')) {
-        jid = jid.replace('@lid', '@s.whatsapp.net');
-    }
-    return { jid, num };
+    return null;
 }
 
 function obtenerCanal() {
@@ -131,7 +119,7 @@ export default {
     async ejecutar({ sock, msg, args, listaComandos, prefijo }) {
         try {
             const jid = msg?.key?.remoteJid;
-            const autor = await obtenerAutor(sock, msg);
+            const autor = obtenerAutor(msg);
             const categorias = organizarComandos(listaComandos);
             const canal = obtenerCanal();
             const categoriaPedida = args?.[0];
@@ -213,15 +201,6 @@ export default {
                 console.error('[MENU] Error media:', e?.message || e);
             }
 
-            // ========== ENVIAR MENCIÓN PRIMERO (texto simple) + MENÚ INTERACTIVO ==========
-            // WhatsApp no renderiza menciones en viewOnceMessage + interactiveMessage
-            // Workaround: enviar texto con mención primero, luego el menú
-            if (menciones.length > 0) {
-                await sock.sendMessage(jid, {
-                    text: `👋 ¡Hola ${mencionTexto}! ✨`
-                }, { quoted: msg, mentions: menciones });
-            }
-
             // ========== MENSAJE INTERACTIVO ==========
             const interactiveMessage = {
                 body: {
@@ -249,7 +228,8 @@ export default {
                 { viewOnceMessage: { message: { interactiveMessage } } },
                 {
                     userJid: sock.user.id,
-                    quoted: msg
+                    quoted: msg,
+                    mentions: menciones  // <-- MENCIÓN AQUÍ
                 }
             );
 
@@ -285,13 +265,6 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
 
     texto += `───────────────`;
 
-    // Enviar mención primero (workaround para viewOnceMessage)
-    if (menciones.length > 0) {
-        await sock.sendMessage(jid, {
-            text: `👋 Hola ${mencionTexto}`
-        }, { quoted: msg, mentions: menciones });
-    }
-
     const interactiveMessage = {
         body: { text: texto },
         footer: { text: '⬅️ Toca para volver al menú principal' },
@@ -313,7 +286,8 @@ async function enviarMenuCategoria(sock, jid, msg, categoria, comandos, prefijo,
         { viewOnceMessage: { message: { interactiveMessage } } },
         {
             userJid: sock.user.id,
-            quoted: msg
+            quoted: msg,
+            mentions: menciones  // <-- MENCIÓN AQUÍ
         }
     );
 
