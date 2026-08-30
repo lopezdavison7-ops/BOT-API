@@ -19,7 +19,7 @@ const API_URL = 'https://api.lempi.lat/s/ttsmp3';
 const SPEAKER_DEFECTO = 'Jorge (Castilian)';
 
 export default {
-    nombre: 'hablar',
+    nombre: 'tts',
 
     categoria: 'Descargas',
 
@@ -46,9 +46,9 @@ export default {
                 '┃\n' +
                 '┃ ❌ Escribe un texto.\n' +
                 '┃\n' +
-                '┃ 📌 Uso: .hablar <texto>\n' +
+                '┃ 📌 Uso: .tts <texto>\n' +
                 '┃ 📌 Con otra voz:\n' +
-                '┃     .hablar <texto> | <speaker>\n' +
+                '┃     .tts <texto> | <speaker>\n' +
                 '┃\n' +
                 `┃ 🎙️ Voz por defecto: ${SPEAKER_DEFECTO}\n` +
                 '┃\n' +
