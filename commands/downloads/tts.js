@@ -1,151 +1,145 @@
-// commands/downloads/tts.js
+// commands/downloads/hablar.js
+// ============================================================
+// COMANDO: HABLAR (texto a voz, con speaker seleccionable)
+// Usa /s/ttsmp3 de la API de Lempi. Ya existe un .tts con otra
+// API (YO SOY YO) sin selección de voz, así que este es aparte
+// para no pisarlo.
+//
+// Uso: .hablar <texto>
+// Uso con otra voz: .hablar <texto> | <speaker>
+// Ejemplo: .hablar Hola amiguita, qué tal
+// Ejemplo: .hablar Hola que tal | Diego (Mexican)
+// ============================================================
+
+import axios from 'axios';
+import config from '../../config.js';
+
+const API_URL = 'https://api.lempi.lat/s/ttsmp3';
+
+const SPEAKER_DEFECTO = 'Jorge (Castilian)';
 
 export default {
-    nombre: 'tts',
-    categoria: 'descargas',
-    alias: ['voz', 'texttospeech'],
-    descripcion: 'Convierte texto a voz usando YO SOY YO API',
+    nombre: 'hablar',
 
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
-        const jid = msg?.key?.remoteJid;
-        const consulta = argumento?.trim();
+    categoria: 'Descargas',
 
-        if (!consulta) {
-            return await responder.texto(
-                '❌ Uso: .tts texto\n\n' +
-                '📝 Ejemplo:\n' +
-                '.tts Hola, ¿cómo estás?'
+    alias: [
+        'ttsmp3'
+    ],
+
+    descripcion:
+        'Convierte texto a voz (con voz seleccionable). Uso: .hablar <texto> | <speaker opcional>',
+
+    ejecutar: async ({
+        sock,
+        msg,
+        jid,
+        responder,
+        argumento
+    }) => {
+
+        const entrada = argumento?.trim();
+
+        if (!entrada) {
+            await responder.texto(
+                '╭〔 🗣️ 𝐇𝐀𝐁𝐋𝐀𝐑 〕⬣\n' +
+                '┃\n' +
+                '┃ ❌ Escribe un texto.\n' +
+                '┃\n' +
+                '┃ 📌 Uso: .hablar <texto>\n' +
+                '┃ 📌 Con otra voz:\n' +
+                '┃     .hablar <texto> | <speaker>\n' +
+                '┃\n' +
+                `┃ 🎙️ Voz por defecto: ${SPEAKER_DEFECTO}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
+            return;
         }
 
+        // Se puede pasar "texto | speaker" para elegir voz.
+        const [textoCrudo, speakerCrudo] = entrada.split('|');
+        const texto = textoCrudo?.trim();
+        const speaker = speakerCrudo?.trim() || SPEAKER_DEFECTO;
+
+        if (!texto) {
+            await responder.texto('❌ Falta el texto antes del "|".');
+            return;
+        }
+
+        const apiKey = config.LEMPI_API_KEY?.trim();
+
+        if (!apiKey) {
+            console.error('[HABLAR] ❌ No se encontró LEMPI_API_KEY en config.js');
+            await responder.texto(
+                '❌ *Error de configuración*\n\n' +
+                'No se encontró `LEMPI_API_KEY` en `config.js`.'
+            );
+            return;
+        }
+
+        const chatJid = jid || msg.key.remoteJid;
+
         try {
-            await responder.texto('🎙️ Generando audio...');
-
-            const apiUrl =
-                `https://apiyosoyyo-ofc.onrender.com/api/tts?text=${encodeURIComponent(consulta)}&apiKey=yosoyyo_sk_gincmnk3`;
-
-            const res = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    Accept: 'audio/wav, audio/*, application/json',
-                    'User-Agent': 'Mozilla/5.0'
-                }
+            const response = await axios.get(API_URL, {
+                params: {
+                    text: texto,
+                    speaker,
+                    apikey: apiKey
+                },
+                timeout: 30000,
+                validateStatus: () => true
             });
 
-            if (!res.ok) {
-                throw new Error(`API respondió con HTTP ${res.status}`);
-            }
+            const data = response.data;
 
-            const contentType = (
-                res.headers.get('content-type') || ''
-            ).toLowerCase();
-
-            /*
-             * La API puede responder:
-             * 1. Audio WAV directamente.
-             * 2. JSON con información de la generación.
-             */
-
-            if (contentType.includes('audio')) {
-                const buffer = Buffer.from(await res.arrayBuffer());
-
-                if (!buffer.length) {
-                    throw new Error('La API devolvió un audio vacío');
-                }
-
-                await sock.sendMessage(
-                    jid,
-                    {
-                        audio: buffer,
-                        mimetype: 'audio/wav',
-                        ptt: true
-                    },
-                    {
-                        quoted: msg
-                    }
+            if (response.status < 200 || response.status >= 300 || !data?.status || !data?.datos?.audioUrl) {
+                console.error('[HABLAR] Error API:', response.status, data?.message || data);
+                await responder.texto(
+                    `❌ No se pudo generar el audio.\n\n📡 ${data?.message || `HTTP ${response.status}`}`
                 );
-
                 return;
             }
 
-            const json = await res.json();
+            const audioUrl = data.datos.audioUrl;
 
-            if (json?.status && Number(json.status) !== 200) {
-                throw new Error(
-                    json?.message ||
-                    json?.error ||
-                    `La API respondió con estado ${json.status}`
-                );
-            }
-
-            /*
-             * Buscar posibles campos donde la API pueda
-             * entregar la URL o los bytes del audio.
-             */
-            const audioUrl =
-                json?.data?.audio_url ||
-                json?.data?.audioUrl ||
-                json?.data?.url ||
-                json?.audio_url ||
-                json?.audioUrl ||
-                json?.url;
-
-            /*
-             * STREAMING_BYTES_LOCAL significa que el servidor
-             * no está entregando una URL pública en ese campo.
-             *
-             * En ese caso no intentamos hacer fetch() sobre
-             * esa cadena porque produciría otro error.
-             */
-            if (
-                !audioUrl ||
-                audioUrl === 'STREAMING_BYTES_LOCAL'
-            ) {
-                throw new Error(
-                    'La API no entregó el audio directamente ni una URL pública de descarga'
-                );
-            }
-
-            const audioRes = await fetch(audioUrl, {
-                headers: {
-                    Accept: 'audio/wav, audio/*',
-                    'User-Agent': 'Mozilla/5.0'
-                }
+            const audioResponse = await axios.get(audioUrl, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                validateStatus: () => true
             });
 
-            if (!audioRes.ok) {
-                throw new Error(
-                    `No se pudo descargar el audio: HTTP ${audioRes.status}`
-                );
+            if (audioResponse.status < 200 || audioResponse.status >= 300) {
+                await responder.texto(`❌ No se pudo descargar el audio (HTTP ${audioResponse.status}).`);
+                return;
             }
 
-            const buffer = Buffer.from(
-                await audioRes.arrayBuffer()
-            );
+            const buffer = Buffer.from(audioResponse.data);
 
             if (!buffer.length) {
-                throw new Error('El archivo de audio está vacío');
+                await responder.texto('❌ El audio llegó vacío.');
+                return;
             }
 
             await sock.sendMessage(
-                jid,
+                chatJid,
                 {
                     audio: buffer,
-                    mimetype: 'audio/wav',
+                    mimetype: 'audio/mpeg',
                     ptt: true
                 },
-                {
-                    quoted: msg
-                }
+                { quoted: msg }
             );
 
         } catch (error) {
-            console.error('[TTS] Error:', error);
+            console.error('[HABLAR] Error:', error?.response?.status || '', error?.message || error);
 
-            return await responder.texto(
-                `❌ Error TTS: ${error?.message || 'No se pudo generar el audio'}`
-            );
+            if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
+                await responder.texto('⏱️ La API tardó demasiado en responder. Intenta de nuevo.');
+                return;
+            }
+
+            await responder.texto('❌ No se pudo generar el audio. Intenta más tarde.');
         }
     }
 };
-```0
