@@ -19,7 +19,7 @@ const API_URL = 'https://api.lempi.lat/s/ttsmp3';
 const SPEAKER_DEFECTO = 'Jorge (Castilian)';
 
 export default {
-    nombre: 'tts',
+    nombre: '.tts',
 
     categoria: 'Descargas',
 
@@ -126,7 +126,7 @@ export default {
                 {
                     audio: buffer,
                     mimetype: 'audio/mpeg',
-                    ptt: true
+                    ptt: false
                 },
                 { quoted: msg }
             );
