@@ -1,14 +1,12 @@
-// commands/downloads/hablar.js
+// commands/downloads/tts.js
 // ============================================================
-// COMANDO: HABLAR (texto a voz, con speaker seleccionable)
-// Usa /s/ttsmp3 de la API de Lempi. Ya existe un .tts con otra
-// API (YO SOY YO) sin selección de voz, así que este es aparte
-// para no pisarlo.
+// COMANDO: TTS (texto a voz, con speaker seleccionable)
+// Usa /s/ttsmp3 de la API de Lempi.
 //
-// Uso: .hablar <texto>
-// Uso con otra voz: .hablar <texto> | <speaker>
-// Ejemplo: .hablar Hola amiguita, qué tal
-// Ejemplo: .hablar Hola que tal | Diego (Mexican)
+// Uso: .tts <texto>
+// Uso con otra voz: .tts <texto> | <speaker>
+// Ejemplo: .tts Hola amiguita, qué tal
+// Ejemplo: .tts Hola que tal | Diego (Mexican)
 // ============================================================
 
 import axios from 'axios';
@@ -19,16 +17,18 @@ const API_URL = 'https://api.lempi.lat/s/ttsmp3';
 const SPEAKER_DEFECTO = 'Jorge (Castilian)';
 
 export default {
-    nombre: '.tts',
+    nombre: 'tts',
 
     categoria: 'Descargas',
 
     alias: [
-        'ttsmp3'
+        'ttsmp3',
+        'voz',
+        'texttospeech'
     ],
 
     descripcion:
-        'Convierte texto a voz (con voz seleccionable). Uso: .hablar <texto> | <speaker opcional>',
+        'Convierte texto a voz (con voz seleccionable). Uso: .tts <texto> | <speaker opcional>',
 
     ejecutar: async ({
         sock,
@@ -42,7 +42,7 @@ export default {
 
         if (!entrada) {
             await responder.texto(
-                '╭〔 🗣️ 𝐇𝐀𝐁𝐋𝐀𝐑 〕⬣\n' +
+                '╭〔 🗣️ 𝐓𝐓𝐒 〕⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe un texto.\n' +
                 '┃\n' +
@@ -70,7 +70,7 @@ export default {
         const apiKey = config.LEMPI_API_KEY?.trim();
 
         if (!apiKey) {
-            console.error('[HABLAR] ❌ No se encontró LEMPI_API_KEY en config.js');
+            console.error('[TTS] ❌ No se encontró LEMPI_API_KEY en config.js');
             await responder.texto(
                 '❌ *Error de configuración*\n\n' +
                 'No se encontró `LEMPI_API_KEY` en `config.js`.'
@@ -94,7 +94,7 @@ export default {
             const data = response.data;
 
             if (response.status < 200 || response.status >= 300 || !data?.status || !data?.datos?.audioUrl) {
-                console.error('[HABLAR] Error API:', response.status, data?.message || data);
+                console.error('[TTS] Error API:', response.status, data?.message || data);
                 await responder.texto(
                     `❌ No se pudo generar el audio.\n\n📡 ${data?.message || `HTTP ${response.status}`}`
                 );
@@ -132,7 +132,7 @@ export default {
             );
 
         } catch (error) {
-            console.error('[HABLAR] Error:', error?.response?.status || '', error?.message || error);
+            console.error('[TTS] Error:', error?.response?.status || '', error?.message || error);
 
             if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
                 await responder.texto('⏱️ La API tardó demasiado en responder. Intenta de nuevo.');
