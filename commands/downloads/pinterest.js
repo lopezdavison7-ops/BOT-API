@@ -12,7 +12,7 @@
 import config from '../../config.js';
 
 const API_BASE =
-    'https://apiyosoyyo-ofc.onrender.com';
+    'https://api-yosoyyo-api-ofc.onrender.com';
 
 const API_KEY =
     config.YO_SOY_YO_API_KEY ||
