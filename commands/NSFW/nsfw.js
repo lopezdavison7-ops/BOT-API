@@ -18,9 +18,10 @@
 
 // ============================================================
 // COMANDOS DISPONIBLES (LAS CLAVES DE ESTE OBJETO SON LOS COMANDOS)
-// ============================================================
-   spank: [
-        "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
+// ============================================================ 
+  const nsfwData = {
+spank: [
+     "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
         "https://cdn.yuki-wabot.my.id/files/b8M6.mp4",
         "https://cdn.yuki-wabot.my.id/files/yBjF.mp4",
         "https://cdn.yuki-wabot.my.id/files/FI0k.mp4",
