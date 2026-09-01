@@ -1,28 +1,29 @@
 // ============================================================
-// COMANDO: FAKE (FAKEMSG)
+// COMANDO: FAKE / DESTROY
 // ============================================================
-// Crea mensajes falsos que parecen ser de otro usuario.
-// Uso: .fake @usuario texto del mensaje falso
-// Ejemplo: .fake @521234567890 Hola soy un tonto
+// Crea mensajes falsos que aparecen como si fueran de otro usuario
+// en el chat. Cuando intentan responder, WhatsApp dice que no existe.
+// 
+// Uso: .fake @usuario mensaje
+// Ejemplo: .fake @521234567890 Hola soy un crack
 // ============================================================
 
 export default {
     nombre: 'fake',
-    categoria: 'fun',
-    alias: ['fakemsg', 'faketext', 'destroy'],
-    descripcion: 'Crea mensajes falsos. Ejemplo: .fake @usuario mensaje',
+    categoria: 'DIVERSIÓN',
+    alias: ['fakemsg', 'destroy', 'suplantar'],
+    descripcion: 'Crea mensajes falsos que parecen ser de otro usuario',
     ejecutar: async ({ sock, msg, responder, args }) => {
         try {
-            // Obtener el JID del usuario a suplantar (por mención o reply)
+            // Obtener el JID del usuario a suplantar
             const contexto = msg?.message?.extendedTextMessage?.contextInfo;
             const mencionados = contexto?.mentionedJid || [];
             const respondido = contexto?.participant || contexto?.participantAlt;
             
-            // El usuario a suplantar (primera mención o el respondido)
             const targetJid = mencionados[0] || respondido || null;
             
             if (!targetJid) {
-                await responder.texto('❌ Debes mencionar a alguien o responder a su mensaje.\n\nUso: `.fake @usuario mensaje falso`');
+                await responder.texto('❌ Menciona a alguien o responde a su mensaje.\n\nUso: `.fake @usuario mensaje`');
                 return;
             }
 
@@ -30,43 +31,46 @@ export default {
             const textoCompleto = msg?.message?.conversation || 
                                    msg?.message?.extendedTextMessage?.text || '';
             
-            // Remover el comando y la mención para quedarse solo con el mensaje
             let mensajeFalso = textoCompleto
-                .replace(/^\.(fake|fakemsg|faketext|destroy)\s*/i, '')
-                .replace(/@\d+/g, '') // Remover @numero
+                .replace(/^\.(fake|fakemsg|destroy|suplantar)\s*/i, '')
+                .replace(/@\d+/g, '')
                 .trim();
 
             if (!mensajeFalso) {
-                await responder.texto('❌ Escribe el mensaje falso.\n\nEjemplo: `.fake @usuario Hola soy increíble`');
+                await responder.texto('❌ Escribe el mensaje falso.\n\nEjemplo: `.fake @usuario Soy el mejor`');
                 return;
             }
 
-            // Extraer número del JID para el @mención
-            const numeroTarget = targetJid.split('@')[0].split(':')[0];
-            
-            // Crear el mensaje falso manipulando el quoted
-            // Esto hace que parezca que el targetJid envió ese mensaje
-            const fakeQuoted = {
+            // Crear el mensaje con el participant manipulado
+            // Esto hace que parezca que targetJid envió el mensaje
+            const fakeMessage = {
                 key: {
                     remoteJid: msg.key.remoteJid,
                     fromMe: false,
-                    id: 'FAKE_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                    participant: targetJid // Aquí está el truco - el "remitente" falso
+                    id: '3EB0' + Date.now().toString(16).toUpperCase() + Math.random().toString(36).substr(2, 9).toUpperCase(),
+                    participant: targetJid // El truco - el "remitente" falso
                 },
                 message: {
                     conversation: mensajeFalso
                 },
-                participant: targetJid
+                messageTimestamp: Math.floor(Date.now() / 1000),
+                participant: targetJid,
+                status: 1
             };
 
-            // Enviar el mensaje citando el mensaje falso
-            // Esto hace que aparezca en el chat como si targetJid hubiera dicho eso
-            await sock.sendMessage(msg.key.remoteJid, {
-                text: `😈 Mensaje falsificado de @${numeroTarget}`,
-                mentions: [targetJid]
-            }, {
-                quoted: fakeQuoted
+            // Usar relayMessage para insertar el mensaje sin modificarlo
+            await sock.relayMessage(msg.key.remoteJid, fakeMessage.message, {
+                messageId: fakeMessage.key.id,
+                participant: targetJid
             });
+
+            // Borrar el mensaje del comando para que no se vea
+            // (opcional, si quieres que solo se vea el mensaje falso)
+            try {
+                await sock.sendMessage(msg.key.remoteJid, { delete: msg.key });
+            } catch (e) {
+                // Si no puede borrar, no pasa nada
+            }
 
         } catch (error) {
             console.error('[FAKE] Error:', error);
