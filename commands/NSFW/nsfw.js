@@ -18,10 +18,10 @@
 
 // ============================================================
 // COMANDOS DISPONIBLES (LAS CLAVES DE ESTE OBJETO SON LOS COMANDOS)
-// ============================================================ 
-  const nsfwData = {
-spank: [
-     "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
+// ============================================================
+const nsfwData = {
+    spank: [
+        "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
         "https://cdn.yuki-wabot.my.id/files/b8M6.mp4",
         "https://cdn.yuki-wabot.my.id/files/yBjF.mp4",
         "https://cdn.yuki-wabot.my.id/files/FI0k.mp4",
@@ -380,7 +380,7 @@ spank: [
         "https://cdn.yuki-wabot.my.id/files/cWWo.mp4",
         "https://cdn.yuki-wabot.my.id/files/MAgj.mp4"
     ],
-    org [
+    orgy: [
         "https://cdn.yuki-wabot.my.id/files/W3lc.mp4",
         "https://cdn.yuki-wabot.my.id/files/hIvF.mp4",
         "https://cdn.yuki-wabot.my.id/files/ypTG.mp4",
