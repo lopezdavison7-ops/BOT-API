@@ -31,8 +31,8 @@ export default {
     // APIs de terceros usadas por .play, .yt, .ss, .pinterest,
     // .spack, .letra, .chtgpt, etc.
     YT_API_KEY: 'yosoyyo_sk_gincmnk3',
-    YO_SOY_YO_API_KEY: 'yosoyyo_sk_gincmnk3',
-    YOSOYYO_API_KEY: 'yosoyyo_sk_gincmnk3',
+    YO_SOY_YO_API_KEY: 'yosoyyo_sk_p7i2ekmm',
+    YOSOYYO_API_KEY: 'yosoyyo_sk_p7i2ekmm',
 
     // Reservada (aún sin usar en ningún comando)
     LEMPI_API_KEY: 'lem_777e1c256edcd0ce3c4c31d34fc61cdba7bd465e'
