@@ -1,412 +1,42 @@
-// ============================================
-// 🔞 COMANDO NSFW - COMPLETO
-// ============================================
+// commands/nsfw/nsfw.js
 
-// <--- PEGA TU JSON AQUÍ (el que me pasaste con todas las categorías)
 const nsfwData = {
-    // Ejemplo:
-    spank: [
-        "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
-        "https://cdn.yuki-wabot.my.id/files/b8M6.mp4"
-    ]
-    const nsfwData = {
-    spank: [
-        "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
-        "https://cdn.yuki-wabot.my.id/files/b8M6.mp4",
-        "https://cdn.yuki-wabot.my.id/files/yBjF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/FI0k.mp4",
-        "https://cdn.yuki-wabot.my.id/files/KLdv.mp4",
-        "https://cdn.yuki-wabot.my.id/files/12LT.mp4",
-        "https://cdn.yuki-wabot.my.id/files/C9nx.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Xb5O.mp4",
-        "https://cdn.yuki-wabot.my.id/files/1IyF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rw8p.mp4"
-    ],
-    undress: [
-        "https://cdn.yuki-wabot.my.id/files/p2g1.mp4",
-        "https://cdn.yuki-wabot.my.id/files/nELt.mp4",
-        "https://cdn.yuki-wabot.my.id/files/hezG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/qJgu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/iK0Z.mp4",
-        "https://cdn.yuki-wabot.my.id/files/NlVS.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LUxZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/IshD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/bWd6.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ATwj.mp4"
-    ],
-    yuri: [
-        "https://cdn.yuki-wabot.my.id/files/2GIM.mp4",
-        "https://cdn.yuki-wabot.my.id/files/tVgt.mp4",
-        "https://cdn.yuki-wabot.my.id/files/taNu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ClhY.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7EUX.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BWHd.mp4",
-        "https://cdn.yuki-wabot.my.id/files/OqMl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/qkZl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/WqgZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/pnrb.mp4"
-    ],
-    sixnine: [
-        "https://cdn.yuki-wabot.my.id/files/kkqs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/QnUE.mp4",
-        "https://cdn.yuki-wabot.my.id/files/aJSH.mp4",
-        "https://cdn.yuki-wabot.my.id/files/APVc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LbgB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BUsd.mp4",
-        "https://cdn.yuki-wabot.my.id/files/huUB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/5jdW.mp4",
-        "https://cdn.yuki-wabot.my.id/files/X0y9.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JmEn.mp4"
-    ],
-    anal: [
-        "https://cdn.yuki-wabot.my.id/files/8d8D.mp4",
-        "https://cdn.yuki-wabot.my.id/files/g8Mm.mp4",
-        "https://cdn.yuki-wabot.my.id/files/jcsM.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gdFO.mp4",
-        "https://cdn.yuki-wabot.my.id/files/hM41.mp4",
-        "https://cdn.yuki-wabot.my.id/files/g2wJ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/tTYb.mp4",
-        "https://cdn.yuki-wabot.my.id/files/0jaS.mp4",
-        "https://cdn.yuki-wabot.my.id/files/S5du.mp4",
-        "https://cdn.yuki-wabot.my.id/files/dr91.mp4"
-    ],
-    fuck: [
-        "https://cdn.yuki-wabot.my.id/files/GWLs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/cCQZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/MRqC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/lHcW.mp4",
-        "https://cdn.yuki-wabot.my.id/files/cUyl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/VUrC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PYJc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rAN7.mp4",
-        "https://cdn.yuki-wabot.my.id/files/weKv.mp4",
-        "https://cdn.yuki-wabot.my.id/files/k7ZM.mp4"
-    ],
-    suckboobs: [
-        "https://cdn.yuki-wabot.my.id/files/3bV7.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BT7m.mp4",
-        "https://cdn.yuki-wabot.my.id/files/yb93.mp4",
-        "https://cdn.yuki-wabot.my.id/files/dnrt.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PT3X.mp4",
-        "https://cdn.yuki-wabot.my.id/files/VesN.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Stxs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/kLxW.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Sy1C.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7eVv.mp4"
-    ],
-    cummoth: [
-        "https://cdn.yuki-wabot.my.id/files/LnRN.mp4",
-        "https://cdn.yuki-wabot.my.id/files/h7YA.mp4",
-        "https://cdn.yuki-wabot.my.id/files/sWFb.mp4",
-        "https://cdn.yuki-wabot.my.id/files/kjvQ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JcyG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/IVVq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/hqRy.mp4",
-        "https://cdn.yuki-wabot.my.id/files/5Y7z.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Di2q.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Z9BJ.mp4"
-    ],
-    cumshot: [
-        "https://cdn.yuki-wabot.my.id/files/vkSu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rj61.mp4",
-        "https://cdn.yuki-wabot.my.id/files/2w4x.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7ZXk.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Up8w.mp4",
-        "https://cdn.yuki-wabot.my.id/files/U1vT.mp4",
-        "https://cdn.yuki-wabot.my.id/files/nNjD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/X09N.mp4",
-        "https://cdn.yuki-wabot.my.id/files/EAa7.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ickC.mp4"
-    ],
-    cum: [
-        "https://cdn.yuki-wabot.my.id/files/WgY8.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Sfg2.mp4",
-        "https://cdn.yuki-wabot.my.id/files/oAQ7.mp4",
-        "https://cdn.yuki-wabot.my.id/files/3kV8.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9siz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/qb94.mp4",
-        "https://cdn.yuki-wabot.my.id/files/xOqF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/vvCu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9Hjn.mp4",
-        "https://cdn.yuki-wabot.my.id/files/WIuC.jpeg"
-    ],
-    lickpussy: [
-        "https://cdn.yuki-wabot.my.id/files/YOkd.mp4",
-        "https://cdn.yuki-wabot.my.id/files/8Ztq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/kHLQ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/qzH1.mp4",
-        "https://cdn.yuki-wabot.my.id/files/cMfm.mp4",
-        "https://cdn.yuki-wabot.my.id/files/cDrL.mp4",
-        "https://cdn.yuki-wabot.my.id/files/D9kS.mp4",
-        "https://cdn.yuki-wabot.my.id/files/apfo.mp4",
-        "https://cdn.yuki-wabot.my.id/files/VNOn.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JrAi.mp4"
-    ],
-    lickdick: [
-        "https://cdn.yuki-wabot.my.id/files/Q3Wi.mp4",
-        "https://cdn.yuki-wabot.my.id/files/XAwW.mp4",
-        "https://cdn.yuki-wabot.my.id/files/87WD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/eWnU.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ppYP.mp4",
-        "https://cdn.yuki-wabot.my.id/files/XA6T.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Hc3Y.mp4",
-        "https://cdn.yuki-wabot.my.id/files/jEir.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Ywlz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/A4hZ.mp4"
-    ],
-    lickass: [
-        "https://cdn.yuki-wabot.my.id/files/1IHj.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9uiB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/6zJk.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mv59.mp4",
-        "https://cdn.yuki-wabot.my.id/files/v9Bq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/OQwz.jpeg",
-        "https://cdn.yuki-wabot.my.id/files/6XJX.mp4",
-        "https://cdn.yuki-wabot.my.id/files/YSSs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/WCMq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/iEW3.mp4"
-    ],
-    handjob: [
-        "https://cdn.yuki-wabot.my.id/files/vARz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/huzl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/WXu1.mp4",
-        "https://cdn.yuki-wabot.my.id/files/A3ic.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9Afv.mp4",
-        "https://cdn.yuki-wabot.my.id/files/suDf.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rsbC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/DP6O.mp4",
-        "https://cdn.yuki-wabot.my.id/files/loC3.mp4",
-        "https://cdn.yuki-wabot.my.id/files/p0yY.mp4"
-    ],
-    grope: [
-        "https://cdn.yuki-wabot.my.id/files/R66C.mp4",
-        "https://cdn.yuki-wabot.my.id/files/x751.mp4",
-        "https://cdn.yuki-wabot.my.id/files/tvd0.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PN18.mp4",
-        "https://cdn.yuki-wabot.my.id/files/sxoz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Z0dG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/oKHl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gb2X.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JISx.mp4",
-        "https://cdn.yuki-wabot.my.id/files/0WbV.mp4"
-    ],
-    grabboobs: [
-        "https://cdn.yuki-wabot.my.id/files/0U8R.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BadN.mp4",
-        "https://cdn.yuki-wabot.my.id/files/SMmv.mp4",
-        "https://cdn.yuki-wabot.my.id/files/SOkx.mp4",
-        "https://cdn.yuki-wabot.my.id/files/O958.mp4",
-        "https://cdn.yuki-wabot.my.id/files/s4zG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mgVE.mp4",
-        "https://cdn.yuki-wabot.my.id/files/KTIn.mp4",
-        "https://cdn.yuki-wabot.my.id/files/XBpu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/swW3.mp4"
-    ],
-    blowjob: [
-        "https://cdn.yuki-wabot.my.id/files/3YNF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ld7h.mp4",
-        "https://cdn.yuki-wabot.my.id/files/pGys.mp4",
-        "https://cdn.yuki-wabot.my.id/files/lRah.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7l5P.mp4",
-        "https://cdn.yuki-wabot.my.id/files/qGVz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ThGu.mp4",
-        "https://cdn.yuki-wabot.my.id/files/UQn3.mp4",
-        "https://cdn.yuki-wabot.my.id/files/GFvh.mp4",
-        "https://cdn.yuki-wabot.my.id/files/2KEZ.mp4"
-    ],
-    boobjob: [
-        "https://cdn.yuki-wabot.my.id/files/wNm2.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mtsj.mp4",
-        "https://cdn.yuki-wabot.my.id/files/MJQZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/me3J.mp4",
-        "https://cdn.yuki-wabot.my.id/files/8nSG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/dvJL.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PIQ0.mp4",
-        "https://cdn.yuki-wabot.my.id/files/5D03.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ykpZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rwyB.mp4"
-    ],
-    fap: [
-        "https://cdn.yuki-wabot.my.id/files/VuiC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7j6s.mp4",
-        "https://cdn.yuki-wabot.my.id/files/dwhV.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9bDa.mp4",
-        "https://cdn.yuki-wabot.my.id/files/B6GC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ZTnN.mp4",
-        "https://cdn.yuki-wabot.my.id/files/EGBJ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LWta.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Z6ri.mp4",
-        "https://cdn.yuki-wabot.my.id/files/xVrs.mp4"
-    ],
-    footjob: [
-        "https://cdn.yuki-wabot.my.id/files/0Yf0.mp4",
-        "https://cdn.yuki-wabot.my.id/files/OsoL.mp4",
-        "https://cdn.yuki-wabot.my.id/files/oIyN.mp4",
-        "https://cdn.yuki-wabot.my.id/files/2nMl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/bTCa.mp4",
-        "https://cdn.yuki-wabot.my.id/files/D8Sw.mp4",
-        "https://cdn.yuki-wabot.my.id/files/viYl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/x5N5.mp4",
-        "https://cdn.yuki-wabot.my.id/files/2ob2.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ZLo7.mp4"
-    ],
-    fingering: [
-        "https://cdn.yuki-wabot.my.id/files/pw4t.mp4",
-        "https://cdn.yuki-wabot.my.id/files/wclJ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/u2NI.mp4",
-        "https://cdn.yuki-wabot.my.id/files/R6ul.mp4",
-        "https://cdn.yuki-wabot.my.id/files/lhQJ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LAzh.mp4",
-        "https://cdn.yuki-wabot.my.id/files/kyuG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/FPoS.mp4",
-        "https://cdn.yuki-wabot.my.id/files/IQcQ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/N7GS.mp4"
-    ],
-    creampie: [
-        "https://cdn.yuki-wabot.my.id/files/2i3e.mp4",
-        "https://cdn.yuki-wabot.my.id/files/H26A.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ugP4.jpeg",
-        "https://cdn.yuki-wabot.my.id/files/YjXf.jpeg",
-        "https://cdn.yuki-wabot.my.id/files/aBHw.jpeg",
-        "https://cdn.yuki-wabot.my.id/files/wcgE.mp4",
-        "https://cdn.yuki-wabot.my.id/files/OmPi.mp4",
-        "https://cdn.yuki-wabot.my.id/files/muwD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/4tfx.mp4",
-        "https://cdn.yuki-wabot.my.id/files/CAd8.jpeg"
-    ],
-    facesitting: [
-        "https://cdn.yuki-wabot.my.id/files/gVMP.mp4",
-        "https://cdn.yuki-wabot.my.id/files/uWys.mp4",
-        "https://cdn.yuki-wabot.my.id/files/0SHB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/YwMe.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mqIn.mp4",
-        "https://cdn.yuki-wabot.my.id/files/tFi1.mp4",
-        "https://cdn.yuki-wabot.my.id/files/X7Oe.mp4",
-        "https://cdn.yuki-wabot.my.id/files/e705.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PEBc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/3k4E.mp4"
-    ],
-    futanari: [
-        "https://cdn.yuki-wabot.my.id/files/sRkO.mp4",
-        "https://cdn.yuki-wabot.my.id/files/j0ry.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mJKc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/68ra.mp4",
-        "https://cdn.yuki-wabot.my.id/files/KLrR.mp4",
-        "https://cdn.yuki-wabot.my.id/files/NN5A.mp4",
-        "https://cdn.yuki-wabot.my.id/files/tJcB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/PB8i.mp4",
-        "https://cdn.yuki-wabot.my.id/files/65Xn.mp4",
-        "https://cdn.yuki-wabot.my.id/files/lLMd.mp4"
-    ],
-    pegging: [
-        "https://cdn.yuki-wabot.my.id/files/J6pL.mp4",
-        "https://cdn.yuki-wabot.my.id/files/lvZG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gpHC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/d4ta.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gaWM.mp4",
-        "https://cdn.yuki-wabot.my.id/files/pjJP.mp4",
-        "https://cdn.yuki-wabot.my.id/files/23bo.mp4",
-        "https://cdn.yuki-wabot.my.id/files/SF64.mp4",
-        "https://cdn.yuki-wabot.my.id/files/9xLd.mp4",
-        "https://cdn.yuki-wabot.my.id/files/3kgZ.mp4"
-    ],
-    bondage: [
-        "https://cdn.yuki-wabot.my.id/files/LByq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/h5bF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/aPHQ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/QIrq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Yox4.mp4",
-        "https://cdn.yuki-wabot.my.id/files/l8IQ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/p4jt.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ijIr.mp4",
-        "https://cdn.yuki-wabot.my.id/files/R0iD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/7RgY.mp4"
-    ],
-    deepthroat: [
-        "https://cdn.yuki-wabot.my.id/files/1Nog.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gEfE.mp4",
-        "https://cdn.yuki-wabot.my.id/files/L26C.mp4",
-        "https://cdn.yuki-wabot.my.id/files/w9qF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Tnjq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/46Zs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/QSSi.mp4",
-        "https://cdn.yuki-wabot.my.id/files/oixe.mp4",
-        "https://cdn.yuki-wabot.my.id/files/VQFb.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BwL8.mp4"
-    ],
-    thighjob: [
-        "https://cdn.yuki-wabot.my.id/files/XHTZ.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ZaiI.mp4",
-        "https://cdn.yuki-wabot.my.id/files/DOzT.mp4",
-        "https://cdn.yuki-wabot.my.id/files/H423.mp4",
-        "https://cdn.yuki-wabot.my.id/files/XKu4.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ivl5.mp4",
-        "https://cdn.yuki-wabot.my.id/files/pqw9.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Xkgy.mp4",
-        "https://cdn.yuki-wabot.my.id/files/6UJC.mp4",
-        "https://cdn.yuki-wabot.my.id/files/4AeC.mp4"
-    ],
-    yaoi: [
-        "https://cdn.yuki-wabot.my.id/files/4saj.mp4",
-        "https://cdn.yuki-wabot.my.id/files/q67x.mp4",
-        "https://cdn.yuki-wabot.my.id/files/HjE8.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ofP5.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JlLl.mp4",
-        "https://cdn.yuki-wabot.my.id/files/gUXB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/4uxr.mp4",
-        "https://cdn.yuki-wabot.my.id/files/z7I9.mp4",
-        "https://cdn.yuki-wabot.my.id/files/m2ld.mp4",
-        "https://cdn.yuki-wabot.my.id/files/8CVI.mp4"
-    ],
-    bukkake: [
-        "https://cdn.yuki-wabot.my.id/files/wDKv.mp4",
-        "https://cdn.yuki-wabot.my.id/files/TGjj.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Af58.mp4",
-        "https://cdn.yuki-wabot.my.id/files/dMZg.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Nd1W.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ZKnj.mp4",
-        "https://cdn.yuki-wabot.my.id/files/3Czz.mp4",
-        "https://cdn.yuki-wabot.my.id/files/oj4E.mp4",
-        "https://cdn.yuki-wabot.my.id/files/cWWo.mp4",
-        "https://cdn.yuki-wabot.my.id/files/MAgj.mp4"
-    ],
-    orgy: [
-        "https://cdn.yuki-wabot.my.id/files/W3lc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/hIvF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/ypTG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/65A2.mp4",
-        "https://cdn.yuki-wabot.my.id/files/Tnma.mp4",
-        "https://cdn.yuki-wabot.my.id/files/DodD.mp4",
-        "https://cdn.yuki-wabot.my.id/files/5U8K.mp4",
-        "https://cdn.yuki-wabot.my.id/files/l30j.mp4",
-        "https://cdn.yuki-wabot.my.id/files/heWq.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LYGn.mp4"
-    ],
-    squirting: [
-        "https://cdn.yuki-wabot.my.id/files/j0in.mp4",
-        "https://cdn.yuki-wabot.my.id/files/zRAF.mp4",
-        "https://cdn.yuki-wabot.my.id/files/pEAr.mp4",
-        "https://cdn.yuki-wabot.my.id/files/6Q5l.mp4",
-        "https://cdn.yuki-wabot.my.id/files/u2vg.mp4",
-        "https://cdn.yuki-wabot.my.id/files/GbnK.mp4",
-        "https://cdn.yuki-wabot.my.id/files/mxPV.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LEqS.mp4",
-        "https://cdn.yuki-wabot.my.id/files/zsWG.mp4",
-        "https://cdn.yuki-wabot.my.id/files/rs9t.mp4"
-    ],
-    69: [
-        "https://cdn.yuki-wabot.my.id/files/kkqs.mp4",
-        "https://cdn.yuki-wabot.my.id/files/QnUE.mp4",
-        "https://cdn.yuki-wabot.my.id/files/aJSH.mp4",
-        "https://cdn.yuki-wabot.my.id/files/APVc.mp4",
-        "https://cdn.yuki-wabot.my.id/files/LbgB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/BUsd.mp4",
-        "https://cdn.yuki-wabot.my.id/files/huUB.mp4",
-        "https://cdn.yuki-wabot.my.id/files/5jdW.mp4",
-        "https://cdn.yuki-wabot.my.id/files/X0y9.mp4",
-        "https://cdn.yuki-wabot.my.id/files/JmEn.mp4"
-    ]
-};const messages = {
+    spank: ["https://cdn.yuki-wabot.my.id/files/1Sve.mp4", "https://cdn.yuki-wabot.my.id/files/b8M6.mp4"],
+    undress: ["https://cdn.yuki-wabot.my.id/files/p2g1.mp4", "https://cdn.yuki-wabot.my.id/files/nELt.mp4"],
+    yuri: ["https://cdn.yuki-wabot.my.id/files/2GIM.mp4", "https://cdn.yuki-wabot.my.id/files/tVgt.mp4"],
+    sixnine: ["https://cdn.yuki-wabot.my.id/files/kkqs.mp4", "https://cdn.yuki-wabot.my.id/files/QnUE.mp4"],
+    anal: ["https://cdn.yuki-wabot.my.id/files/8d8D.mp4", "https://cdn.yuki-wabot.my.id/files/g8Mm.mp4"],
+    fuck: ["https://cdn.yuki-wabot.my.id/files/GWLs.mp4", "https://cdn.yuki-wabot.my.id/files/cCQZ.mp4"],
+    suckboobs: ["https://cdn.yuki-wabot.my.id/files/3bV7.mp4", "https://cdn.yuki-wabot.my.id/files/BT7m.mp4"],
+    cummoth: ["https://cdn.yuki-wabot.my.id/files/LnRN.mp4", "https://cdn.yuki-wabot.my.id/files/h7YA.mp4"],
+    cumshot: ["https://cdn.yuki-wabot.my.id/files/vkSu.mp4", "https://cdn.yuki-wabot.my.id/files/rj61.mp4"],
+    cum: ["https://cdn.yuki-wabot.my.id/files/WgY8.mp4", "https://cdn.yuki-wabot.my.id/files/Sfg2.mp4"],
+    lickpussy: ["https://cdn.yuki-wabot.my.id/files/YOkd.mp4", "https://cdn.yuki-wabot.my.id/files/8Ztq.mp4"],
+    lickdick: ["https://cdn.yuki-wabot.my.id/files/Q3Wi.mp4", "https://cdn.yuki-wabot.my.id/files/XAwW.mp4"],
+    lickass: ["https://cdn.yuki-wabot.my.id/files/1IHj.mp4", "https://cdn.yuki-wabot.my.id/files/9uiB.mp4"],
+    handjob: ["https://cdn.yuki-wabot.my.id/files/vARz.mp4", "https://cdn.yuki-wabot.my.id/files/huzl.mp4"],
+    grope: ["https://cdn.yuki-wabot.my.id/files/R66C.mp4", "https://cdn.yuki-wabot.my.id/files/x751.mp4"],
+    grabboobs: ["https://cdn.yuki-wabot.my.id/files/0U8R.mp4", "https://cdn.yuki-wabot.my.id/files/BadN.mp4"],
+    blowjob: ["https://cdn.yuki-wabot.my.id/files/3YNF.mp4", "https://cdn.yuki-wabot.my.id/files/ld7h.mp4"],
+    boobjob: ["https://cdn.yuki-wabot.my.id/files/wNm2.mp4", "https://cdn.yuki-wabot.my.id/files/mtsj.mp4"],
+    fap: ["https://cdn.yuki-wabot.my.id/files/VuiC.mp4", "https://cdn.yuki-wabot.my.id/files/7j6s.mp4"],
+    footjob: ["https://cdn.yuki-wabot.my.id/files/0Yf0.mp4", "https://cdn.yuki-wabot.my.id/files/OsoL.mp4"],
+    fingering: ["https://cdn.yuki-wabot.my.id/files/pw4t.mp4", "https://cdn.yuki-wabot.my.id/files/wclJ.mp4"],
+    creampie: ["https://cdn.yuki-wabot.my.id/files/2i3e.mp4", "https://cdn.yuki-wabot.my.id/files/H26A.mp4"],
+    facesitting: ["https://cdn.yuki-wabot.my.id/files/gVMP.mp4", "https://cdn.yuki-wabot.my.id/files/uWys.mp4"],
+    futanari: ["https://cdn.yuki-wabot.my.id/files/sRkO.mp4", "https://cdn.yuki-wabot.my.id/files/j0ry.mp4"],
+    pegging: ["https://cdn.yuki-wabot.my.id/files/J6pL.mp4", "https://cdn.yuki-wabot.my.id/files/lvZG.mp4"],
+    bondage: ["https://cdn.yuki-wabot.my.id/files/LByq.mp4", "https://cdn.yuki-wabot.my.id/files/h5bF.mp4"],
+    deepthroat: ["https://cdn.yuki-wabot.my.id/files/1Nog.mp4", "https://cdn.yuki-wabot.my.id/files/gEfE.mp4"],
+    thighjob: ["https://cdn.yuki-wabot.my.id/files/XHTZ.mp4", "https://cdn.yuki-wabot.my.id/files/ZaiI.mp4"],
+    yaoi: ["https://cdn.yuki-wabot.my.id/files/4saj.mp4", "https://cdn.yuki-wabot.my.id/files/q67x.mp4"],
+    bukkake: ["https://cdn.yuki-wabot.my.id/files/wDKv.mp4", "https://cdn.yuki-wabot.my.id/files/TGjj.mp4"],
+    orgy: ["https://cdn.yuki-wabot.my.id/files/W3lc.mp4", "https://cdn.yuki-wabot.my.id/files/hIvF.mp4"],
+    squirting: ["https://cdn.yuki-wabot.my.id/files/j0in.mp4", "https://cdn.yuki-wabot.my.id/files/zRAF.mp4"],
+    69: ["https://cdn.yuki-wabot.my.id/files/kkqs.mp4", "https://cdn.yuki-wabot.my.id/files/QnUE.mp4"]
+};
+
+const messages = {
     spank: { target: '🔥 @user1 le dio una buena nalgada a @user2 🍑', solo: '😳 @user1 se dio una nalgada a sí mismo/a...' },
     undress: { target: '😳 @user1 le está quitando la ropa a @user2 👀', solo: '👀 @user1 se quitó la ropa solo/a...' },
     yuri: { target: '👭 @user1 y @user2 están teniendo un momento yuri apasionado 🌸', solo: '🌸 @user1 está disfrutando de algo de yuri solo/a...' },
@@ -442,88 +72,60 @@ const nsfwData = {
     69: { target: '⚡ @user1 y @user2 están haciendo el 69 🥵', solo: '🤸 @user1 intentó hacer el 69 solo/a...' }
 };
 
-module.exports = {
-    command: Object.keys(nsfwData),
-
-    execute: async (m, { sock, from, command }) => {
-        const cmd = command.toLowerCase();
-        const urls = nsfwData[cmd];
-        if (!urls) return;
-
-        // Selección aleatoria de la URL
-        const randomUrl = urls[Math.floor(Math.random() * urls.length)];
-        const isImage = randomUrl.endsWith('.jpeg') || randomUrl.endsWith('.jpg') || randomUrl.endsWith('.png');
-
-        // Obtención de remitente y objetivo (mención o respuesta)
-        const sender = m.sender || m.key.participant;
-        let target = null;
-
-        if (m.mentionedJid && m.mentionedJid.length > 0) {
-            target = m.mentionedJid[0];
-        } else if (m.quoted && m.quoted.sender) {
-            target = m.quoted.sender;
-        }
-
-        let captionText = '';
-        let mentionsArr = [sender];
-
-        const senderTag = `@${sender.split('@')[0]}`;
-
-        if (target && target !== sender) {
-            const targetTag = `@${target.split('@')[0]}`;
-            captionText = messages[cmd].target.replace('@user1', senderTag).replace('@user2', targetTag);
-            mentionsArr.push(target);
-        } else {
-            captionText = messages[cmd].solo.replace('@user1', senderTag);
-        }
-
-        // Estructura de envío de Baileys apuntando a la URL directamente
-        const content = isImage 
-            ? { image: { url: randomUrl }, caption: captionText, mentions: mentionsArr }
-            : { video: { url: randomUrl }, gifPlayback: true, caption: captionText, mentions: mentionsArr };
-
-        await sock.sendMessage(from, content, { quoted: m });
-    }
-};
-};
-
-
 export default {
     nombre: 'nsfw',
-    categoria: 'Diversión',
-    alias: ['porno', 'xxx', 'hot', '18', 'adulto'],
-    descripcion: 'Contenido +18 (solo para adultos)',
+    categoria: 'NSFW',
+    alias: Object.keys(nsfwData),
+    descripcion: 'Envía videos NSFW (spank, blowjob, 69, etc.)',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            const args = String(argumento || '').trim().toLowerCase();
-            const categorias = Object.keys(nsfwData);
+            // Obtener el comando usado. Tu estructura puede usar argumento o msg.command
+            const cmd = (argumento || msg.text || '').split(' ')[0].replace(/[!./#]/g, '').toLowerCase();
             
-            // Si no hay categoría, mostrar lista
-            if (!args || !nsfwData[args]) {
-                await responder.texto(
-                    `🔞 *NSFW - CATEGORÍAS*\n\n` +
-                    `📌 *Disponibles:*\n` +
-                    `${categorias.map(c => `• .nsfw ${c}`).join('\n')}\n\n` +
-                    `⚠️ *Solo para mayores de 18 años*`
-                );
+            // Verificar si el comando existe en la lista (o usar el comando original del bot)
+            const commandName = Object.keys(nsfwData).find(k => k === cmd) || msg.command;
+
+            if (!commandName || !nsfwData[commandName]) {
+                await responder.texto('❌ Comando NSFW no reconocido.');
                 return;
             }
 
-            // Seleccionar video aleatorio
-            const videos = nsfwData[args];
-            const random = videos[Math.floor(Math.random() * videos.length)];
+            const urls = nsfwData[commandName];
+            const randomUrl = urls[Math.floor(Math.random() * urls.length)];
+            const isImage = randomUrl.endsWith('.jpeg') || randomUrl.endsWith('.jpg') || randomUrl.endsWith('.png');
 
-            // Enviar el video
-            await responder.texto(
-                `🔞 *${args.toUpperCase()}*\n\n` +
-                `📌 *Video ${videos.indexOf(random) + 1} de ${videos.length}*`
-            );
-            
-            await responder.video(random);
+            // Obtener remitente
+            const sender = msg.sender || msg.key.participant;
+            const senderTag = `@${sender.split('@')[0]}`;
+
+            // Obtener mencionado (si responde o menciona)
+            let target = null;
+            if (msg.mentionedJid && msg.mentionedJid.length > 0) {
+                target = msg.mentionedJid[0];
+            } else if (msg.quoted && msg.quoted.sender) {
+                target = msg.quoted.sender;
+            }
+
+            let captionText = '';
+            let mentionsArr = [sender];
+
+            if (target && target !== sender) {
+                const targetTag = `@${target.split('@')[0]}`;
+                captionText = messages[commandName].target.replace('@user1', senderTag).replace('@user2', targetTag);
+                mentionsArr.push(target);
+            } else {
+                captionText = messages[commandName].solo.replace('@user1', senderTag);
+            }
+
+            const content = isImage 
+                ? { image: { url: randomUrl }, caption: captionText, mentions: mentionsArr }
+                : { video: { url: randomUrl }, gifPlayback: true, caption: captionText, mentions: mentionsArr };
+
+            await sock.sendMessage(msg.chat, content, { quoted: msg });
 
         } catch (error) {
             console.error('[NSFW] Error:', error);
-            await responder.texto('❌ Error al enviar el contenido.');
+            await responder.texto('❌ Error al ejecutar el comando NSFW.');
         }
     }
 };
