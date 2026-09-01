@@ -29,7 +29,7 @@ function esUrlSpotify(texto) {
 
 function sanitizarNombre(nombre) {
     return String(nombre)
-        .replace(/[<>:\"/\\|?*]/g, '')
+        .replace(/[<>:"/\\|?*]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
         .substring(0, 100);
@@ -164,21 +164,21 @@ export default {
         if (esUrlSpotify(input)) {
             spotifyUrl = input;
             await responder.texto(
-                `╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
-                `┃\n` +
-                `┃ 🎵 Procesando URL...\\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
+                '╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                '┃\n' +
+                '┃ 🎵 Procesando URL...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
         } else {
             // BÚSQUEDA POR NOMBRE
             await responder.texto(
-                `╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
-                `┃\n` +
-                `┃ Buscando: *${input}*\\n` +
-                `┃ 🔎 En Spotify💻...\\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
+                '╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                '┃\n' +
+                `┃ Buscando: *${input}*\n` +
+                '┃ 🔎 En Spotify💻...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
 
             const canciones = await buscarEnLempi(input, apikey);
@@ -187,8 +187,8 @@ export default {
                 await responder.texto(
                     '╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
                     '┃\n' +
-                    '┃ No se encontraron canciones.\\n' +
-                    '┃ Intenta con otro nombre.\\n' +
+                    '┃ No se encontraron canciones.\n' +
+                    '┃ Intenta con otro nombre.\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -199,14 +199,14 @@ export default {
             spotifyUrl = track.url;
 
             await responder.texto(
-                `╭〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
-                `┃\n` +
-                `┃ 🎤 *${track.titulo}*\\n` +
-                `┃ 👤 ${track.artista}\\n` +
-                `┃ 💿 ${track.album}\\n` +
-                `┃ ⏳ Descargando audio...\\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
+                '╭〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                '┃\n' +
+                `┃ 🎤 *${track.titulo}*\n` +
+                `┃ 👤 ${track.artista}\n` +
+                `┃ 💿 ${track.album}\n` +
+                '┃ ⏳ Descargando audio...\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
 
@@ -218,12 +218,12 @@ export default {
 
         if (!resultado.exito) {
             await responder.texto(
-                `╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
-                `┃\n` +
-                `┃ No se pudo descargar.\\n` +
-                `┃ 📝 ${resultado.error}\\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
+                '╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                '┃\n' +
+                '┃ No se pudo descargar.\n' +
+                `┃ 📝 ${resultado.error}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
             return;
         }
@@ -243,23 +243,23 @@ export default {
             const duracionStr = formatearDuracion(resultado.duracion);
 
             await responder.texto(
-                `╭〔 ✅ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n` +
-                `┃\n` +
-                `┃ 🎵 *${resultado.cancion}*\\n` +
-                `┃ 👤 ${resultado.artista}\\n` +
-                `┃ 💿 ${resultado.album}\\n` +
-                `┃ ⏱️ ${duracionStr}\\n` +
-                `┃ 📦 ${resultado.tamano}\\n` +
-                `┃ ✅ Descarga completada\\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣`
+                '╭〔 ✅ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
+                '┃\n' +
+                `┃ 🎵 *${resultado.cancion}*\n` +
+                `┃ 👤 ${resultado.artista}\n` +
+                `┃ 💿 ${resultado.album}\n` +
+                `┃ ⏱️ ${duracionStr}\n` +
+                `┃ 📦 ${resultado.tamano}\n` +
+                '┃ ✅ Descarga completada\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
         } catch (e) {
             console.error('[SPOTIFY] Error enviando:', e.message);
             await responder.texto(
                 '╭〔 ❌ 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
                 '┃\n' +
-                '┃ Error al enviar el audio.\\n' +
+                '┃ Error al enviar el audio.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
