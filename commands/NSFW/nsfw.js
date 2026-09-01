@@ -77,28 +77,24 @@ export default {
     categoria: 'NSFW',
     alias: Object.keys(nsfwData),
     descripcion: 'Envía videos NSFW (spank, blowjob, 69, etc.)',
-    ejecutar: async ({ msg, responder, argumento, sock }) => {
+    ejecutar: async ({ msg, responder, sock }) => {
         try {
-            // Obtener el comando usado. Tu estructura puede usar argumento o msg.command
-            const cmd = (argumento || msg.text || '').split(' ')[0].replace(/[!./#]/g, '').toLowerCase();
+            // Aquí está la corrección clave: usar la variable que te da el bot
+            // msg.command es el nombre exacto que el usuario escribió (ej: "spank", "69")
+            const cmd = (msg.command || msg.message.conversation || '').toLowerCase();
             
-            // Verificar si el comando existe en la lista (o usar el comando original del bot)
-            const commandName = Object.keys(nsfwData).find(k => k === cmd) || msg.command;
-
-            if (!commandName || !nsfwData[commandName]) {
+            if (!nsfwData[cmd]) {
                 await responder.texto('❌ Comando NSFW no reconocido.');
                 return;
             }
 
-            const urls = nsfwData[commandName];
+            const urls = nsfwData[cmd];
             const randomUrl = urls[Math.floor(Math.random() * urls.length)];
             const isImage = randomUrl.endsWith('.jpeg') || randomUrl.endsWith('.jpg') || randomUrl.endsWith('.png');
 
-            // Obtener remitente
             const sender = msg.sender || msg.key.participant;
             const senderTag = `@${sender.split('@')[0]}`;
 
-            // Obtener mencionado (si responde o menciona)
             let target = null;
             if (msg.mentionedJid && msg.mentionedJid.length > 0) {
                 target = msg.mentionedJid[0];
@@ -111,16 +107,19 @@ export default {
 
             if (target && target !== sender) {
                 const targetTag = `@${target.split('@')[0]}`;
-                captionText = messages[commandName].target.replace('@user1', senderTag).replace('@user2', targetTag);
+                captionText = messages[cmd].target.replace('@user1', senderTag).replace('@user2', targetTag);
                 mentionsArr.push(target);
             } else {
-                captionText = messages[commandName].solo.replace('@user1', senderTag);
+                captionText = messages[cmd].solo.replace('@user1', senderTag);
             }
 
             const content = isImage 
                 ? { image: { url: randomUrl }, caption: captionText, mentions: mentionsArr }
                 : { video: { url: randomUrl }, gifPlayback: true, caption: captionText, mentions: mentionsArr };
 
+            // En tu 8ball usas 'responder.texto', pero para enviar video/imagen 
+            // casi siempre se usa sock.sendMessage y el ID del chat.
+            // Si msg.chat no funciona, prueba con 'from' o 'm.chat'.
             await sock.sendMessage(msg.chat, content, { quoted: msg });
 
         } catch (error) {
