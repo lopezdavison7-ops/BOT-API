@@ -1,348 +1,286 @@
- commands/downloads/pinterest.js
+// commands/downloads/pinterest.js
 // ============================================================
-// COMANDO: PINTEREST
 // BOT-API
-//
-// Busca Pins públicos en Pinterest y descarga las imágenes
-// mediante un extractor externo de medios. Esto evita depender
-// de descargar directamente desde i.pinimg.com, que puede
-// rechazar algunas peticiones del bot.
-//
-// Uso:
-//   .pinterest anime
-//   .pinterest gatos
-//   .pin carros
-//
-// También acepta una URL directa de Pinterest/pin.it.
+// COMANDO: PINTEREST
+// ============================================================
+// Busca Pins públicos de Pinterest y descarga sus imágenes.
+// No depende de config.js ni de una API externa.
+// Compatible con el cargador automático de commands.
 // ============================================================
 
-const PINTEREST_SEARCH = 'https://www.pinterest.com/search/pins/';
-const MEDIA_RESOLVER = 'https://pin.vinayop.cloud/v1/pin/img';
+const PINTEREST_BASE = 'https://www.pinterest.com';
+const LIMITE_RESULTADOS = 8;
+const TIMEOUT = 30000;
 
-const MAX_RESULTS = 8;
-const SEARCH_TIMEOUT = 30000;
-const DOWNLOAD_TIMEOUT = 60000;
-const CAPTION = '📌 Pinterest • BOT-API 💙';
+function limpiarTexto(texto) {
+return String(texto || '')
+.replace(/\s+/g, ' ')
+.trim();
+}
 
-// ============================================================
-// FETCH CON TIMEOUT
-// ============================================================
+async function fetchTimeout(url, opciones = {}, timeout = TIMEOUT) {
+const controller = new AbortController();
 
-async function fetchTimeout(url, options = {}, timeout = SEARCH_TIMEOUT) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+const timer = setTimeout(() => {
+    controller.abort();
+}, timeout);
 
-    try {
-        return await fetch(url, {
-            ...options,
-            redirect: 'follow',
-            signal: controller.signal
-        });
-    } finally {
-        clearTimeout(timer);
+try {
+    return await fetch(url, {
+        ...opciones,
+        signal: controller.signal
+    });
+} finally {
+    clearTimeout(timer);
+}
+
+}
+
+function extraerImagenes(html) {
+const imagenes = new Set();
+
+// URLs directas de imágenes que aparecen en los datos
+const patrones = [
+    /https?:\\?\/\\?\/i\.pinimg\.com\\?\/[^"'\\\s<>]+/gi,
+    /https?:\/\/i\.pinimg\.com\/[^"'\\\s<>]+/gi
+];
+
+for (const regex of patrones) {
+    const encontrados = html.match(regex) || [];
+
+    for (let url of encontrados) {
+        url = url
+            .replace(/\\u002F/g, '/')
+            .replace(/\\\//g, '/')
+            .replace(/&amp;/g, '&')
+            .replace(/["'\\]+$/g, '');
+
+        if (!url.includes('pinimg.com')) continue;
+
+        // Preferir original/1200x/736x antes que miniaturas
+        url = url
+            .replace('/236x/', '/originals/')
+            .replace('/474x/', '/originals/')
+            .replace('/564x/', '/originals/')
+            .replace('/736x/', '/originals/')
+            .replace('/600x/', '/originals/')
+            .replace('/750x/', '/originals/')
+            .replace('/1200x/', '/originals/');
+
+        imagenes.add(url);
     }
 }
 
-// ============================================================
-// TEXTO
-// ============================================================
+return [...imagenes].slice(0, LIMITE_RESULTADOS);
 
-function limpiar(texto) {
-    return String(texto ?? '')
-        .replace(/\\u002F/g, '/')
-        .replace(/\\\//g, '/')
-        .replace(/&amp;/g, '&')
-        .trim();
 }
 
-function esPinterestUrl(url) {
-    try {
-        const u = new URL(url);
-        return /(^|\\.)pinterest\\.(com|ca|co|cl|mx|es|fr|de|it|jp|kr|pt|uk)$/i.test(u.hostname) ||
-            u.hostname === 'pin.it';
-    } catch {
-        return false;
+async function buscarPinterest(consulta) {
+const url =
+"${PINTEREST_BASE}/search/pins/?q=${encodeURIComponent(consulta)}";
+
+const respuesta = await fetchTimeout(url, {
+    headers: {
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36',
+        'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language':
+            'es-ES,es;q=0.9,en;q=0.8',
+        'Referer':
+            'https://www.pinterest.com/'
     }
+});
+
+if (!respuesta.ok) {
+    throw new Error(`Pinterest respondió HTTP ${respuesta.status}`);
 }
 
-// ============================================================
-// EXTRAER URLS DE PINS DEL HTML DE PINTEREST
-// ============================================================
+const html = await respuesta.text();
+const imagenes = extraerImagenes(html);
 
-function extraerPins(html) {
-    const encontrados = new Set();
-
-    const patrones = [
-        /https?:\/\/(?:www\.)?pinterest\.com\/pin\/(\d+)/gi,
-        /https?:\/\/(?:[a-z]{2}\.)?pinterest\.com\/pin\/(\d+)/gi,
-        /href=["'](?:https?:\/\/(?:www\.)?pinterest\.com)?\/pin\/(\d+)[^"']*["']/gi,
-        /["']\/pin\/(\d+)[^"']*["']/gi
-    ];
-
-    for (const regex of patrones) {
-        let match;
-        while ((match = regex.exec(html)) !== null) {
-            const id = match[match.length - 1];
-            if (/^\\d{6,}$/.test(id)) {
-                encontrados.add(`https://www.pinterest.com/pin/${id}/`);
-            }
-        }
-    }
-
-    return [...encontrados].slice(0, MAX_RESULTS);
-}
-
-// ============================================================
-// BUSCAR EN PINTEREST
-// ============================================================
-
-async function buscarPins(consulta) {
-    const url = new URL(PINTEREST_SEARCH);
-    url.searchParams.set('q', consulta);
-
-    console.log(`[PINTEREST] Buscando: ${consulta}`);
-
-    const respuesta = await fetchTimeout(
-        url.toString(),
-        {
-            headers: {
-                Accept: 'text/html,application/xhtml+xml',
-                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                'Cache-Control': 'no-cache',
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-                    'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                    'Chrome/131.0.0.0 Safari/537.36'
-            }
-        },
-        SEARCH_TIMEOUT
-    );
-
-    if (!respuesta.ok) {
-        throw new Error(`Pinterest respondió HTTP ${respuesta.status}.`);
-    }
-
-    const html = await respuesta.text();
-    const pins = extraerPins(html);
-
-    console.log(`[PINTEREST] Pins encontrados: ${pins.length}`);
-
-    if (!pins.length) {
-        throw new Error(
-            'Pinterest no entregó Pins en el HTML inicial. Intenta otra búsqueda.'
-        );
-    }
-
-    return pins;
-}
-
-// ============================================================
-// RESOLVER / DESCARGAR IMAGEN
-// ============================================================
-
-async function descargarDesdeResolver(pinUrl, indice) {
-    const endpoint = new URL(MEDIA_RESOLVER);
-    endpoint.searchParams.set('url', pinUrl);
-
-    console.log(`[PINTEREST] Resolviendo imagen ${indice}: ${pinUrl}`);
-
-    const respuesta = await fetchTimeout(
-        endpoint.toString(),
-        {
-            headers: {
-                Accept: 'image/avif,image/webp,image/jpeg,image/png,application/json,*/*',
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-                    'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                    'Chrome/131.0.0.0 Safari/537.36'
-            }
-        },
-        DOWNLOAD_TIMEOUT
-    );
-
-    if (!respuesta.ok) {
-        throw new Error(`Resolver HTTP ${respuesta.status}.`);
-    }
-
-    const contentType =
-        (respuesta.headers.get('content-type') || '').toLowerCase();
-
-    // Algunos resolvers devuelven directamente la imagen.
-    if (contentType.startsWith('image/')) {
-        const buffer = Buffer.from(await respuesta.arrayBuffer());
-        if (!buffer.length) throw new Error('La imagen está vacía.');
-        return { buffer, contentType };
-    }
-
-    // Compatibilidad por si el resolver devuelve JSON con una URL.
-    if (contentType.includes('application/json')) {
-        const data = await respuesta.json();
-        const mediaUrl =
-            data?.url ||
-            data?.image ||
-            data?.download ||
-            data?.downloadUrl ||
-            data?.result?.url;
-
-        if (!mediaUrl) {
-            throw new Error('El resolver no devolvió una URL de imagen.');
-        }
-
-        const imagen = await fetchTimeout(
-            mediaUrl,
-            {
-                headers: {
-                    Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*',
-                    'User-Agent': 'Mozilla/5.0'
-                }
-            },
-            DOWNLOAD_TIMEOUT
-        );
-
-        if (!imagen.ok) {
-            throw new Error(`La imagen respondió HTTP ${imagen.status}.`);
-        }
-
-        const tipo = (imagen.headers.get('content-type') || '').toLowerCase();
-        if (!tipo.startsWith('image/')) {
-            throw new Error('La URL resuelta no devolvió una imagen.');
-        }
-
-        const buffer = Buffer.from(await imagen.arrayBuffer());
-        if (!buffer.length) throw new Error('La imagen está vacía.');
-
-        return { buffer, contentType: tipo };
-    }
-
+if (!imagenes.length) {
     throw new Error(
-        `El resolver devolvió un contenido inesperado: ${contentType || 'desconocido'}.`
+        'Pinterest no devolvió imágenes públicas para esa búsqueda.'
     );
 }
 
-// ============================================================
-// ENVIAR IMÁGENES
-// ============================================================
+return imagenes;
 
-async function enviarResultados(sock, jid, msg, pins) {
-    const resultados = await Promise.allSettled(
-        pins.map((pin, i) => descargarDesdeResolver(pin, i + 1))
-    );
+}
 
-    let enviadas = 0;
+async function descargarImagen(url) {
+const respuesta = await fetchTimeout(
+url,
+{
+headers: {
+'User-Agent':
+'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36',
+'Accept':
+'image/avif,image/webp,image/apng,image/svg+xml,image/,/*;q=0.8',
+'Referer':
+'https://www.pinterest.com/'
+}
+},
+60000
+);
 
-    for (let i = 0; i < resultados.length; i++) {
-        const resultado = resultados[i];
+if (!respuesta.ok) {
+    throw new Error(`HTTP ${respuesta.status}`);
+}
 
-        if (resultado.status !== 'fulfilled') {
-            console.error(
-                `[PINTEREST] Falló ${i + 1}/${pins.length}:`,
-                resultado.reason?.message || resultado.reason
-            );
-            continue;
-        }
+const tipo =
+    respuesta.headers.get('content-type') || '';
 
-        try {
-            await sock.sendMessage(
-                jid,
-                {
-                    image: resultado.value.buffer,
-                    caption: CAPTION
-                },
-                { quoted: msg }
-            );
+if (!tipo.startsWith('image/')) {
+    throw new Error('La respuesta no es una imagen');
+}
 
-            enviadas++;
-        } catch (error) {
-            console.error(
-                `[PINTEREST] Error enviando ${i + 1}:`,
-                error?.message || error
-            );
-        }
+const datos = await respuesta.arrayBuffer();
+const buffer = Buffer.from(datos);
+
+if (!buffer.length) {
+    throw new Error('Imagen vacía');
+}
+
+return buffer;
+
+}
+
+async function enviarResultados(sock, jid, msg, urls) {
+let enviadas = 0;
+
+for (let i = 0; i < urls.length; i++) {
+    try {
+        const buffer = await descargarImagen(urls[i]);
+
+        await sock.sendMessage(
+            jid,
+            {
+                image: buffer,
+                caption:
+                    i === 0
+                        ? `📌 *Pinterest*\n🖼️ Resultado ${i + 1}/${urls.length}`
+                        : `🖼️ Resultado ${i + 1}/${urls.length}`
+            },
+            {
+                quoted: msg
+            }
+        );
+
+        enviadas++;
+    } catch (error) {
+        console.error(
+            `[PINTEREST] Error imagen ${i + 1}:`,
+            error.message
+        );
     }
-
-    return enviadas;
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
+return enviadas;
+
+}
 
 export default {
-    nombre: 'pinterest',
-    categoria: 'descargas',
-    alias: ['pin', 'pinterestimg'],
-    descripcion: 'Busca y descarga imágenes públicas de Pinterest.',
+nombre: 'pinterest',
 
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
-        const consulta = argumento?.trim();
-        const jid = msg?.key?.remoteJid;
+categoria: 'Descargas',
 
-        if (!jid) return;
+alias: [
+    'pin',
+    'pinterestimg'
+],
 
-        if (!consulta) {
-            await responder.texto(
-                '╭━━〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe qué quieres buscar.\n' +
-                '┃\n' +
-                '┃ 📌 Ejemplos:\n' +
-                '┃ › .pinterest anime\n' +
-                '┃ › .pinterest gatos\n' +
-                '┃ › .pinterest carros\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
-        }
+descripcion:
+    'Busca y descarga imágenes públicas de Pinterest.',
 
-        try {
-            await responder.texto(
-                `📌 *Pinterest*\n\n🔎 Buscando: *${consulta}*\n⏳ Extrayendo imágenes...`
-            );
+ejecutar: async ({
+    sock,
+    msg,
+    responder,
+    argumento
+}) => {
+    const consulta = limpiarTexto(argumento);
 
-            let pins;
+    if (!consulta) {
+        await responder.texto(
+            '╭〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+            '┃\n' +
+            '┃ ❌ Escribe algo para buscar.\n' +
+            '┃\n' +
+            '┃ 📌 Ejemplos:\n' +
+            '┃ › .pinterest anime\n' +
+            '┃ › .pinterest carros\n' +
+            '┃ › .pinterest gatos\n' +
+            '┃ › .pin fondos de pantalla\n' +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
+        );
+        return;
+    }
 
-            // Si el usuario pasa un Pin directamente, no hacemos búsqueda.
-            if (esPinterestUrl(consulta)) {
-                pins = [consulta];
-            } else {
-                pins = await buscarPins(consulta);
-            }
+    const jid = msg?.key?.remoteJid;
 
-            const enviadas = await enviarResultados(
+    if (!jid) return;
+
+    try {
+        await responder.texto(
+            '╭〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+            '┃\n' +
+            `┃ 🔎 Buscando: *${consulta}*\n` +
+            '┃ ⏳ Espera un momento...\n' +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
+        );
+
+        console.log(
+            `[PINTEREST] Buscando: ${consulta}`
+        );
+
+        const urls = await buscarPinterest(consulta);
+
+        console.log(
+            `[PINTEREST] Encontradas: ${urls.length}`
+        );
+
+        const enviadas =
+            await enviarResultados(
                 sock,
                 jid,
                 msg,
-                pins
+                urls
             );
 
-            if (!enviadas) {
-                throw new Error(
-                    'No pude descargar las imágenes encontradas. El extractor externo no devolvió medios válidos.'
-                );
-            }
-
-            await responder.texto(
-                '╭━━〔 ✅ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
-                '┃\n' +
-                `┃ 🔎 Búsqueda: *${consulta}*\n` +
-                `┃ 🖼️ Enviadas: *${enviadas}/${pins.length}*\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-        } catch (error) {
-            console.error(
-                '[PINTEREST] Error:',
-                error?.stack || error?.message || error
-            );
-
-            await responder.texto(
-                '╭━━〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
-                '┃\n' +
-                `┃ ${error?.message || 'No pude completar la búsqueda.'}\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+        if (!enviadas) {
+            throw new Error(
+                'Pinterest encontró imágenes, pero ninguna pudo descargarse.'
             );
         }
+
+        await responder.texto(
+            '╭〔 ✅ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+            '┃\n' +
+            `┃ 🔎 Búsqueda: *${consulta}*\n` +
+            `┃ 🖼️ Enviadas: *${enviadas}/${urls.length}*\n` +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
+        );
+
+    } catch (error) {
+        console.error(
+            '[PINTEREST] Error:',
+            error.stack || error.message
+        );
+
+        await responder.texto(
+            '╭〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+            '┃\n' +
+            '┃ No pude completar la búsqueda.\n' +
+            `┃ ⚠️ ${error.message || 'Error desconocido.'}\n` +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
+        );
     }
+}
+
 };
