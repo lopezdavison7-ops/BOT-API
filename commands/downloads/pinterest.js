@@ -3,211 +3,198 @@
 // BOT-API
 // COMANDO: PINTEREST
 // ============================================================
-// Usa un descargador web externo para resolver Pins públicos,
-// evitando hacer la búsqueda directamente contra Pinterest.
+// Busca imágenes de Pinterest usando su endpoint interno.
+// No requiere cheerio ni dependencias adicionales.
 // ============================================================
-
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-const DOWNLOADER_URL = 'https://pinsavepro.com/image-downloader';
-const LIMITE_RESULTADOS = 8;
-const TIMEOUT = 30000;
-
-async function obtenerImagen(url) {
-    const respuesta = await axios.get(url, {
-        headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36',
-            Accept:
-                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
-        },
-        timeout: TIMEOUT,
-        maxRedirects: 5
-    });
-
-    const $ = cheerio.load(respuesta.data);
-
-    const urls = new Set();
-
-    $('img').each((_, elemento) => {
-        const src =
-            $(elemento).attr('src') ||
-            $(elemento).attr('data-src') ||
-            $(elemento).attr('data-lazy-src');
-
-        if (
-            src &&
-            (
-                src.includes('pinimg.com') ||
-                src.startsWith('https://')
-            )
-        ) {
-            urls.add(src);
-        }
-    });
-
-    $('a').each((_, elemento) => {
-        const href = $(elemento).attr('href');
-
-        if (
-            href &&
-            (
-                href.includes('pinimg.com') ||
-                /\.(jpg|jpeg|png|webp)(\?|$)/i.test(href)
-            )
-        ) {
-            urls.add(href);
-        }
-    });
-
-    const imagenes = [...urls]
-        .filter(url => /^https?:\/\//i.test(url))
-        .slice(0, LIMITE_RESULTADOS);
-
-    return imagenes;
-}
-
-async function descargar(url) {
-    const respuesta = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 60000,
-        maxRedirects: 5,
-        headers: {
-            'User-Agent': 'Mozilla/5.0',
-            Referer: DOWNLOADER_URL,
-            Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*'
-        }
-    });
-
-    const tipo =
-        respuesta.headers['content-type'] || '';
-
-    if (!tipo.startsWith('image/')) {
-        throw new Error('El resultado no es una imagen.');
-    }
-
-    return Buffer.from(respuesta.data);
-}
 
 export default {
     nombre: 'pinterest',
     categoria: 'descargas',
-    alias: ['pin'],
-    descripcion: 'Descarga imágenes de Pins públicos',
+    alias: ['pin', 'pinterestimg'],
+    descripcion: 'Busca imágenes en Pinterest',
 
-    ejecutar: async ({
-        sock,
-        msg,
-        responder,
-        argumento
-    }) => {
-        const jid = msg?.key?.remoteJid;
-        const consulta = argumento?.trim();
-
-        if (!jid) return;
-
-        if (!consulta) {
-            return await responder.texto(
-                '╭〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe una búsqueda o un\n' +
-                '┃ enlace de Pinterest.\n' +
-                '┃\n' +
-                '┃ Ejemplo:\n' +
-                '┃ › .pinterest anime\n' +
-                '┃ › .pinterest gatos\n' +
-                '┃ › .pinterest https://pin.it/...\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-        }
-
+    ejecutar: async ({ sock, msg, responder, argumento }) => {
         try {
-            await responder.texto(
-                '╭〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
-                '┃\n' +
-                '┃ ⏳ Procesando...\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            const query = argumento?.trim();
 
-            let pinUrl = consulta;
-
-            if (!/^https?:\/\//i.test(pinUrl)) {
-                pinUrl =
-                    `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(consulta)}`;
-            }
-
-            const imagenes =
-                await obtenerImagen(pinUrl);
-
-            if (!imagenes.length) {
-                return await responder.texto(
-                    '╭〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+            if (!query) {
+                return responder.texto(
+                    '╭〔 📌 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
                     '┃\n' +
-                    '┃ No se encontraron imágenes.\n' +
+                    '┃ Escribe algo para buscar.\n' +
+                    '┃\n' +
+                    '┃ Ejemplo:\n' +
+                    '┃ .pinterest anime\n' +
+                    '┃ .pin paisajes\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
             }
 
-            let enviadas = 0;
+            const encodedQuery = encodeURIComponent(query);
 
-            for (let i = 0; i < imagenes.length; i++) {
-                try {
-                    const buffer =
-                        await descargar(imagenes[i]);
+            const sourceUrl =
+                `/search/pins/?q=${encodedQuery}&rs=typed`;
 
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            image: buffer,
-                            caption:
-                                `📌 *Pinterest*\n` +
-                                `🖼️ ${i + 1}/${imagenes.length}`
-                        },
-                        { quoted: msg }
-                    );
+            const data = {
+                options: {
+                    applied_unified_filters: null,
+                    appliedProductFilters: '---',
+                    article: null,
+                    auto_correction_disabled: false,
+                    corpus: null,
+                    customized_rerank_type: null,
+                    domains: null,
+                    dynamicPageSizeExpGroup: 'control',
+                    filters: null,
+                    journey_depth: null,
+                    page_size: null,
+                    price_max: null,
+                    price_min: null,
+                    query_pin_sigs: null,
+                    query,
+                    redux_normalize_feed: true,
+                    request_params: null,
+                    rs: 'typed',
+                    scope: 'pins',
+                    selected_one_bar_modules: null,
+                    seoDrawerEnabled: false,
+                    source_id: null,
+                    source_module_id: null,
+                    source_url: sourceUrl,
+                    top_pin_id: null,
+                    top_pin_ids: null
+                },
+                context: {}
+            };
 
-                    enviadas++;
-                } catch (error) {
-                    console.error(
-                        `[PINTEREST] Imagen ${i + 1}:`,
-                        error.message
-                    );
+            const link =
+                'https://id.pinterest.com/resource/BaseSearchResource/get/' +
+                `?source_url=${encodeURIComponent(sourceUrl)}` +
+                `&data=${encodeURIComponent(JSON.stringify(data))}`;
+
+            const res = await fetch(link, {
+                headers: {
+                    accept: 'application/json, text/javascript, */*; q=0.01',
+                    'accept-language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
+                    referer: 'https://ar.pinterest.com/',
+                    'user-agent':
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+                        'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+                        'Chrome/133.0.0.0 Safari/537.36',
+                    'x-app-version': 'c056fb7',
+                    'x-pinterest-appstate': 'active',
+                    'x-pinterest-pws-handler': 'www/index.js',
+                    'x-pinterest-source-url': '/',
+                    'x-requested-with': 'XMLHttpRequest'
                 }
+            });
+
+            if (!res.ok) {
+                throw new Error(`Pinterest respondió ${res.status}`);
             }
 
-            if (!enviadas) {
-                throw new Error(
-                    'El descargador no devolvió una imagen utilizable.'
+            const json = await res.json();
+
+            const results =
+                json?.resource_response?.data?.results ?? [];
+
+            const pins = results
+                .map((item) => {
+                    if (!item?.images) return null;
+
+                    const image =
+                        item.images.orig?.url ||
+                        item.images['736x']?.url ||
+                        item.images['564x']?.url ||
+                        item.images['474x']?.url ||
+                        item.images['236x']?.url;
+
+                    if (!image) return null;
+
+                    return {
+                        title:
+                            item.title ||
+                            item.grid_title ||
+                            'Pinterest Pin',
+
+                        image,
+
+                        image_small:
+                            item.images['236x']?.url ||
+                            null,
+
+                        link:
+                            item.id
+                                ? `https://www.pinterest.com/pin/${item.id}/`
+                                : null,
+
+                        desc:
+                            item.description ||
+                            null
+                    };
+                })
+                .filter(Boolean);
+
+            if (!pins.length) {
+                return responder.texto(
+                    '╭〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
+                    '┃\n' +
+                    '┃ No encontré imágenes para:\n' +
+                    `┃ ${query}\n` +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
                 );
             }
 
-            await responder.texto(
-                '╭〔 ✅ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
-                '┃\n' +
-                `┃ 🖼️ Resultados enviados: *${enviadas}*\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            const cantidad = Math.min(pins.length, 5);
+
+            for (let i = 0; i < cantidad; i++) {
+                const pin = pins[i];
+
+                try {
+                    const response = await fetch(pin.image, {
+                        headers: {
+                            'user-agent':
+                                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+                                'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+                                'Chrome/133.0.0.0 Safari/537.36',
+                            referer: 'https://www.pinterest.com/'
+                        }
+                    });
+
+                    if (!response.ok) continue;
+
+                    const buffer =
+                        Buffer.from(await response.arrayBuffer());
+
+                    await responder.imagen(
+                        buffer,
+                        `📌 ${pin.title}\n` +
+                        `🔎 ${query}` +
+                        (pin.link ? `\n🔗 ${pin.link}` : '')
+                    );
+                } catch {
+                    continue;
+                }
+            }
+
+            return;
 
         } catch (error) {
             console.error(
                 '[PINTEREST]',
-                error.stack || error.message
+                error?.message || error
             );
 
-            await responder.texto(
+            return responder.texto(
                 '╭〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕⬣\n' +
                 '┃\n' +
-                `┃ ${error.message || 'No se pudo completar la descarga.'}\n` +
+                '┃ Ocurrió un error al buscar las imágenes.\n' +
+                '┃ Intenta nuevamente en unos segundos.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
     }
 };
-```0
