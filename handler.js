@@ -40,20 +40,17 @@ export async function cargarComandosHandler() {
 }
 
 // ============================================================
-// OBTENER CATEGORÍA NORMALIZADA
+// OBTENER CATEGORÍA
 // ============================================================
 
-function obtenerCategoria(
-    cmd
-) {
+function obtenerCategoria(cmd) {
 
     if (!cmd) {
         return '';
     }
 
     return String(
-        cmd.categoria ||
-        ''
+        cmd.categoria || ''
     )
         .trim()
         .toLowerCase()
@@ -65,7 +62,30 @@ function obtenerCategoria(
 }
 
 // ============================================================
-// COMPROBAR SI UN COMANDO ESTÁ DESACTIVADO
+// COMPROBAR COMANDO DE CONTROL
+// ============================================================
+//
+// Estos comandos NO pueden ser bloqueados por el sistema
+// de categorías, para que siempre sea posible volver a activar
+// una categoría desactivada.
+// ============================================================
+
+function esComandoControl(
+    nombreComando
+) {
+
+    return [
+        'activar',
+        'desactivar',
+        'enable',
+        'disable'
+    ].includes(
+        nombreComando
+    );
+}
+
+// ============================================================
+// COMPROBAR SI CATEGORÍA ESTÁ BLOQUEADA
 // ============================================================
 
 function comandoDesactivado(
@@ -75,18 +95,11 @@ function comandoDesactivado(
 ) {
 
     // --------------------------------------------------------
-    // El comando que controla categorías NUNCA se bloquea.
+    // Los comandos de control siempre funcionan.
     // --------------------------------------------------------
 
-    const comandosControl = [
-        'desactivar',
-        'activar',
-        'disable',
-        'enable'
-    ];
-
     if (
-        comandosControl.includes(
+        esComandoControl(
             nombreComando
         )
     ) {
@@ -94,7 +107,7 @@ function comandoDesactivado(
     }
 
     // --------------------------------------------------------
-    // En chats privados no se desactivan categorías.
+    // Solo se aplica en grupos.
     // --------------------------------------------------------
 
     if (
@@ -104,6 +117,10 @@ function comandoDesactivado(
         return false;
     }
 
+    // --------------------------------------------------------
+    // Obtener categoría del comando.
+    // --------------------------------------------------------
+
     const categoria =
         obtenerCategoria(cmd);
 
@@ -111,8 +128,11 @@ function comandoDesactivado(
         return false;
     }
 
+    // --------------------------------------------------------
+    // Comprobar configuración GLOBAL.
+    // --------------------------------------------------------
+
     return !categoriaActivada(
-        jid,
         categoria
     );
 }
@@ -150,7 +170,7 @@ export async function handleMessage(
         }
 
         // ----------------------------------------------------
-        // MENSAJE VÁLIDO
+        // VALIDACIONES
         // ----------------------------------------------------
 
         if (!msg.message) {
@@ -411,7 +431,7 @@ export async function handleMessage(
         }
 
         // ====================================================
-        // COMPROBAR CATEGORÍA
+        // COMPROBAR CATEGORÍA GLOBAL
         // ====================================================
 
         if (
@@ -435,7 +455,7 @@ export async function handleMessage(
                         `┃ 📂 Categoría: *${categoria}*\n` +
                         '┃\n' +
                         '┃ 🔴 Esta categoría está\n' +
-                        '┃ desactivada en este grupo.\n' +
+                        '┃ desactivada globalmente.\n' +
                         '┃\n' +
                         '┃ Un administrador puede\n' +
                         `┃ activarla con:\n` +
@@ -537,8 +557,7 @@ export async function handleMessage(
                         jid,
                         {
                             audio: aud,
-                            mimetype:
-                                'audio/mpeg',
+                            mimetype: 'audio/mpeg',
                             ptt
                         },
                         {
