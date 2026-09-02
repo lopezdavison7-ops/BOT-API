@@ -1,22 +1,29 @@
 // commands/system/desactivar.js
 // ============================================================
 // BOT-API
-// COMANDO: DESACTIVAR
+// COMANDO: DESACTIVAR / ACTIVAR
 // ============================================================
 //
-// DESACTIVA UNA CATEGORÍA GLOBALMENTE.
+// CONTROL GLOBAL DE CATEGORÍAS.
 //
 // Ejemplos:
 //
 // .desactivar nsfw
+// .activar nsfw
+//
 // .desactivar economy
-// .desactivar descargas
-// .desactivar fun
+// .activar economy
 //
-// También:
-// .desactivar nsfw off
+// .desactivar descargas off
+// .activar descargas on
 //
-// Solo administradores del grupo y Owners.
+// Funciona desde grupos.
+// Funciona desde chats privados.
+//
+// Para cambiar el estado:
+// - Owner
+// - Administrador de grupo
+//
 // ============================================================
 
 import {
@@ -26,7 +33,6 @@ import {
 import {
     activarCategoria,
     desactivarCategoria,
-    obtenerEstadoCategoria,
     obtenerCategoriasDesactivadas,
     resolverCategoria
 } from '../../lib/categoriaConfig.js';
@@ -95,7 +101,7 @@ async function esAdministrador(
             metadata?.participants || [];
 
         // ----------------------------------------------------
-        // COMPARACIÓN EXACTA
+        // COMPARACIÓN DIRECTA
         // ----------------------------------------------------
 
         const encontrado =
@@ -184,7 +190,7 @@ async function esAdministrador(
     } catch (error) {
 
         console.error(
-            '[CATEGORIAS] ❌ Error comprobando admin:',
+            '[CATEGORIAS] ❌ Error comprobando administrador:',
             error.message
         );
 
@@ -221,15 +227,21 @@ async function mostrarAyuda(
     await responder.texto(
         '╭━━〔 ⚙️ 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀𝐒 〕━━⬣\n' +
         '┃\n' +
-        '┃ 🔴 Desactivar globalmente:\n' +
+        '┃ 🌎 Configuración GLOBAL\n' +
+        '┃\n' +
+        '┃ 🔴 Desactivar:\n' +
         '┃ › .desactivar nsfw\n' +
         '┃ › .desactivar economy\n' +
         '┃ › .desactivar descargas\n' +
         '┃\n' +
-        '┃ 🟢 Activar globalmente:\n' +
+        '┃ 🟢 Activar:\n' +
         '┃ › .activar nsfw\n' +
         '┃ › .activar economy\n' +
         '┃ › .activar descargas\n' +
+        '┃\n' +
+        '┃ También:\n' +
+        '┃ › .desactivar nsfw off\n' +
+        '┃ › .activar nsfw on\n' +
         '┃\n' +
         '┃ Estado actual:\n' +
         estado +
@@ -267,30 +279,44 @@ export default {
         const jid =
             msg?.key?.remoteJid;
 
-        // ----------------------------------------------------
-        // SOLO GRUPOS
-        // ----------------------------------------------------
-
-        if (
-            !jid ||
-            !jid.endsWith('@g.us')
-        ) {
-
-            await responder.texto(
-                '❌ Este comando solo puede utilizarse en grupos.'
-            );
-
-            return;
-        }
-
-        // ----------------------------------------------------
+        // ====================================================
         // PERMISOS
-        // ----------------------------------------------------
+        // ====================================================
+        //
+        // OWNER:
+        // Puede hacerlo desde grupo o privado.
+        //
+        // ADMIN:
+        // Puede hacerlo desde un grupo.
+        //
+        // ====================================================
 
         const owner =
             esOwner(msg);
 
         if (!owner) {
+
+            // ------------------------------------------------
+            // Un usuario normal solo puede hacerlo
+            // si está en un grupo y es administrador.
+            // ------------------------------------------------
+
+            if (
+                !jid ||
+                !jid.endsWith('@g.us')
+            ) {
+
+                await responder.texto(
+                    '╭━━〔 🔐 𝐏𝐄𝐑𝐌𝐈𝐒𝐎𝐒 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ❌ En chat privado solo el\n' +
+                    '┃ Owner puede modificar categorías.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+
+                return;
+            }
 
             const admin =
                 await esAdministrador(
@@ -305,7 +331,7 @@ export default {
                     '╭━━〔 🔐 𝐏𝐄𝐑𝐌𝐈𝐒𝐎𝐒 〕━━⬣\n' +
                     '┃\n' +
                     '┃ ❌ Solo los administradores\n' +
-                    '┃ del grupo o un Owner pueden\n' +
+                    '┃ del grupo o el Owner pueden\n' +
                     '┃ modificar categorías.\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
@@ -315,9 +341,9 @@ export default {
             }
         }
 
-        // ----------------------------------------------------
+        // ====================================================
         // ARGUMENTOS
-        // ----------------------------------------------------
+        // ====================================================
 
         const partes =
             String(argumento || '')
@@ -338,12 +364,11 @@ export default {
             partes[0];
 
         const opcion =
-            partes[1]
-                ?.toLowerCase();
+            partes[1]?.toLowerCase();
 
-        // ----------------------------------------------------
-        // SABER SI SE USÓ .ACTIVAR
-        // ----------------------------------------------------
+        // ====================================================
+        // DETECTAR COMANDO UTILIZADO
+        // ====================================================
 
         const textoOriginal =
             msg?.message?.conversation ||
@@ -360,14 +385,16 @@ export default {
                 .replace(/^\./, '');
 
         let accion =
-            comandoUsado === 'activar' ||
-            comandoUsado === 'enable'
+            (
+                comandoUsado === 'activar' ||
+                comandoUsado === 'enable'
+            )
                 ? 'activar'
                 : 'desactivar';
 
-        // ----------------------------------------------------
+        // ====================================================
         // ON / OFF
-        // ----------------------------------------------------
+        // ====================================================
 
         if (opcion === 'on') {
             accion = 'activar';
@@ -377,9 +404,9 @@ export default {
             accion = 'desactivar';
         }
 
-        // ----------------------------------------------------
+        // ====================================================
         // RESOLVER CATEGORÍA
-        // ----------------------------------------------------
+        // ====================================================
 
         const categoria =
             resolverCategoria(
@@ -388,11 +415,8 @@ export default {
 
         if (!categoria) {
 
-            await responder.texto(
-                '❌ Especifica una categoría.\n\n' +
-                'Ejemplo:\n' +
-                '› .desactivar nsfw\n' +
-                '› .activar economy'
+            await mostrarAyuda(
+                responder
             );
 
             return;
@@ -409,15 +433,15 @@ export default {
             );
 
             await responder.texto(
-                '╭━━〔 🟢 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                '╭━━〔 🟢 𝐂𝐀𝐓𝐄𝐆𝐎𝐑ÍA 𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                 '┃\n' +
                 `┃ 📂 Categoría: *${categoriaOriginal}*\n` +
                 '┃\n' +
                 '┃ 🌎 Alcance: GLOBAL\n' +
                 '┃ 🟢 Estado: ACTIVADA\n' +
                 '┃\n' +
-                '┃ Esta categoría vuelve a estar\n' +
-                '┃ disponible en todos los grupos.\n' +
+                '┃ Disponible nuevamente en\n' +
+                '┃ grupos y chats privados.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
@@ -441,8 +465,8 @@ export default {
             '┃ 🌎 Alcance: GLOBAL\n' +
             '┃ 🔴 Estado: DESACTIVADA\n' +
             '┃\n' +
-            '┃ Esta categoría queda bloqueada\n' +
-            '┃ en todos los grupos del bot.\n' +
+            '┃ Bloqueada en grupos y\n' +
+            '┃ chats privados.\n' +
             '┃\n' +
             '╰━━━━━━━━━━━━━━━━⬣'
         );
