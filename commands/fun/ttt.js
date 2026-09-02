@@ -6,6 +6,8 @@ import {
     formatearTablero
 } from '../../lib/ttt.js';
 
+import { resolverJidReal } from '../../lib/resolverJid.js';
+
 export default {
     nombre: 'ttt',
 
@@ -54,9 +56,20 @@ export default {
         }
 
         const jugadorO =
-            mencionados[0];
+            await resolverJidReal(
+                sock,
+                chatJid,
+                mencionados[0]
+            );
 
-        if (jugadorO === jugadorX) {
+        const jugadorXResuelto =
+            await resolverJidReal(
+                sock,
+                chatJid,
+                jugadorX
+            );
+
+        if (jugadorO === jugadorXResuelto) {
 
             await responder.texto(
                 '╭━━〔 ❌ 𝐓𝐓𝐓 〕━━⬣\n' +
@@ -89,14 +102,14 @@ export default {
 
         crearPartida(
             chatJid,
-            jugadorX,
+            jugadorXResuelto,
             jugadorO
         );
 
         const texto =
-            `⚔️ @${jugadorX.split('@')[0]} ha retado a ` +
+            `⚔️ @${jugadorXResuelto.split('@')[0]} ha retado a ` +
             `@${jugadorO.split('@')[0]}\n\n` +
-            `Turno de @${jugadorX.split('@')[0]} (❌)\n\n` +
+            `Turno de @${jugadorXResuelto.split('@')[0]} (❌)\n\n` +
             formatearTablero(
                 Array(9).fill(null)
             ) +
@@ -107,7 +120,7 @@ export default {
                 chatJid,
                 {
                     text: texto,
-                    mentions: [jugadorX, jugadorO]
+                    mentions: [jugadorXResuelto, jugadorO]
                 },
                 {
                     quoted: msg
