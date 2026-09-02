@@ -57,17 +57,16 @@ function obtenerCategoria(cmd) {
         .normalize('NFD')
         .replace(
             /[\u0300-\u036f]/g,
-            ''
-        );
+            '');
 }
 
 // ============================================================
-// COMPROBAR COMANDO DE CONTROL
+// COMANDOS DE CONTROL
 // ============================================================
 //
-// Estos comandos NO pueden ser bloqueados por el sistema
-// de categorías, para que siempre sea posible volver a activar
-// una categoría desactivada.
+// Estos comandos NO se bloquean.
+//
+// Así siempre puedes volver a activar una categoría.
 // ============================================================
 
 function esComandoControl(
@@ -85,7 +84,19 @@ function esComandoControl(
 }
 
 // ============================================================
-// COMPROBAR SI CATEGORÍA ESTÁ BLOQUEADA
+// COMPROBAR CATEGORÍA DESACTIVADA
+// ============================================================
+//
+// IMPORTANTE:
+//
+// La configuración es GLOBAL.
+//
+// NO importa si el mensaje viene de:
+// - Grupo
+// - Chat privado
+//
+// Si la categoría está desactivada,
+// el comando queda bloqueado.
 // ============================================================
 
 function comandoDesactivado(
@@ -107,18 +118,15 @@ function comandoDesactivado(
     }
 
     // --------------------------------------------------------
-    // Solo se aplica en grupos.
+    // Sin JID no hacemos nada.
     // --------------------------------------------------------
 
-    if (
-        !jid ||
-        !jid.endsWith('@g.us')
-    ) {
+    if (!jid) {
         return false;
     }
 
     // --------------------------------------------------------
-    // Obtener categoría del comando.
+    // Obtener categoría.
     // --------------------------------------------------------
 
     const categoria =
@@ -129,7 +137,12 @@ function comandoDesactivado(
     }
 
     // --------------------------------------------------------
-    // Comprobar configuración GLOBAL.
+    // CONFIGURACIÓN GLOBAL
+    // --------------------------------------------------------
+    //
+    // No se comprueba @g.us.
+    //
+    // Por eso funciona también en privados.
     // --------------------------------------------------------
 
     return !categoriaActivada(
@@ -161,7 +174,7 @@ export async function handleMessage(
         }
 
         // ----------------------------------------------------
-        // JID DEL BOT
+        // JID BOT
         // ----------------------------------------------------
 
         if (!botJid) {
@@ -377,7 +390,7 @@ export async function handleMessage(
                 : [];
 
         // ====================================================
-        // FIX: .menu 1
+        // .MENU 1
         // ====================================================
 
         if (
