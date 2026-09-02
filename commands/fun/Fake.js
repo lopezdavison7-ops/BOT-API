@@ -62,7 +62,7 @@ export default {
             // Enviar el mensaje citando el mensaje falso
             // Esto hace que aparezca en el chat como si targetJid hubiera dicho eso
             await sock.sendMessage(msg.key.remoteJid, {
-                text: `😈 Mensaje falsificado de @${numeroTarget}`,
+                text: `😈 Mensaje de @${numeroTarget}`,
                 mentions: [targetJid]
             }, {
                 quoted: fakeQuoted
