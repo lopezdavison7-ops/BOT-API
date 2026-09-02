@@ -1,25 +1,22 @@
 // commands/system/desactivar.js
 // ============================================================
 // BOT-API
-// COMANDO: DESACTIVAR / ACTIVAR
+// COMANDO: DESACTIVAR
 // ============================================================
+//
+// DESACTIVA UNA CATEGORÍA GLOBALMENTE.
 //
 // Ejemplos:
 //
 // .desactivar nsfw
-// .activar nsfw
-//
 // .desactivar economy
-// .activar economy
-//
-// .desactivar descargas off
-// .activar descargas on
-//
+// .desactivar descargas
 // .desactivar fun
-// .activar fun
 //
-// La configuración es independiente para cada grupo.
-// Solo administradores y Owners pueden utilizarlo.
+// También:
+// .desactivar nsfw off
+//
+// Solo administradores del grupo y Owners.
 // ============================================================
 
 import {
@@ -30,6 +27,7 @@ import {
     activarCategoria,
     desactivarCategoria,
     obtenerEstadoCategoria,
+    obtenerCategoriasDesactivadas,
     resolverCategoria
 } from '../../lib/categoriaConfig.js';
 
@@ -97,29 +95,31 @@ async function esAdministrador(
             metadata?.participants || [];
 
         // ----------------------------------------------------
-        // COMPROBAR JID EXACTO
+        // COMPARACIÓN EXACTA
         // ----------------------------------------------------
 
         const encontrado =
-            participantes.find(p => {
+            participantes.find(
+                participanteGrupo => {
 
-                if (!p) {
-                    return false;
+                    if (!participanteGrupo) {
+                        return false;
+                    }
+
+                    const ids = [
+                        participanteGrupo.id,
+                        participanteGrupo.jid,
+                        participanteGrupo.phoneNumber,
+                        participanteGrupo.lid
+                    ].filter(Boolean);
+
+                    return ids.some(
+                        id =>
+                            String(id) ===
+                            String(participante)
+                    );
                 }
-
-                const ids = [
-                    p.id,
-                    p.jid,
-                    p.phoneNumber,
-                    p.lid
-                ].filter(Boolean);
-
-                return ids.some(
-                    id =>
-                        String(id) ===
-                        String(participante)
-                );
-            });
+            );
 
         if (
             encontrado &&
@@ -132,7 +132,7 @@ async function esAdministrador(
         }
 
         // ----------------------------------------------------
-        // COMPROBAR POR NÚMERO
+        // COMPARACIÓN POR NÚMERO
         // ----------------------------------------------------
 
         const numero =
@@ -146,44 +146,46 @@ async function esAdministrador(
         }
 
         const admin =
-            participantes.find(p => {
+            participantes.find(
+                participanteGrupo => {
 
-                if (
-                    p?.admin !== 'admin' &&
-                    p?.admin !== 'superadmin'
-                ) {
-                    return false;
+                    if (
+                        participanteGrupo?.admin !== 'admin' &&
+                        participanteGrupo?.admin !== 'superadmin'
+                    ) {
+                        return false;
+                    }
+
+                    const ids = [
+                        participanteGrupo.id,
+                        participanteGrupo.jid,
+                        participanteGrupo.phoneNumber,
+                        participanteGrupo.lid
+                    ].filter(Boolean);
+
+                    return ids.some(id => {
+
+                        const numeroGrupo =
+                            String(id)
+                                .split('@')[0]
+                                .split(':')[0]
+                                .replace(/\D/g, '');
+
+                        return (
+                            numeroGrupo &&
+                            numeroGrupo === numero
+                        );
+                    });
                 }
-
-                const ids = [
-                    p.id,
-                    p.jid,
-                    p.phoneNumber,
-                    p.lid
-                ].filter(Boolean);
-
-                return ids.some(id => {
-
-                    const n =
-                        String(id)
-                            .split('@')[0]
-                            .split(':')[0]
-                            .replace(/\D/g, '');
-
-                    return (
-                        n &&
-                        n === numero
-                    );
-                });
-            });
+            );
 
         return Boolean(admin);
 
     } catch (error) {
 
         console.error(
-            '[CATEGORIAS] Error comprobando admin:',
-            error?.message || error
+            '[CATEGORIAS] ❌ Error comprobando admin:',
+            error.message
         );
 
         return false;
@@ -191,32 +193,46 @@ async function esAdministrador(
 }
 
 // ============================================================
-// MOSTRAR AYUDA
+// AYUDA
 // ============================================================
 
 async function mostrarAyuda(
     responder
 ) {
 
+    const desactivadas =
+        obtenerCategoriasDesactivadas();
+
+    let estado =
+        '┃ 🟢 No hay categorías desactivadas.';
+
+    if (desactivadas.length) {
+
+        estado =
+            '┃ 🔴 Desactivadas globalmente:\n' +
+            desactivadas
+                .map(
+                    categoria =>
+                        `┃ • ${categoria}`
+                )
+                .join('\n');
+    }
+
     await responder.texto(
         '╭━━〔 ⚙️ 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀𝐒 〕━━⬣\n' +
         '┃\n' +
-        '┃ Activa o desactiva categorías\n' +
-        '┃ completas del bot en este grupo.\n' +
-        '┃\n' +
-        '┃ 🔴 Desactivar:\n' +
+        '┃ 🔴 Desactivar globalmente:\n' +
         '┃ › .desactivar nsfw\n' +
         '┃ › .desactivar economy\n' +
         '┃ › .desactivar descargas\n' +
         '┃\n' +
-        '┃ 🟢 Activar:\n' +
+        '┃ 🟢 Activar globalmente:\n' +
         '┃ › .activar nsfw\n' +
         '┃ › .activar economy\n' +
         '┃ › .activar descargas\n' +
         '┃\n' +
-        '┃ También acepta:\n' +
-        '┃ › .desactivar nsfw off\n' +
-        '┃ › .activar nsfw on\n' +
+        '┃ Estado actual:\n' +
+        estado +
         '┃\n' +
         '╰━━━━━━━━━━━━━━━━⬣'
     );
@@ -239,7 +255,7 @@ export default {
     ],
 
     descripcion:
-        'Activa o desactiva categorías completas del bot.',
+        'Activa o desactiva categorías globalmente.',
 
     ejecutar: async ({
         sock,
@@ -290,7 +306,7 @@ export default {
                     '┃\n' +
                     '┃ ❌ Solo los administradores\n' +
                     '┃ del grupo o un Owner pueden\n' +
-                    '┃ modificar las categorías.\n' +
+                    '┃ modificar categorías.\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
@@ -326,53 +342,43 @@ export default {
                 ?.toLowerCase();
 
         // ----------------------------------------------------
-        // DETERMINAR ACCIÓN
+        // SABER SI SE USÓ .ACTIVAR
         // ----------------------------------------------------
 
-        const nombre =
-            String(
-                msg?.message
-                    ?.conversation ||
-                msg?.message
-                    ?.extendedTextMessage
-                    ?.text ||
-                ''
-            )
+        const textoOriginal =
+            msg?.message?.conversation ||
+            msg?.message?.extendedTextMessage?.text ||
+            msg?.message?.imageMessage?.caption ||
+            msg?.message?.videoMessage?.caption ||
+            '';
+
+        const comandoUsado =
+            String(textoOriginal)
                 .trim()
                 .split(/\s+/)[0]
                 ?.toLowerCase()
                 .replace(/^\./, '');
 
-        let accion;
+        let accion =
+            comandoUsado === 'activar' ||
+            comandoUsado === 'enable'
+                ? 'activar'
+                : 'desactivar';
 
-        if (
-            nombre === 'activar' ||
-            nombre === 'enable'
-        ) {
+        // ----------------------------------------------------
+        // ON / OFF
+        // ----------------------------------------------------
+
+        if (opcion === 'on') {
             accion = 'activar';
-        } else {
+        }
 
+        if (opcion === 'off') {
             accion = 'desactivar';
         }
 
         // ----------------------------------------------------
-        // SI USÓ on / off
-        // ----------------------------------------------------
-
-        if (
-            opcion === 'on'
-        ) {
-            accion = 'activar';
-        }
-
-        if (
-            opcion === 'off'
-        ) {
-            accion = 'desactivar';
-        }
-
-        // ----------------------------------------------------
-        // CATEGORÍA
+        // RESOLVER CATEGORÍA
         // ----------------------------------------------------
 
         const categoria =
@@ -383,7 +389,7 @@ export default {
         if (!categoria) {
 
             await responder.texto(
-                '❌ Debes especificar una categoría.\n\n' +
+                '❌ Especifica una categoría.\n\n' +
                 'Ejemplo:\n' +
                 '› .desactivar nsfw\n' +
                 '› .activar economy'
@@ -392,16 +398,13 @@ export default {
             return;
         }
 
-        // ----------------------------------------------------
-        // ACTIVAR
-        // ----------------------------------------------------
+        // ====================================================
+        // ACTIVAR GLOBALMENTE
+        // ====================================================
 
-        if (
-            accion === 'activar'
-        ) {
+        if (accion === 'activar') {
 
             activarCategoria(
-                jid,
                 categoria
             );
 
@@ -410,27 +413,23 @@ export default {
                 '┃\n' +
                 `┃ 📂 Categoría: *${categoriaOriginal}*\n` +
                 '┃\n' +
+                '┃ 🌎 Alcance: GLOBAL\n' +
                 '┃ 🟢 Estado: ACTIVADA\n' +
                 '┃\n' +
-                '┃ Los comandos de esta categoría\n' +
-                '┃ vuelven a estar disponibles.\n' +
+                '┃ Esta categoría vuelve a estar\n' +
+                '┃ disponible en todos los grupos.\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
-            );
-
-            console.log(
-                `[CATEGORIAS] ${jid} → ACTIVADA: ${categoria}`
             );
 
             return;
         }
 
-        // ----------------------------------------------------
-        // DESACTIVAR
-        // ----------------------------------------------------
+        // ====================================================
+        // DESACTIVAR GLOBALMENTE
+        // ====================================================
 
         desactivarCategoria(
-            jid,
             categoria
         );
 
@@ -439,16 +438,13 @@ export default {
             '┃\n' +
             `┃ 📂 Categoría: *${categoriaOriginal}*\n` +
             '┃\n' +
+            '┃ 🌎 Alcance: GLOBAL\n' +
             '┃ 🔴 Estado: DESACTIVADA\n' +
             '┃\n' +
-            '┃ Los comandos de esta categoría\n' +
-            '┃ quedan bloqueados en este grupo.\n' +
+            '┃ Esta categoría queda bloqueada\n' +
+            '┃ en todos los grupos del bot.\n' +
             '┃\n' +
             '╰━━━━━━━━━━━━━━━━⬣'
-        );
-
-        console.log(
-            `[CATEGORIAS] ${jid} → DESACTIVADA: ${categoria}`
         );
     }
 };
