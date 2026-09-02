@@ -63,15 +63,28 @@ async function scrapePinterest(consulta) {
 // FETCH CON TIMEOUT
 // ============================================================
 
-async function fetchConTimeout(url, opciones = {}, timeout = TIMEOUT_API) {
-    const controller = new AbortController();
-    const temporizador = setTimeout(() => controller.abort(), timeout);
+async function fetchConTimeout(
+    url,
+    opciones = {},
+    timeout = TIMEOUT_API
+) {
+    const controller =
+        new AbortController();
+
+    const temporizador =
+        setTimeout(
+            () => controller.abort(),
+            timeout
+        );
 
     try {
-        return await fetch(url, {
-            ...opciones,
-            signal: controller.signal
-        });
+        return await fetch(
+            url,
+            {
+                ...opciones,
+                signal: controller.signal
+            }
+        );
     } finally {
         clearTimeout(temporizador);
     }
@@ -81,56 +94,102 @@ async function fetchConTimeout(url, opciones = {}, timeout = TIMEOUT_API) {
 // LIMPIAR TEXTO
 // ============================================================
 
-function limpiarTexto(texto, fallback = '') {
-    if (texto === null || texto === undefined) {
+function limpiarTexto(
+    texto,
+    fallback = ''
+) {
+    if (
+        texto === null ||
+        texto === undefined
+    ) {
         return fallback;
     }
-    return String(texto).replace(/\s+/g, ' ').trim();
+
+    return String(texto)
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 // ============================================================
-// BUSCAR PINTEREST - AHORA USA EL SCRAPER
+// BUSCAR PINTEREST - AHORA USA SCRAPER
 // ============================================================
 
-async function buscarPinterest(consulta) {
-    console.log(`[PINTEREST] Buscando: ${consulta}`);
-    
-    const resultados = await scrapePinterest(consulta);
-    
-    console.log(`[PINTEREST] Imágenes válidas: ${resultados.length}`);
-    return resultados;
+async function buscarPinterest(
+    consulta
+) {
+    console.log(
+        `[PINTEREST] Buscando: ${consulta}`
+    );
+
+    // Usar scraper en lugar de API
+    const imagenes = await scrapePinterest(consulta);
+
+    if (
+        imagenes.length === 0
+    ) {
+        throw new Error(
+            'No encontré imágenes para esa búsqueda.'
+        );
+    }
+
+    console.log(
+        `[PINTEREST] Imágenes válidas: ${imagenes.length}`
+    );
+
+    return imagenes;
 }
 
 // ============================================================
 // DESCARGAR IMAGEN (sin enviarla)
 // ============================================================
 
-async function descargarImagen(url, indice) {
-    const respuesta = await fetchConTimeout(
-        url,
-        {
-            headers: {
-                Accept: 'image/avif,image/webp,image/jpeg,image/png,*/*',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        },
-        60000
-    );
+async function descargarImagen(
+    url,
+    indice
+) {
+    const respuesta =
+        await fetchConTimeout(
+            url,
+            {
+                headers: {
+                    Accept:
+                        'image/avif,image/webp,image/jpeg,image/png,*/*',
+                    'User-Agent':
+                        'Mozilla/5.0'
+                }
+            },
+            60000
+        );
 
     if (!respuesta.ok) {
-        throw new Error(`HTTP ${respuesta.status} al descargar imagen ${indice}`);
+        throw new Error(
+            `HTTP ${respuesta.status} al descargar imagen ${indice}`
+        );
     }
 
-    const tipo = respuesta.headers.get('content-type') || 'image/jpeg';
-    if (!tipo.startsWith('image/')) {
-        throw new Error(`La URL ${indice} no devolvió una imagen.`);
+    const tipo =
+        respuesta.headers
+            .get('content-type') ||
+        'image/jpeg';
+
+    if (
+        !tipo.startsWith('image/')
+    ) {
+        throw new Error(
+            `La URL ${indice} no devolvió una imagen.`
+        );
     }
 
-    const arrayBuffer = await respuesta.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const arrayBuffer =
+        await respuesta.arrayBuffer();
+
+    const buffer =
+        Buffer.from(arrayBuffer);
 
     if (!buffer.length) {
-        throw new Error(`La imagen ${indice} está vacía.`);
+        throw new Error(
+            `La imagen ${indice} está vacía.`
+        );
     }
 
     return buffer;
@@ -140,57 +199,135 @@ async function descargarImagen(url, indice) {
 // ENVIAR IMAGEN (una por una — respaldo si falla el álbum)
 // ============================================================
 
-async function enviarImagen(sock, jid, url, msg, indice, total) {
-    console.log(`[PINTEREST] Descargando imagen ${indice}/${total}`);
-    const buffer = await descargarImagen(url, indice);
-    console.log(`[PINTEREST] Imagen ${indice}: ${buffer.length} bytes`);
+async function enviarImagen(
+    sock,
+    jid,
+    url,
+    msg,
+    indice,
+    total
+) {
+    console.log(
+        `[PINTEREST] Descargando imagen ${indice}/${total}`
+    );
 
-    await sock.sendMessage(jid, {
-        image: buffer,
-        caption: CAPTION
-    }, {
-        quoted: msg
-    });
+    const buffer =
+        await descargarImagen(
+            url,
+            indice
+        );
 
-    console.log(`[PINTEREST] Imagen ${indice}/${total} enviada`);
+    console.log(
+        `[PINTEREST] Imagen ${indice}: ${buffer.length} bytes`
+    );
+
+    await sock.sendMessage(
+        jid,
+        {
+            image: buffer,
+            caption: CAPTION
+        },
+        {
+            quoted: msg
+        }
+    );
+
+    console.log(
+        `[PINTEREST] Imagen ${indice}/${total} enviada`
+    );
 }
 
 // ============================================================
 // ENVIAR COMO ÁLBUM (todas las imágenes en un solo mensaje)
 // ============================================================
+// Devuelve la cantidad de imágenes incluidas en el álbum.
+// Lanza error si el fork de Baileys no soporta { album: [...] }
+// o si ninguna imagen se pudo descargar.
+// ============================================================
 
-async function enviarComoAlbum(sock, jid, msg, resultados) {
-    console.log(`[PINTEREST] Descargando ${resultados.length} imágenes en paralelo...`);
+async function enviarComoAlbum(
+    sock,
+    jid,
+    msg,
+    resultados
+) {
 
-    const descargas = await Promise.allSettled(
-        resultados.map((item, i) => descargarImagen(item.descarga, i + 1))
+    console.log(
+        `[PINTEREST] Descargando ${resultados.length} imágenes en paralelo...`
     );
 
+    const descargas =
+        await Promise.allSettled(
+            resultados.map(
+                (item, i) =>
+                    descargarImagen(
+                        item.descarga,
+                        i + 1
+                    )
+            )
+        );
+
     const buffers = [];
-    descargas.forEach((resultado, i) => {
-        if (resultado.status === 'fulfilled') {
-            buffers.push(resultado.value);
-        } else {
-            console.error(`[PINTEREST] Falló imagen ${i + 1}:`, 
-                resultado.reason?.message || resultado.reason);
+
+    descargas.forEach(
+        (resultado, i) => {
+
+            if (resultado.status === 'fulfilled') {
+
+                buffers.push(
+                    resultado.value
+                );
+
+            } else {
+
+                console.error(
+                    `[PINTEREST] Falló imagen ${i + 1}:`,
+                    resultado.reason?.message ||
+                    resultado.reason
+                );
+
+            }
+
         }
-    });
+    );
 
     if (buffers.length === 0) {
-        throw new Error('No pude descargar ninguna imagen.');
+        throw new Error(
+            'No pude descargar ninguna imagen.'
+        );
     }
 
-    console.log(`[PINTEREST] Enviando álbum de ${buffers.length} imágenes...`);
+    console.log(
+        `[PINTEREST] Enviando álbum de ${buffers.length} imágenes...`
+    );
 
-    const album = buffers.map((buffer, i) => ({
-        image: buffer,
-        caption: i === buffers.length - 1 ? CAPTION : undefined
-    }));
+    const album =
+        buffers.map(
+            (buffer, i) => ({
+                image: buffer,
+                caption:
+                    i === buffers.length - 1
+                        ? CAPTION
+                        : undefined
+            })
+        );
 
-    await sock.sendMessage(jid, { album }, { quoted: msg });
+    await sock.sendMessage(
+        jid,
+        {
+            album
+        },
+        {
+            quoted: msg
+        }
+    );
 
-    console.log(`[PINTEREST] Álbum enviado: ${buffers.length}/${resultados.length}`);
+    console.log(
+        `[PINTEREST] Álbum enviado: ${buffers.length}/${resultados.length}`
+    );
+
     return buffers.length;
+
 }
 
 // ============================================================
@@ -198,13 +335,28 @@ async function enviarComoAlbum(sock, jid, msg, resultados) {
 // ============================================================
 
 export default {
-    nombre: 'pinterest',
-    categoria: 'descargas',
-    alias: ['pin', 'pinterestimg'],
-    descripcion: 'Busca imágenes en Pinterest y las envía.',
 
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
-        const consulta = argumento?.trim();
+    nombre: 'pinterest',
+
+    categoria: 'descargas',
+
+    alias: [
+        'pin',
+        'pinterestimg'
+    ],
+
+    descripcion:
+        'Busca imágenes en Pinterest y las envía.',
+
+    ejecutar: async ({
+        sock,
+        msg,
+        responder,
+        argumento
+    }) => {
+
+        const consulta =
+            argumento?.trim();
 
         if (!consulta) {
             await responder.texto(
@@ -220,21 +372,35 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
+
             return;
         }
 
-        const jid = msg?.key?.remoteJid;
-        if (!jid) return;
+        const jid =
+            msg?.key?.remoteJid;
 
-        console.log('================================================');
-        console.log(`[PINTEREST] Consulta: ${consulta}`);
+        if (!jid) {
+            return;
+        }
+
+        console.log(
+            '================================================'
+        );
+
+        console.log(
+            `[PINTEREST] Consulta: ${consulta}`
+        );
 
         try {
+
             // ------------------------------------------------
-            // BUSCAR - AHORA USA EL SCRAPER
+            // BUSCAR
             // ------------------------------------------------
 
-            const resultados = await buscarPinterest(consulta);
+            const resultados =
+                await buscarPinterest(
+                    consulta
+                );
 
             // ------------------------------------------------
             // AVISO
@@ -254,21 +420,53 @@ export default {
             let enviadas = 0;
 
             try {
-                enviadas = await enviarComoAlbum(sock, jid, msg, resultados);
-            } catch (errorAlbum) {
-                console.error('[PINTEREST] Álbum falló, usando respaldo:', 
-                    errorAlbum?.message || errorAlbum);
 
-                for (let i = 0; i < resultados.length; i++) {
+                enviadas =
+                    await enviarComoAlbum(
+                        sock,
+                        jid,
+                        msg,
+                        resultados
+                    );
+
+            } catch (errorAlbum) {
+
+                console.error(
+                    '[PINTEREST] Álbum falló, usando respaldo ' +
+                    'una por una:',
+                    errorAlbum?.message ||
+                    errorAlbum
+                );
+
+                for (
+                    let i = 0;
+                    i < resultados.length;
+                    i++
+                ) {
+
                     try {
-                        await enviarImagen(sock, jid, resultados[i].descarga,
-                            msg, i + 1, resultados.length);
+
+                        await enviarImagen(
+                            sock,
+                            jid,
+                            resultados[i].descarga,
+                            msg,
+                            i + 1,
+                            resultados.length
+                        );
+
                         enviadas++;
+
                     } catch (error) {
-                        console.error(`[PINTEREST] Error imagen ${i + 1}:`, 
-                            error?.message || error);
+
+                        console.error(
+                            `[PINTEREST] Error imagen ${i + 1}:`,
+                            error?.message ||
+                            error
+                        );
                     }
                 }
+
             }
 
             // ------------------------------------------------
@@ -276,10 +474,15 @@ export default {
             // ------------------------------------------------
 
             if (enviadas === 0) {
-                throw new Error('No pude enviar ninguna imagen.');
+
+                throw new Error(
+                    'No pude enviar ninguna imagen.'
+                );
             }
 
-            console.log(`[PINTEREST] Finalizado: ${enviadas}/${resultados.length}`);
+            console.log(
+                `[PINTEREST] Finalizado: ${enviadas}/${resultados.length}`
+            );
 
             await responder.texto(
                 `✅ *Pinterest terminado*\n\n` +
@@ -289,14 +492,23 @@ export default {
             );
 
         } catch (error) {
-            console.error('[PINTEREST] Error:', error?.stack || error?.message || error);
+
+            console.error(
+                '[PINTEREST] Error:',
+                error?.stack ||
+                error?.message ||
+                error
+            );
 
             await responder.texto(
                 '╭━━〔 ❌ 𝐏𝐈𝐍𝐓𝐄𝐑𝐄𝐒𝐓 〕━━⬣\n' +
                 '┃\n' +
                 '┃ No pude completar la búsqueda.\n' +
                 '┃\n' +
-                `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
+                `┃ ⚠️ ${
+                    error?.message ||
+                    'Error desconocido.'
+                }\n` +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
