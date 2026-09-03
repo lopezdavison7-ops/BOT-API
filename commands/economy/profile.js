@@ -1,4 +1,21 @@
 // commands/economy/profile.js
+// ============================================================
+// BOT-API
+// COMANDO: PROFILE
+// ============================================================
+// Muestra:
+// - Usuario
+// - Dinero
+// - Cartas
+// - Nivel
+// - XP
+// - Progreso de XP
+// - Edad
+// - Género
+// - Pareja
+// - Foto de perfil
+// ============================================================
+
 import {
     obtenerUsuario
 } from '../../database/economia.js';
@@ -8,6 +25,13 @@ import {
     calcularEdad,
     GENEROS
 } from '../../database/perfiles.js';
+
+import {
+    obtenerNivel,
+    xpNecesaria,
+    barraXP,
+    porcentajeXP
+} from '../../lib/niveles.js';
 
 export default {
     nombre: 'profile',
@@ -21,7 +45,7 @@ export default {
     ],
 
     descripcion:
-        'Muestra tu perfil económico y colección con foto y mención.',
+        'Muestra tu perfil económico, nivel y colección con foto y mención.',
 
     ejecutar: async ({
         sock,
@@ -29,18 +53,84 @@ export default {
         responder
     }) => {
 
+        // -------------------------------------------------------
+        // IDENTIFICAR USUARIO
+        // -------------------------------------------------------
+
         const id =
             msg.key.participant ||
+            msg.key.participantAlt ||
+            msg.key.remoteJid ||
+            msg.key.remoteJidAlt;
+
+        const chatJid =
             msg.key.remoteJid;
+
+        if (!id || !chatJid) {
+            return;
+        }
+
+        // -------------------------------------------------------
+        // DATOS DE ECONOMÍA
+        // -------------------------------------------------------
 
         const usuario =
             obtenerUsuario(id);
 
+        // -------------------------------------------------------
+        // DATOS DEL PERFIL
+        // -------------------------------------------------------
+
         const perfil =
             obtenerPerfil(id);
 
+        // -------------------------------------------------------
+        // DATOS DE NIVEL
+        // -------------------------------------------------------
+
+        const nivel =
+            obtenerNivel(
+                chatJid,
+                id
+            );
+
+        const nivelActual =
+            nivel?.nivel || 1;
+
+        const xpActual =
+            Number(
+                nivel?.xp || 0
+            );
+
+        const xpNecesariaNivel =
+            xpNecesaria(
+                nivelActual
+            );
+
+        const progreso =
+            porcentajeXP(
+                nivel
+            );
+
+        const barra =
+            barraXP(
+                nivel,
+                10
+            );
+
+        const mensajes =
+            Number(
+                nivel?.mensajes || 0
+            );
+
+        // -------------------------------------------------------
+        // PERSONAJES / CARTAS
+        // -------------------------------------------------------
+
         const personajes =
-            Array.isArray(usuario.personajes)
+            Array.isArray(
+                usuario.personajes
+            )
                 ? usuario.personajes
                 : [];
 
@@ -49,8 +139,14 @@ export default {
                 usuario.dinero || 0
             );
 
+        // -------------------------------------------------------
+        // NÚMERO
+        // -------------------------------------------------------
+
         const numero =
-            id.split('@')[0];
+            String(id)
+                .split('@')[0]
+                .split(':')[0];
 
         // -------------------------------------------------------
         // OBTENER FOTO DE PERFIL
@@ -74,27 +170,24 @@ export default {
 
                 if (respuesta.ok) {
 
-                    // fetch() nativo de Node no tiene .buffer()
-                    // (eso es de node-fetch v2). Se usa
-                    // arrayBuffer() + Buffer.from, que sí existe.
                     const arrayBuffer =
                         await respuesta.arrayBuffer();
 
                     fotoBuffer =
-                        Buffer.from(arrayBuffer);
+                        Buffer.from(
+                            arrayBuffer
+                        );
 
                     tieneFoto = true;
-
                 }
-
             }
 
         } catch {
-            // Si no tiene foto, ignoramos.
+            // Si no tiene foto, continuamos sin ella.
         }
 
         // -------------------------------------------------------
-        // LÍNEAS OPCIONALES (edad / género / pareja)
+        // LÍNEAS OPCIONALES
         // -------------------------------------------------------
 
         let lineaEdad = '';
@@ -103,7 +196,13 @@ export default {
 
         const mentions = [id];
 
-        if (perfil.fechaNacimiento) {
+        // -------------------------------------------------------
+        // EDAD
+        // -------------------------------------------------------
+
+        if (
+            perfil.fechaNacimiento
+        ) {
 
             const edad =
                 calcularEdad(
@@ -117,13 +216,23 @@ export default {
 
             lineaEdad =
                 '┃ 🎂 Edad › *No definida*\n';
-
         }
 
-        if (perfil.genero && GENEROS[perfil.genero]) {
+        // -------------------------------------------------------
+        // GÉNERO
+        // -------------------------------------------------------
+
+        if (
+            perfil.genero &&
+            GENEROS[
+                perfil.genero
+            ]
+        ) {
 
             const info =
-                GENEROS[perfil.genero];
+                GENEROS[
+                    perfil.genero
+                ];
 
             lineaGenero =
                 `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
@@ -132,10 +241,15 @@ export default {
 
             lineaGenero =
                 '┃ ⚧️ Género › *No definido*\n';
-
         }
 
-        if (perfil.pareja) {
+        // -------------------------------------------------------
+        // PAREJA
+        // -------------------------------------------------------
+
+        if (
+            perfil.pareja
+        ) {
 
             lineaPareja =
                 `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
@@ -148,52 +262,70 @@ export default {
 
             lineaPareja =
                 '┃ 💍 Pareja › *No definida*\n';
-
         }
 
         // -------------------------------------------------------
-        // CONSTRUIR MENSAJE
+        // CONSTRUIR PERFIL
         // -------------------------------------------------------
 
-        const texto = `
+        const texto =
+`
 ╭〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 ┃
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
 ┃ 🆔 Usuario › @${numero}
+┃
 ┃ 💰 Dinero › *$${dinero.toLocaleString()}*
 ┃ 🎴 Cartas › *${personajes.length}*
+┃
+┃ ⭐ Nivel › *${nivelActual}*
+┃ ✨ XP › *${xpActual} / ${xpNecesariaNivel}*
+┃ 📊 Progreso › *${progreso}%*
+┃ ${barra}
+┃ 💬 Mensajes › *${mensajes}*
+┃
 ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
         // -------------------------------------------------------
-        // ENVIAR CON FOTO O SOLO TEXTO
+        // ENVIAR CON FOTO
         // -------------------------------------------------------
 
-        if (tieneFoto && fotoBuffer) {
+        if (
+            tieneFoto &&
+            fotoBuffer
+        ) {
 
             await sock.sendMessage(
-                msg.key.remoteJid,
+                chatJid,
                 {
                     image: fotoBuffer,
                     caption: texto,
                     mentions
                 },
-                { quoted: msg }
+                {
+                    quoted: msg
+                }
             );
 
         } else {
 
+            // ---------------------------------------------------
+            // ENVIAR SIN FOTO
+            // ---------------------------------------------------
+
             await sock.sendMessage(
-                msg.key.remoteJid,
+                chatJid,
                 {
                     text: texto,
                     mentions
                 },
-                { quoted: msg }
+                {
+                    quoted: msg
+                }
             );
-
         }
     }
 };
