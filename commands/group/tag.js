@@ -13,6 +13,8 @@
 // como mencionados.
 // ============================================================
 
+import { identificadoresDe } from '../../lib/resolverJid.js';
+
 function obtenerTextoCitado(msg) {
     const contexto =
         msg?.message?.extendedTextMessage?.contextInfo;
@@ -71,6 +73,10 @@ async function esAdministrador(sock, msg) {
         msg?.key?.participantAlt
     ].filter(Boolean);
 
+    const posiblesNumeros = posiblesJids.map(
+        posible => String(posible).split('@')[0].split(':')[0]
+    );
+
     for (const participante of participantes) {
         const admin =
             participante.admin === 'admin' ||
@@ -78,18 +84,20 @@ async function esAdministrador(sock, msg) {
 
         if (!admin) continue;
 
-        for (const posible of posiblesJids) {
-            const numeroPosible =
-                String(posible).split('@')[0].split(':')[0];
+        // Se revisan TODOS los identificadores del participante
+        // (id, jid, phoneNumber, lid) — no solo `id`, que puede
+        // venir como @lid y nunca coincidir con el número real
+        // que trae el mensaje.
+        const idsParticipante = identificadoresDe(participante).map(
+            id => String(id).split('@')[0].split(':')[0]
+        );
 
-            const numeroParticipante =
-                String(participante.id)
-                    .split('@')[0]
-                    .split(':')[0];
+        const coincide = idsParticipante.some(
+            numeroParticipante => posiblesNumeros.includes(numeroParticipante)
+        );
 
-            if (numeroPosible === numeroParticipante) {
-                return true;
-            }
+        if (coincide) {
+            return true;
         }
     }
 
