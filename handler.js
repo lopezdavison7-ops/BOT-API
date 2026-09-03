@@ -226,7 +226,34 @@ export async function handleMessage(
 
         const comandoEsAfk = /^\s*\.afk(?:\s|$)/i.test(String(textoInicial));
 
-        if (!comandoEsAfk) {
+        // Solo el usuario que realmente envía un mensaje puede salir
+        // de AFK. Los mensajes enviados por el propio bot NO cuentan.
+        // En grupos usamos participant/participantAlt como identidad del
+        // remitente; remoteJid es el JID del grupo y nunca debe usarse
+        // como identidad del usuario que está escribiendo.
+        const tieneContenidoDeUsuario = Boolean(
+            msg.message?.conversation ||
+            msg.message?.extendedTextMessage ||
+            msg.message?.imageMessage ||
+            msg.message?.videoMessage ||
+            msg.message?.audioMessage ||
+            msg.message?.documentMessage ||
+            msg.message?.stickerMessage ||
+            msg.message?.contactMessage ||
+            msg.message?.contactsArrayMessage ||
+            msg.message?.locationMessage ||
+            msg.message?.liveLocationMessage ||
+            msg.message?.buttonsResponseMessage ||
+            msg.message?.listResponseMessage ||
+            msg.message?.templateButtonReplyMessage ||
+            msg.message?.interactiveResponseMessage
+        );
+
+        const tieneRemitenteReal = isGroup
+            ? Boolean(msg?.key?.participant || msg?.key?.participantAlt)
+            : Boolean(msg?.key?.remoteJid);
+
+        if (!fromMe && !comandoEsAfk && tieneContenidoDeUsuario && tieneRemitenteReal) {
             const regreso = quitarAfk({ jid, msg });
 
             if (regreso) {
