@@ -10,13 +10,17 @@
 // - Minijuegos
 // - Categorías
 // - Sistema de niveles / XP
+//
+// IMPORTANTE:
+// La XP NO se entrega por mensajes normales.
+// La XP se entrega desde lib/minijuegos.js únicamente cuando
+// un jugador participa realmente en un minijuego.
 // ============================================================
 
 import { loadCommands } from './controllers/cmdManager.js';
 import { procesarMinijuegos } from './lib/minijuegos.js';
 
 import {
-    buscarAfk,
     quitarAfk,
     buscarAfkPorIds,
     obtenerIdentificadores,
@@ -27,32 +31,11 @@ import {
     categoriaActivada
 } from './lib/categoriaConfig.js';
 
-import {
-    agregarXP
-} from './lib/niveles.js';
-
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
 
 const PREFIJO = '.';
-
-// ------------------------------------------------------------
-// Cooldown de XP
-// ------------------------------------------------------------
-//
-// Cada usuario puede recibir XP una vez cada 30 segundos
-// por chat.
-//
-// Así evitamos que alguien mande mensajes rápidamente
-// solamente para farmear XP.
-// ------------------------------------------------------------
-
-const XP_COOLDOWN =
-    30 * 1000;
-
-const cooldownXP =
-    new Map();
 
 let comandos = null;
 let botJid = null;
@@ -161,6 +144,7 @@ function comandoDesactivado(
 //
 // En privado:
 //
+// participant
 // remoteJid
 // remoteJidAlt
 //
@@ -248,123 +232,6 @@ function tieneContenidoDeUsuario(
 }
 
 // ============================================================
-// DAR XP
-// ============================================================
-
-function procesarXP(
-    msg,
-    jid,
-    isGroup,
-    fromMe
-) {
-
-    // --------------------------------------------------------
-    // Los mensajes del bot nunca dan XP.
-    // --------------------------------------------------------
-
-    if (fromMe) {
-        return null;
-    }
-
-    // --------------------------------------------------------
-    // Necesitamos contenido real.
-    // --------------------------------------------------------
-
-    if (
-        !tieneContenidoDeUsuario(
-            msg
-        )
-    ) {
-        return null;
-    }
-
-    // --------------------------------------------------------
-    // Identificar usuario.
-    // --------------------------------------------------------
-
-    const usuario =
-        obtenerRemitente(
-            msg,
-            isGroup,
-            jid
-        );
-
-    if (!usuario) {
-        return null;
-    }
-
-    // --------------------------------------------------------
-    // Cooldown.
-    //
-    // La clave contiene chat + usuario.
-    // --------------------------------------------------------
-
-    const clave =
-        `${jid}|${usuario}`;
-
-    const ahora =
-        Date.now();
-
-    const ultimo =
-        cooldownXP.get(
-            clave
-        ) || 0;
-
-    if (
-        ahora - ultimo <
-        XP_COOLDOWN
-    ) {
-
-        return null;
-    }
-
-    cooldownXP.set(
-        clave,
-        ahora
-    );
-
-    // --------------------------------------------------------
-    // Dar XP.
-    // --------------------------------------------------------
-
-    return agregarXP(
-        jid,
-        usuario
-    );
-}
-
-// ============================================================
-// LIMPIAR COOLDOWN ANTIGUO
-// ============================================================
-//
-// Evita que el Map crezca indefinidamente.
-// ============================================================
-
-function limpiarCooldownXP() {
-
-    const ahora =
-        Date.now();
-
-    for (
-        const [
-            clave,
-            tiempo
-        ] of cooldownXP
-    ) {
-
-        if (
-            ahora - tiempo >
-            XP_COOLDOWN * 10
-        ) {
-
-            cooldownXP.delete(
-                clave
-            );
-        }
-    }
-}
-
-// ============================================================
 // MANEJAR MENSAJE
 // ============================================================
 
@@ -388,129 +255,47 @@ export async function handleMessage(
         }
 
         // ----------------------------------------------------
-        // JID BOT
+        // JID DEL BOT
         // ----------------------------------------------------
 
         if (!botJid) {
 
             botJid =
-                sock.user.id;
+                sock.user?.id ||
+                null;
         }
 
         // ----------------------------------------------------
         // VALIDACIONES
         // ----------------------------------------------------
 
-        if (!msg.message) {
+        if (!msg?.message) {
             return;
         }
 
         if (
-            msg.key.remoteJid ===
+            msg.key?.remoteJid ===
             'status@broadcast'
         ) {
             return;
         }
 
         const jid =
-            msg.key.remoteJid;
+            msg.key?.remoteJid;
+
+        if (!jid) {
+            return;
+        }
 
         const fromMe =
-            msg.key.fromMe;
+            Boolean(
+                msg.key?.fromMe
+            );
 
         const isGroup =
-            jid.endsWith('@g.us');
-
-        // ====================================================
-        // SISTEMA DE NIVELES / XP
-        // ====================================================
-        //
-        // IMPORTANTE:
-        //
-        // Se ejecuta antes del procesamiento del comando.
-        //
-        // Solo los mensajes del usuario dan XP.
-        // Los mensajes del bot NO dan XP.
-        //
-        // El cooldown evita farmear XP enviando mensajes
-        // continuamente.
-        // ====================================================
-
-        const resultadoXP =
-            procesarXP(
-                msg,
-                jid,
-                isGroup,
-                fromMe
+            jid.endsWith(
+                '@g.us'
             );
-
-        if (
-            resultadoXP?.subio
-        ) {
-
-            const usuario =
-                obtenerRemitente(
-                    msg,
-                    isGroup,
-                    jid
-                );
-
-            const numero =
-                String(
-                    usuario || ''
-                )
-                    .split('@')[0]
-                    .split(':')[0]
-                    .replace(
-                        /\D/g,
-                        ''
-                    );
-
-            const niveles =
-                resultadoXP.nivelesSubidos ||
-                1;
-
-            const textoNivel =
-                niveles > 1
-                    ? `¡subió *${niveles} niveles*!`
-                    : `¡subió al *nivel ${resultadoXP.nivel}*!`;
-
-            await sock.sendMessage(
-                jid,
-                {
-                    text:
-                        `╭━━〔 🎉 *LEVEL UP* 〕━━⬣\n` +
-                        `┃\n` +
-                        `┃ 👤 @${numero || 'usuario'}\n` +
-                        `┃ ⭐ ${textoNivel}\n` +
-                        `┃ ✨ XP: *${resultadoXP.xp}*\n` +
-                        `┃\n` +
-                        `┃ 🚀 ¡Sigue participando!\n` +
-                        `┃\n` +
-                        `╰━━━━━━━━━━━━━━━━⬣`,
-                    mentions:
-                        numero
-                            ? [
-                                `${numero}@s.whatsapp.net`
-                            ]
-                            : []
-                },
-                {
-                    quoted: msg
-                }
-            );
-        }
-
-        // ----------------------------------------------------
-        // LIMPIAR COOLDOWN CADA CIERTO TIEMPO
-        // ----------------------------------------------------
-
-        if (
-            Math.random() < 0.01
-        ) {
-
-            limpiarCooldownXP();
-        }
 
         // ====================================================
         // SISTEMA AFK
@@ -533,6 +318,9 @@ export async function handleMessage(
         // ----------------------------------------------------
         // Solo el usuario que realmente manda un mensaje
         // puede salir de AFK.
+        //
+        // Los mensajes del bot NO cancelan AFK.
+        // Las menciones tampoco cancelan AFK.
         // ----------------------------------------------------
 
         const contenidoUsuario =
@@ -624,7 +412,8 @@ export async function handleMessage(
                             `┃ ⏱️ Estuvo AFK: *${tiempo}*\n` +
                             `┃\n` +
                             `╰━━━━━━━━━━━━━━━━⬣`,
-                        mentions
+                        mentions:
+                            menciones
                     },
                     {
                         quoted: msg
@@ -721,6 +510,16 @@ export async function handleMessage(
 
         // ====================================================
         // MINIJUEGOS
+        // ====================================================
+        //
+        // IMPORTANTE:
+        //
+        // Aquí se procesa la participación en los juegos.
+        //
+        // lib/minijuegos.js se encarga de entregar XP SOLO
+        // cuando uno de los juegos devuelve true.
+        //
+        // Por eso un mensaje normal NO genera XP.
         // ====================================================
 
         const fueMinijuego =
@@ -851,7 +650,7 @@ export async function handleMessage(
             }
         }
 
-                // ====================================================
+        // ====================================================
         // PREFIJO
         // ====================================================
 
@@ -996,113 +795,111 @@ export async function handleMessage(
             return;
         }
 
-        // ====================================================
-        // EJECUTAR COMANDO
-        // ====================================================
+        // ============================================================
+// EJECUTAR COMANDO
+// ============================================================
 
-        await cmd.ejecutar({
+await cmd.ejecutar({
 
-            sock,
+    sock,
 
-            msg,
+    msg,
 
-            args,
+    args,
 
-            argumento,
+    argumento,
 
-            listaComandos,
+    listaComandos,
 
-            prefijo,
+    prefijo,
 
-            fromMe,
+    fromMe,
 
-            isGroup,
+    isGroup,
 
-            jid,
+    jid,
 
-            botJid,
+    botJid,
 
-            responder: {
+    responder: {
 
-                texto: async (
+        texto: async (text) => {
+
+            await sock.sendMessage(
+                jid,
+                {
                     text
-                ) => {
-
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            text
-                        },
-                        {
-                            quoted: msg
-                        }
-                    );
                 },
-
-                imagen: async (
-                    img,
-                    caption = ''
-                ) => {
-
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            image: img,
-                            caption
-                        },
-                        {
-                            quoted: msg
-                        }
-                    );
-                },
-
-                video: async (
-                    vid,
-                    caption = ''
-                ) => {
-
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            video: vid,
-                            caption
-                        },
-                        {
-                            quoted: msg
-                        }
-                    );
-                },
-
-                audio: async (
-                    aud,
-                    ptt = true
-                ) => {
-
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            audio: aud,
-                            mimetype: 'audio/mpeg',
-                            ptt
-                        },
-                        {
-                            quoted: msg
-                        }
-                    );
+                {
+                    quoted: msg
                 }
-            }
-        });
+            );
+        },
 
-    } catch (error) {
+        imagen: async (
+            img,
+            caption = ''
+        ) => {
 
-        console.error(
-            '[HANDLER] Error al manejar mensaje:',
-            error
-        );
+            await sock.sendMessage(
+                jid,
+                {
+                    image: img,
+                    caption
+                },
+                {
+                    quoted: msg
+                }
+            );
+        },
 
-        if (
-            !msg.key.fromMe
-        ) {
+        video: async (
+            vid,
+            caption = ''
+        ) => {
+
+            await sock.sendMessage(
+                jid,
+                {
+                    video: vid,
+                    caption
+                },
+                {
+                    quoted: msg
+                }
+            );
+        },
+
+        audio: async (
+            aud,
+            ptt = true
+        ) => {
+
+            await sock.sendMessage(
+                jid,
+                {
+                    audio: aud,
+                    mimetype: 'audio/mpeg',
+                    ptt
+                },
+                {
+                    quoted: msg
+                }
+            );
+        }
+    }
+});
+
+} catch (error) {
+
+    console.error(
+        '[HANDLER] Error al manejar mensaje:',
+        error
+    );
+
+    if (!msg?.key?.fromMe) {
+
+        try {
 
             await sock.sendMessage(
                 msg.key.remoteJid,
@@ -1114,6 +911,24 @@ export async function handleMessage(
                     quoted: msg
                 }
             );
+
+        } catch (sendError) {
+
+            console.error(
+                '[HANDLER] No se pudo enviar el error:',
+                sendError
+            );
         }
     }
 }
+}
+       
+                  
+ 
+      
+        
+                
+        
+             
+    
+                
