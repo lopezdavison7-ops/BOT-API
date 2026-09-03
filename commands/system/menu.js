@@ -1,11 +1,17 @@
 // ============================================================
-// MENU - BOT-API 2.0 MENÚ AESTHETIC (ESPACIADO FINAL)
+// MENU - BOT-API 2.0
+// ============================================================
+// MENÚ MULTI-DISEÑO
+//
+// Cada vez que se usa .menu se selecciona un diseño diferente
+// en ese chat. No repite inmediatamente el diseño anterior.
+// Se conservan las categorías, comandos, menciones, imagen,
+// canal, versión, creador, uptime, fecha y hora.
 // ============================================================
 
 import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
-import { prepareWAMessageMedia } from 'baileys';
 import { obtenerStore } from '../../lib/jsonStore.js';
 
 const VERSION = '2.0.0';
@@ -14,25 +20,182 @@ const ZONA_HORARIA = 'America/Managua';
 
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 const VIDEO_MENU_URL = '';
-
 const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
 
-// ── GRUPO FIJO PARA MENCIONES ──
 const GRUPO_MENCIONES = '120363429140811226@g.us';
 const CANTIDAD_MENCIONES = 5;
 
-// Orden de categorías
 const ORDEN_CATEGORIAS = [
-    'Sistema', 'Owner', 'Grupos', 'Moderación',
-    'Economía', 'Diversión', 'Interacción',
-    'Descargas', 'Multimedia', 'Utilidades', 'IA', 'Otros'
+    'Sistema', 'Owner', 'Grupos', 'Moderación', 'Economía',
+    'Diversión', 'Interacción', 'Descargas', 'Multimedia',
+    'Utilidades', 'IA', 'Otros'
 ];
 
 const ICONOS = {
-    Owner: '👑', Economía: '💸', 'Diversión': '🎉', Sistema: '⚙️', Otros: '📦',
-    Descargas: '📥', Utilidades: '🛠️', IA: '🧠', Multimedia: '🎨',
-    Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
+    Owner: '👑', Economía: '💸', 'Diversión': '🎉', Sistema: '⚙️',
+    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
+    Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
+
+// ============================================================
+// DISEÑOS
+// ============================================================
+
+const DISEÑOS = [
+    {
+        nombre: 'Galaxy', emoji: '🌌',
+        top: '╭━━━━━━━━━━〔 🌌 〕━━━━━━━━━━╮',
+        bottom: '╰━━━━━━━━━━〔 🌌 〕━━━━━━━━━━╯',
+        titulo: '🌌 *GALAXY MENU*',
+        subtitulo: '✦ 𝑬𝒙𝒑𝒍𝒐𝒓𝒂 𝒆𝒍 𝒖𝒏𝒊𝒗𝒆𝒓𝒔𝒐 ✦',
+        info: '╭──────〔 🌌 *I N F O* 〕──────╮',
+        infoEnd: '╰────────────────────────────╯',
+        category: '╭━━━〔 {icon} *{name}* 〕━━━╮',
+        categoryEnd: '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
+        command: '┃ ✦ *{command}*',
+        desc: '┃ └─ 🌙 {desc}',
+        footer: '🌌 _Explorando comandos desde otra dimensión..._'
+    },
+    {
+        nombre: 'Neon', emoji: '💜',
+        top: '╔═══════════〔 💜 〕═══════════╗',
+        bottom: '╚═══════════〔 💜 〕═══════════╝',
+        titulo: '💜 *ＮＥＯＮ ＭＥＮＵ*',
+        subtitulo: '⚡ 𝑷𝒐𝒘𝒆𝒓 • 𝑪𝒐𝒅𝒆 • 𝑴𝒂𝒈𝒊𝒄 ⚡',
+        info: '╭━━〔 💜 *SYSTEM INFO* 〕━━╮',
+        infoEnd: '╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
+        category: '╭──〔 💜 {icon} *{name}* 〕──╮',
+        categoryEnd: '╰──────────────────────────╯',
+        command: '│ ⚡ *{command}*',
+        desc: '│ 💫 {desc}',
+        footer: '💜 _Powered by BOT-API_'
+    },
+    {
+        nombre: 'Sakura', emoji: '🌸',
+        top: '╭━━━━━━━〔 🌸 〕━━━━━━━╮',
+        bottom: '╰━━━━━━━〔 🌸 〕━━━━━━━╯',
+        titulo: '🌸 *𝑺𝑨𝑲𝑼𝑹𝑨 𝑴𝑬𝑵𝑼*',
+        subtitulo: '♡ 𝑼𝒏 𝒎𝒆𝒏𝒖́ 𝒄𝒐𝒏 𝒖𝒏 𝒕𝒐𝒒𝒖𝒆 𝒆𝒔𝒑𝒆𝒄𝒊𝒂𝒍 ♡',
+        info: '╭──〔 🌷 *𝑰𝑵𝑭𝑶* 〕──╮',
+        infoEnd: '╰──────────────────────╯',
+        category: '╭━━〔 🌸 {icon} *{name}* 〕━━╮',
+        categoryEnd: '╰━━━━━━━━━━━━━━━━━━━━━━╯',
+        command: '┃ 🌷 *{command}*',
+        desc: '┃ ↳ 🌸 {desc}',
+        footer: '🌸 _Que florezcan tus comandos..._'
+    },
+    {
+        nombre: 'Fire', emoji: '🔥',
+        top: '🔥━━━━━━━━〔 🔥 〕━━━━━━━━🔥',
+        bottom: '🔥━━━━━━━━〔 🔥 〕━━━━━━━━🔥',
+        titulo: '🔥 *F I R E   M E N U*',
+        subtitulo: '⚡ 𝑻𝒐𝒅𝒐 𝒆𝒍 𝒑𝒐𝒅𝒆𝒓 𝒆𝒏 𝒕𝒖𝒔 𝒎𝒂𝒏𝒐𝒔 ⚡',
+        info: '🔥╭━━〔 *SYSTEM* 〕━━╮',
+        infoEnd: '🔥╰━━━━━━━━━━━━━━━━━━╯',
+        category: '🔥╭━━〔 {icon} *{name}* 〕━━╮',
+        categoryEnd: '🔥╰━━━━━━━━━━━━━━━━━━━━━━╯',
+        command: '🔥┃ *{command}*',
+        desc: '🔥┃ ➜ {desc}',
+        footer: '🔥 _BOT-API en llamas_ 🔥'
+    },
+    {
+        nombre: 'Luxury', emoji: '💎',
+        top: '╭══════════〔 💎 〕══════════╮',
+        bottom: '╰══════════〔 💎 〕══════════╯',
+        titulo: '💎 *𝑳𝑼𝑿𝑼𝑹𝒀 𝑴𝑬𝑵𝑼*',
+        subtitulo: '♛ 𝑬𝒍𝒆𝒈𝒂𝒏𝒄𝒊𝒂 • 𝑷𝒐𝒘𝒆𝒓 • 𝑷𝒓𝒆𝒔𝒕𝒊𝒈𝒆 ♛',
+        info: '╭────〔 💎 *VIP INFO* 〕────╮',
+        infoEnd: '╰───────────────────────────╯',
+        category: '╭══〔 💎 {icon} *{name}* 〕══╮',
+        categoryEnd: '╰════════════════════════════╯',
+        command: '║ ◇ *{command}*',
+        desc: '║   └─ {desc}',
+        footer: '💎 _Una experiencia premium en cada comando._'
+    },
+    {
+        nombre: 'Ocean', emoji: '🌊',
+        top: '🌊╭━━━━━━━━〔 🌊 〕━━━━━━━━╮',
+        bottom: '🌊╰━━━━━━━━〔 🌊 〕━━━━━━━━╯',
+        titulo: '🌊 *𝑶𝑪𝑬𝑨𝑵 𝑴𝑬𝑵𝑼*',
+        subtitulo: '🐚 𝑭𝒍𝒖𝒚𝒆 𝒑𝒐𝒓 𝒍𝒂𝒔 𝒐𝒑𝒄𝒊𝒐𝒏𝒆𝒔 🐚',
+        info: '╭───〔 🌊 *OCEAN INFO* 〕───╮',
+        infoEnd: '╰───────────────────────────╯',
+        category: '🌊╭──〔 {icon} *{name}* 〕──╮',
+        categoryEnd: '🌊╰────────────────────────╯',
+        command: '🐬│ *{command}*',
+        desc: '🐚│ {desc}',
+        footer: '🌊 _Sumérgete en BOT-API._'
+    },
+    {
+        nombre: 'Dark', emoji: '🖤',
+        top: '╔═══════〔 🖤 〕═══════╗',
+        bottom: '╚═══════〔 🖤 〕═══════╝',
+        titulo: '🖤 *D A R K   M E N U*',
+        subtitulo: '☠︎ 𝑻𝒉𝒆 𝒅𝒂𝒓𝒌 𝒔𝒊𝒅𝒆 𝒐𝒇 𝒄𝒐𝒅𝒆 ☠︎',
+        info: '╭──〔 🖤 *DARK SYSTEM* 〕──╮',
+        infoEnd: '╰─────────────────────────╯',
+        category: '╭─〔 🖤 {icon} *{name}* 〕─╮',
+        categoryEnd: '╰─────────────────────────╯',
+        command: '│ ☠ *{command}*',
+        desc: '│ └─ {desc}',
+        footer: '🖤 _BOT-API • Dark Mode_'
+    },
+    {
+        nombre: 'Rainbow', emoji: '🌈',
+        top: '🌈━━━━━━━━〔 🌈 〕━━━━━━━━🌈',
+        bottom: '🌈━━━━━━━━〔 🌈 〕━━━━━━━━🌈',
+        titulo: '🌈 *𝑹𝑨𝑰𝑵𝑩𝑶𝑾 𝑴𝑬𝑵𝑼*',
+        subtitulo: '✨ 𝑪𝒐𝒍𝒐𝒓 • 𝑭𝒖𝒏 • 𝑷𝒐𝒘𝒆𝒓 ✨',
+        info: '╭━━〔 🌈 *INFO* 〕━━╮',
+        infoEnd: '╰━━━━━━━━━━━━━━━━━━╯',
+        category: '╭━━〔 🌈 {icon} *{name}* 〕━━╮',
+        categoryEnd: '╰━━━━━━━━━━━━━━━━━━━━━━╯',
+        command: '┃ 🌈 *{command}*',
+        desc: '┃ ✨ {desc}',
+        footer: '🌈 _Tu bot, tus colores, tus comandos._'
+    },
+    {
+        nombre: 'Cyber', emoji: '🤖',
+        top: '╭━━━〔 🤖 CYBER 〕━━━╮',
+        bottom: '╰━━━〔 🤖 CYBER 〕━━━╯',
+        titulo: '🤖 *ＣＹＢＥＲ  ＭＥＮＵ*',
+        subtitulo: '▣ 𝑺𝒚𝒔𝒕𝒆𝒎 𝒐𝒏𝒍𝒊𝒏𝒆 • 𝑨𝒄𝒄𝒆𝒔𝒔 𝒈𝒓𝒂𝒏𝒕𝒆𝒅 ▣',
+        info: '╭─〔 🤖 *SYSTEM STATUS* 〕─╮',
+        infoEnd: '╰──────────────────────────╯',
+        category: '╭─〔 🤖 {icon} *{name}* 〕─╮',
+        categoryEnd: '╰────────────────────────╯',
+        command: '┃ ▣ *{command}*',
+        desc: '┃ └─ {desc}',
+        footer: '🤖 _SYSTEM ONLINE • BOT-API_'
+    },
+    {
+        nombre: 'Royal', emoji: '👑',
+        top: '♛━━━━━━━━〔 👑 〕━━━━━━━━♛',
+        bottom: '♛━━━━━━━━〔 👑 〕━━━━━━━━♛',
+        titulo: '👑 *𝑹𝑶𝒀𝑨𝑳 𝑴𝑬𝑵𝑼*',
+        subtitulo: '⚜️ 𝑻𝒉𝒆 𝒓𝒐𝒚𝒂𝒍 𝒃𝒐𝒕 𝒆𝒙𝒑𝒆𝒓𝒊𝒆𝒏𝒄𝒆 ⚜️',
+        info: '╭━━〔 👑 *ROYAL INFO* 〕━━╮',
+        infoEnd: '╰━━━━━━━━━━━━━━━━━━━━━━━━╯',
+        category: '╭━━〔 👑 {icon} *{name}* 〕━━╮',
+        categoryEnd: '╰━━━━━━━━━━━━━━━━━━━━━━━━╯',
+        command: '║ ♛ *{command}*',
+        desc: '║ └─ {desc}',
+        footer: '👑 _BOT-API • Royal Edition_'
+    }
+];
+
+// Último diseño utilizado por cada chat.
+const ultimoDiseñoPorChat = new Map();
+
+function obtenerDiseño(jid) {
+    const anterior = ultimoDiseñoPorChat.get(jid);
+    let disponibles = DISEÑOS.filter(d => d.nombre !== anterior);
+    if (!disponibles.length) disponibles = DISEÑOS;
+
+    const diseño = disponibles[Math.floor(Math.random() * disponibles.length)];
+    ultimoDiseñoPorChat.set(jid, diseño.nombre);
+    return diseño;
+}
 
 // ============================================================
 // HELPERS
@@ -99,8 +262,7 @@ function organizarComandos(lista) {
 }
 
 function ordenarCategorias(categorias) {
-    const claves = Object.keys(categorias);
-    return claves.sort((a, b) => {
+    return Object.keys(categorias).sort((a, b) => {
         const ia = ORDEN_CATEGORIAS.indexOf(a);
         const ib = ORDEN_CATEGORIAS.indexOf(b);
         if (ia === -1 && ib === -1) return a.localeCompare(b);
@@ -110,129 +272,91 @@ function ordenarCategorias(categorias) {
     });
 }
 
-// ── ACORTAR DESCRIPCIÓN PARA QUE NO SE VEA PEGADA ──
 function acortarDesc(texto) {
     if (!texto) return 'Sin descripción';
     const limpio = String(texto).trim();
-    // Si es corto, lo dejamos tal cual
     if (limpio.length <= 40) return limpio;
-    // Si es largo, cortamos a 40 y ponemos ...
-    return limpio.slice(0, 40).trim() + '...';
+    return `${limpio.slice(0, 40).trim()}...`;
 }
 
-// ── OBTENER MENCIONES DEL GRUPO FIJO ──
 async function obtenerMencionesFijas() {
     try {
-        const s = global.conns?.[0] || Object.values(global.conns)[0];
+        const conexiones = global.conns || {};
+        const s = conexiones?.[0] || Object.values(conexiones)[0];
         if (!s) return { jids: [], texto: '' };
 
         const meta = await s.groupMetadata(GRUPO_MENCIONES);
-        const jids = meta.participants
-            .slice(0, CANTIDAD_MENCIONES)
-            .map(p => p.id);
-
+        const jids = meta.participants.slice(0, CANTIDAD_MENCIONES).map(p => p.id);
         const texto = jids.map(v => `@${v.split('@')[0]}`).join(' ');
         return { jids, texto };
     } catch (e) {
-        console.error('[MENU] Error menciones fijas:', e);
+        console.error('[MENU] Error menciones fijas:', e?.message || e);
         return { jids: [], texto: '' };
     }
 }
 
 // ============================================================
-// GENERAR TEXTO DEL MENÚ (TODO EN UN SOLO MENSAJE)
+// GENERAR MENÚ
 // ============================================================
 
-function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, extra = {}) {
+function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño, extra = {}) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
-    let texto = ``;
+    let texto = '';
 
-    // ═════ SALUDO ARRIBA ═════
+    texto += `${diseño.top}\n\n`;
     texto += `👋 ¡Hola ${mencionTexto}! ✨\n`;
+
     if (extra.mencionesTexto) {
         texto += `\n👥 ${extra.mencionesTexto}\n`;
     }
-    texto += `\n`;
 
-    // ═════ HEADER ═════
-    texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
     texto += `\n`;
-    texto += `              🌸  *${botName}*  🌸\n`;
-    texto += `           · · ·  𝑀𝐸𝒩𝒰  · · ·\n`;
-    texto += `\n`;
-    texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
-    texto += `\n`;
+    texto += `${diseño.titulo}\n`;
+    texto += `${diseño.subtitulo}\n\n`;
+    texto += `🤖 *${botName}*\n`;
+    texto += `🎨 Diseño actual: *${diseño.nombre}* ${diseño.emoji}\n\n`;
 
-    // ═════ INFO BOX ═════
-    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    texto += `         📊  *I N F O R M A C I Ó N*  📊\n`;
-    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    texto += `\n`;
-    texto += `  👨‍💻  Creador    ▸  ${CREADOR}\n`;
-    texto += `  📦  Versión    ▸  ${VERSION}\n`;
-    texto += `  📚  Comandos   ▸  ${totalCmds}\n`;
-    texto += `  🗂️  Categorías ▸  ${totalCats}\n`;
-    texto += `  🔧  Prefijo    ▸  ${prefijo}\n`;
-    texto += `  ⏱️  Uptime     ▸  ${formatUptime(process.uptime())}\n`;
-    texto += `\n`;
-    texto += `  📅  ${now.format('DD/MM/YYYY')}\n`;
-    texto += `  🕐  ${now.format('HH:mm:ss')}\n`;
-    texto += `\n`;
-    texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `${diseño.info}\n`;
+    texto += `┃ 👨‍💻 Creador    ▸ ${CREADOR}\n`;
+    texto += `┃ 📦 Versión    ▸ ${VERSION}\n`;
+    texto += `┃ 📚 Comandos   ▸ ${totalCmds}\n`;
+    texto += `┃ 🗂️ Categorías ▸ ${totalCats}\n`;
+    texto += `┃ 🔧 Prefijo    ▸ ${prefijo}\n`;
+    texto += `┃ ⏱️ Uptime     ▸ ${formatUptime(process.uptime())}\n`;
+    texto += `┃ 📅 Fecha      ▸ ${now.format('DD/MM/YYYY')}\n`;
+    texto += `┃ 🕐 Hora       ▸ ${now.format('HH:mm:ss')}\n`;
+    texto += `${diseño.infoEnd}\n`;
 
-    // ═════ CATEGORÍAS ═════
-    const catsOrdenadas = ordenarCategorias(categorias);
-
-    for (const cat of catsOrdenadas) {
+    for (const cat of ordenarCategorias(categorias)) {
         const icono = obtenerIcono(cat);
         const cmds = categorias[cat];
 
-        texto += `\n`;
-        texto += `\n`;
-        texto += `  ────── ⋆  ${icono}  *${cat.toUpperCase()}*  ${icono}  ⋆ ──────\n`;
-        texto += `\n`;
+        texto += `\n${diseño.category.replace('{icon}', icono).replace('{name}', cat.toUpperCase())}\n\n`;
 
         for (const cmd of cmds) {
-            const alias = cmd.alias && cmd.alias.length ? `(${cmd.alias.join(', ')})` : '';
-            const desc = acortarDesc(cmd.descripcion);
-
-            // Comando en negrita
-            if (alias) {
-                texto += `  ◇ *${prefijo}${cmd.nombre}* ${alias}\n`;
-            } else {
-                texto += `  ◇ *${prefijo}${cmd.nombre}*\n`;
-            }
-
-            // Descripción corta y limpia
-            texto += `  > ${desc}\n`;
-
-            // ESPACIO DOBLE entre comandos (para que no se peguen)
+            const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
+            texto += `${diseño.command.replace('{command}', `${prefijo}${cmd.nombre}${alias}`)}\n`;
+            texto += `${diseño.desc.replace('{desc}', acortarDesc(cmd.descripcion))}\n`;
             texto += `\n`;
         }
 
-        texto += `  ─────────────────────────────────────\n`;
+        texto += `${diseño.categoryEnd}\n`;
     }
-
-    // ═════ FOOTER ═════
-    texto += `\n`;
 
     const canal = obtenerCanal();
     if (canal) {
-        texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        texto += `  📢  *Canal Oficial*\n`;
-        texto += `  ${canal}\n`;
-        texto += `  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        texto += `\n`;
+        texto += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        texto += `📢 *CANAL OFICIAL*\n${canal}\n`;
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     }
 
-    texto += `  💡  Usa *${prefijo}menu <comando>* para más info\n`;
-    texto += `\n`;
-    texto += `▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰\n`;
-    texto += `\n`;
-    texto += `       _${botName}_  ·  ${now.format('HH:mm')}`;
+    texto += `\n💡 Usa *${prefijo}menu <comando>* para más información.\n\n`;
+    texto += `${diseño.footer}\n\n`;
+    texto += `_${botName}_ • ${now.format('HH:mm')}\n`;
+    texto += `${diseño.bottom}`;
 
     return texto;
 }
@@ -246,76 +370,64 @@ export default {
     categoria: 'Sistema',
     alias: ['ayuda', 'help', 'comandos', 'cmds'],
 
-    async ejecutar({ sock, msg, args, listaComandos, prefijo }) {
+    async ejecutar({ sock, msg, listaComandos, prefijo }) {
         try {
             const jid = msg?.key?.remoteJid;
+            if (!jid) return;
+
             const autor = obtenerAutor(msg);
             const categorias = organizarComandos(listaComandos);
+            const diseño = obtenerDiseño(jid);
 
-            // ── SIEMPRE OBTENER MENCIONES DEL GRUPO FIJO ──
             const { jids: mencionesFijas, texto: textoMenciones } = await obtenerMencionesFijas();
-
             const mencionTexto = autor ? `@${autor.num}` : '@usuario';
             const mencionesAutor = autor ? [autor.jid] : [];
-
             const todasLasMenciones = [...new Set([...mencionesAutor, ...mencionesFijas])];
             const botName = global.botname || 'BOT-API 2.0';
 
-            // ========== HEADER CON IMAGEN/VIDEO ==========
-            let header = { hasMediaAttachment: false };
-            try {
-                if (VIDEO_MENU_URL) {
-                    const media = await prepareWAMessageMedia(
-                        { video: { url: VIDEO_MENU_URL }, gifPlayback: false },
-                        { upload: sock.waUploadToServer }
-                    );
-                    header = { hasMediaAttachment: true, videoMessage: media.videoMessage };
-                } else if (fs.existsSync(FOTO_MENU)) {
-                    const media = await prepareWAMessageMedia(
-                        { image: { url: FOTO_MENU } },
-                        { upload: sock.waUploadToServer }
-                    );
-                    header = { hasMediaAttachment: true, imageMessage: media.imageMessage };
-                }
-            } catch (e) {
-                console.error('[MENU] Error media:', e?.message || e);
-            }
+            const menuTexto = generarMenuCompleto(
+                categorias,
+                prefijo,
+                mencionTexto,
+                botName,
+                diseño,
+                { mencionesTexto: textoMenciones }
+            );
 
-            // ========== GENERAR MENÚ COMPLETO ==========
-            const menuTexto = generarMenuCompleto(categorias, prefijo, mencionTexto, botName, {
-                mencionesTexto: textoMenciones
-            });
-
-            // ========== ENVIAR TODO EN UN SOLO MENSAJE ==========
-            if (header.hasMediaAttachment) {
-                if (header.imageMessage) {
-                    await sock.sendMessage(jid, {
-                        image: { url: FOTO_MENU },
-                        caption: menuTexto,
-                        mentions: todasLasMenciones
-                    }, { quoted: msg });
-                } else if (header.videoMessage) {
-                    await sock.sendMessage(jid, {
-                        video: { url: VIDEO_MENU_URL },
-                        caption: menuTexto,
-                        gifPlayback: false,
-                        mentions: todasLasMenciones
-                    }, { quoted: msg });
-                }
-            } else {
+            if (VIDEO_MENU_URL) {
                 await sock.sendMessage(jid, {
-                    text: menuTexto,
+                    video: { url: VIDEO_MENU_URL },
+                    caption: menuTexto,
+                    gifPlayback: false,
                     mentions: todasLasMenciones
                 }, { quoted: msg });
+                return;
             }
+
+            if (fs.existsSync(FOTO_MENU)) {
+                await sock.sendMessage(jid, {
+                    image: { url: FOTO_MENU },
+                    caption: menuTexto,
+                    mentions: todasLasMenciones
+                }, { quoted: msg });
+                return;
+            }
+
+            await sock.sendMessage(jid, {
+                text: menuTexto,
+                mentions: todasLasMenciones
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
-            await sock.sendMessage(
-                msg.key.remoteJid,
-                { text: `❌ Error al mostrar el menú: ${error.message}` },
-                { quoted: msg }
-            );
+
+            try {
+                await sock.sendMessage(
+                    msg.key.remoteJid,
+                    { text: `❌ Error al mostrar el menú: ${error.message}` },
+                    { quoted: msg }
+                );
+            } catch {}
         }
     }
 };
