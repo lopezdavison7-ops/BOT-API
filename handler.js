@@ -6,6 +6,7 @@
 
 import { loadCommands } from './controllers/cmdManager.js';
 import { procesarMinijuegos } from './lib/minijuegos.js';
+import { buscarAfk, quitarAfk, buscarAfkPorIds, obtenerIdentificadores, formatearTiempoAfk } from './lib/afk.js';
 
 import {
     categoriaActivada
@@ -205,6 +206,92 @@ export async function handleMessage(
 
         const isGroup =
             jid.endsWith('@g.us');
+
+        // ====================================================
+        // SISTEMA AFK
+        // ====================================================
+        //
+        // Si el usuario estaba AFK y vuelve a escribir, se le
+        // quita automáticamente el estado y se anuncia su regreso.
+        // .afk se procesa más abajo como comando normal, por lo que
+        // entrar en AFK no se cancela en el mismo mensaje.
+        // ====================================================
+
+        const textoInicial =
+            msg.message?.conversation ||
+            msg.message?.extendedTextMessage?.text ||
+            msg.message?.imageMessage?.caption ||
+            msg.message?.videoMessage?.caption ||
+            '';
+
+        const comandoEsAfk = /^\s*\.afk(?:\s|$)/i.test(String(textoInicial));
+
+        if (!comandoEsAfk) {
+            const regreso = quitarAfk({ jid, msg });
+
+            if (regreso) {
+                const participante = msg?.key?.participant || msg?.key?.remoteJid || regreso.usuario;
+                const numero = String(participante)
+                    .split('@')[0]
+                    .split(':')[0]
+                    .replace(/\D/g, '');
+
+                const frasesRegreso = [
+                    'volvió de las profundidades 🌊',
+                    'salió de las sombras 🌑',
+                    'regresó al mundo real 🌎',
+                    'ha vuelto de su viaje 🌀',
+                    'regresó entre los vivos 👀',
+                    'volvió a la civilización 🗿'
+                ];
+
+                const frase = frasesRegreso[Math.floor(Math.random() * frasesRegreso.length)];
+                const tiempo = formatearTiempoAfk(regreso.desde);
+                const menciones = numero ? [`${numero}@s.whatsapp.net`] : obtenerIdentificadores(msg);
+
+                await sock.sendMessage(jid, {
+                    text: `╭━━〔 🟢 *REGRESO* 〕━━⬣\n┃\n┃ 👋 @${numero || 'usuario'} ${frase}.\n┃ ⏱️ Estuvo AFK: *${tiempo}*\n┃\n╰━━━━━━━━━━━━━━━━⬣`,
+                    mentions: menciones
+                }, { quoted: msg });
+            }
+        }
+
+        // ----------------------------------------------------
+        // AVISAR SI ALGUIEN MENCIONA A UN USUARIO AFK
+        // ----------------------------------------------------
+
+        const mencionados =
+            msg.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
+            msg.message?.imageMessage?.contextInfo?.mentionedJid ||
+            msg.message?.videoMessage?.contextInfo?.mentionedJid ||
+            [];
+
+        if (Array.isArray(mencionados) && mencionados.length) {
+            for (const mencionado of mencionados) {
+                const afk = buscarAfkPorIds({
+                    jid,
+                    ids: [mencionado]
+                });
+
+                if (!afk) continue;
+
+                const razon = afk.razon
+                    ? `\n┃ 💬 Motivo: *${afk.razon}*`
+                    : '';
+
+                const numero = String(mencionado)
+                    .split('@')[0]
+                    .split(':')[0]
+                    .replace(/\D/g, '');
+
+                await sock.sendMessage(jid, {
+                    text: `╭━━〔 💤 *USUARIO AFK* 〕━━⬣\n┃\n┃ 👤 @${numero || 'usuario'} está AFK.\n┃ ⏱️ Desde hace: *${formatearTiempoAfk(afk.desde)}*${razon}\n┃\n╰━━━━━━━━━━━━━━━━⬣`,
+                    mentions: [mencionado]
+                }, { quoted: msg });
+
+                break;
+            }
+        }
 
         // ====================================================
         // MINIJUEGOS
