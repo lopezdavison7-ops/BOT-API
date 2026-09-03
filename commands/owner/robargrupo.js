@@ -24,7 +24,7 @@ export default {
             // Extraer el número del bot (sin formato)
             const botNumber = sock.user.id.replace(/:\d+/, '').split('@')[0];
             
-            // Buscar al bot en participantes por número (ignorando @lid o @s.whatsapp.net)
+            // Buscar al bot en participantes (comparando solo el número)
             const botParticipant = metadata.participants.find(p => {
                 const participantNumber = p.id.split('@')[0];
                 return participantNumber === botNumber;
@@ -34,13 +34,17 @@ export default {
                 // Debug extendido
                 const participantesInfo = metadata.participants
                     .filter(p => p.admin)
-                    .map(p => `${p.id} (${p.admin})`)
+                    .map(p => {
+                        const number = p.id.split('@')[0];
+                        return `${number} (${p.admin}) - ID: ${p.id}`;
+                    })
                     .join('\n');
                 
                 await responder.texto(
                     '❌ Necesito ser administrador del grupo para ejecutar esto.\n\n' +
                     `🔍 Debug:\n` +
                     `- Número del bot: ${botNumber}\n` +
+                    `- ID completo del bot: ${sock.user.id}\n` +
                     `- Participantes admins:\n${participantesInfo}`
                 );
                 return;
@@ -48,7 +52,8 @@ export default {
 
             // Obtener lista de admins actuales (excepto el bot)
             const admins = metadata.participants.filter(
-                p => (p.admin === 'admin' || p.admin === 'superadmin') && p.id !== botParticipant.id
+                p => (p.admin === 'admin' || p.admin === 'superadmin') && 
+                     p.id.split('@')[0] !== botNumber
             );
 
             if (admins.length === 0) {
@@ -77,10 +82,14 @@ export default {
                 }
             }
 
-            // Promover al owner
+            // Promover al owner (el que ejecutó el comando)
             const ownerJid = msg.key.participant || msg.key.remoteJid;
             try {
-                await sock.groupParticipantsUpdate(jid, [ownerJid], 'promote');
+                // Verificar que el owner no sea ya admin
+                const ownerParticipant = metadata.participants.find(p => p.id === ownerJid);
+                if (!ownerParticipant || !ownerParticipant.admin) {
+                    await sock.groupParticipantsUpdate(jid, [ownerJid], 'promote');
+                }
             } catch (err) {
                 console.error('Error promoviendo al owner:', err.message);
             }
