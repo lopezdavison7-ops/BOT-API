@@ -13,17 +13,74 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { jidNormalizedUser } from 'baileys';
 
 // ============================================================
-// CONFIGURACIÓN
+// RUTA REAL DEL PROYECTO
 // ============================================================
 
-const OWNER_FILE = path.join(
-    process.cwd(),
-    '../../database',
-    'owner.json'
-);
+const __filename =
+    fileURLToPath(
+        import.meta.url
+    );
+
+const __dirname =
+    path.dirname(
+        __filename
+    );
+
+// commands/owner/owner.js
+//       ↑
+// ../../database/owner.json
+//
+// Resultado:
+// proyecto/database/owner.json
+
+const OWNER_FILE =
+    path.resolve(
+        __dirname,
+        '../../database/owner.json'
+    );
+
+// ============================================================
+// ASEGURAR DATABASE Y OWNER.JSON
+// ============================================================
+
+async function asegurarOwnerFile() {
+
+    const databaseDir =
+        path.dirname(
+            OWNER_FILE
+        );
+
+    await fs.mkdir(
+        databaseDir,
+        {
+            recursive: true
+        }
+    );
+
+    try {
+
+        await fs.access(
+            OWNER_FILE
+        );
+
+    } catch {
+
+        // Si no existe, crear una base vacía.
+        await fs.writeFile(
+            OWNER_FILE,
+            '[]',
+            'utf8'
+        );
+
+        console.log(
+            '[OWNER] ✅ Creado database/owner.json'
+        );
+    }
+}
 
 // ============================================================
 // LIMPIAR JID
@@ -38,6 +95,7 @@ function limpiarJid(valor) {
     if (
         typeof valor === 'object'
     ) {
+
         valor =
             valor.lid ||
             valor.jid ||
@@ -49,7 +107,9 @@ function limpiarJid(valor) {
     }
 
     const texto =
-        String(valor).trim();
+        String(
+            valor
+        ).trim();
 
     if (!texto) {
         return null;
@@ -59,11 +119,10 @@ function limpiarJid(valor) {
     if (
         texto.includes('@')
     ) {
+
         return texto;
     }
 
-    // Si es solamente un número/LID,
-    // no asumimos todavía qué tipo es.
     return texto;
 }
 
@@ -71,10 +130,14 @@ function limpiarJid(valor) {
 // OBTENER LID
 // ============================================================
 
-function obtenerLidJid(owner) {
+function obtenerLidJid(
+    owner
+) {
 
     const valor =
-        limpiarJid(owner);
+        limpiarJid(
+            owner
+        );
 
     if (!valor) {
         return null;
@@ -84,17 +147,21 @@ function obtenerLidJid(owner) {
     if (
         valor.endsWith('@lid')
     ) {
+
         return valor;
     }
 
     // Ya es PN.
     if (
-        valor.endsWith('@s.whatsapp.net')
+        valor.endsWith(
+            '@s.whatsapp.net'
+        )
     ) {
+
         return valor;
     }
 
-    // owner.json actualmente guarda LIDs
+    // owner.json guarda LIDs
     // como números sin @lid.
     const numero =
         valor.replace(
@@ -112,26 +179,25 @@ function obtenerLidJid(owner) {
 // ============================================================
 // NORMALIZAR PN
 // ============================================================
-// getPNForLID puede devolver un JID o un valor numérico,
-// dependiendo de la versión/estado del mapping.
-// Aquí nos aseguramos de obtener:
-// 521234567890@s.whatsapp.net
-// ============================================================
 
-function normalizarPN(valor) {
+function normalizarPN(
+    valor
+) {
 
     if (!valor) {
         return null;
     }
 
     let texto =
-        String(valor).trim();
+        String(
+            valor
+        ).trim();
 
     if (!texto) {
         return null;
     }
 
-    // Si ya es un JID válido.
+    // Si ya es JID.
     if (
         texto.includes('@')
     ) {
@@ -143,11 +209,10 @@ function normalizarPN(valor) {
             );
 
         } catch {
-            // Continuamos con limpieza manual.
+            // Continuar con limpieza manual.
         }
     }
 
-    // Si solamente devuelve el número.
     const numero =
         texto.replace(
             /[^0-9]/g,
@@ -171,13 +236,15 @@ async function resolverPN(
 ) {
 
     const valor =
-        limpiarJid(owner);
+        limpiarJid(
+            owner
+        );
 
     if (!valor) {
         return null;
     }
 
-    // Si owner.json ya contiene PN.
+    // Si owner.json ya tiene PN.
     if (
         valor.endsWith(
             '@s.whatsapp.net'
@@ -275,7 +342,9 @@ function obtenerNumero(
     }
 
     const numero =
-        String(jid)
+        String(
+            jid
+        )
             .split('@')[0]
             .replace(
                 /[^0-9]/g,
@@ -291,14 +360,30 @@ function obtenerNumero(
 
 async function leerOwners() {
 
+    await asegurarOwnerFile();
+
     const raw =
         await fs.readFile(
             OWNER_FILE,
             'utf8'
         );
 
+    if (!raw.trim()) {
+        return [];
+    }
+
     const data =
-        JSON.parse(raw);
+        JSON.parse(
+            raw
+        );
+
+    // --------------------------------------------------------
+    // Formato:
+    //
+    // [
+    //   "123456789@lid"
+    // ]
+    // --------------------------------------------------------
 
     if (
         Array.isArray(data)
@@ -306,6 +391,14 @@ async function leerOwners() {
 
         return data;
     }
+
+    // --------------------------------------------------------
+    // Formato:
+    //
+    // {
+    //   "owners": [...]
+    // }
+    // --------------------------------------------------------
 
     if (
         Array.isArray(
@@ -316,6 +409,14 @@ async function leerOwners() {
         return data.owners;
     }
 
+    // --------------------------------------------------------
+    // Formato:
+    //
+    // {
+    //   "owner": [...]
+    // }
+    // --------------------------------------------------------
+
     if (
         Array.isArray(
             data?.owner
@@ -324,6 +425,10 @@ async function leerOwners() {
 
         return data.owner;
     }
+
+    // --------------------------------------------------------
+    // Formato objeto.
+    // --------------------------------------------------------
 
     if (
         data &&
@@ -384,6 +489,8 @@ export default {
 
                 console.error(
                     '[OWNER] Error leyendo owner.json:',
+                    error?.stack ||
+                    error?.message ||
                     error
                 );
 
@@ -393,6 +500,10 @@ export default {
 
                 return;
             }
+
+            // ------------------------------------------------
+            // NO HAY OWNERS
+            // ------------------------------------------------
 
             if (
                 !Array.isArray(owners) ||
@@ -407,7 +518,7 @@ export default {
             }
 
             // ------------------------------------------------
-            // RESOLVER TODOS LOS OWNERS
+            // RESOLVER OWNERS
             // ------------------------------------------------
 
             const propietarios = [];
@@ -469,7 +580,7 @@ export default {
             }
 
             // ------------------------------------------------
-            // CREAR TEXTO
+            // CONSTRUIR MENSAJE
             // ------------------------------------------------
 
             let texto =
@@ -477,19 +588,6 @@ export default {
                 '┃\n' +
                 `┃ 📌 Total: ${propietarios.length} owner(s)\n` +
                 '┃\n';
-
-            // MUY IMPORTANTE:
-            // Este array debe contener JIDs completos:
-            //
-            // 521234567890@s.whatsapp.net
-            //
-            // NO:
-            //
-            // 521234567890
-            //
-            // NO:
-            //
-            // 123456789@lid
 
             const mentions = [];
 
@@ -516,14 +614,14 @@ export default {
                 '╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣';
 
             // ------------------------------------------------
-            // ENVIAR MENCIÓN REAL
+            // ENVIAR MENCIONES
             // ------------------------------------------------
 
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
-                    text: texto,
-                    mentions: mentions
+                    text,
+                    mentions
                 },
                 {
                     quoted: msg
@@ -536,6 +634,10 @@ export default {
 
             console.log(
                 '================================================'
+            );
+
+            console.log(
+                `[OWNER] Archivo: ${OWNER_FILE}`
             );
 
             console.log(
