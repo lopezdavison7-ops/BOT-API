@@ -1,22 +1,58 @@
+// ============================================================
 // handler.js
 // ============================================================
 // BOT-API
 // MANEJADOR PRINCIPAL DE MENSAJES
+//
+// Incluye:
+// - Comandos
+// - AFK
+// - Minijuegos
+// - Categorías
+// - Sistema de niveles / XP
 // ============================================================
 
 import { loadCommands } from './controllers/cmdManager.js';
 import { procesarMinijuegos } from './lib/minijuegos.js';
-import { buscarAfk, quitarAfk, buscarAfkPorIds, obtenerIdentificadores, formatearTiempoAfk } from './lib/afk.js';
+
+import {
+    buscarAfk,
+    quitarAfk,
+    buscarAfkPorIds,
+    obtenerIdentificadores,
+    formatearTiempoAfk
+} from './lib/afk.js';
 
 import {
     categoriaActivada
 } from './lib/categoriaConfig.js';
+
+import {
+    agregarXP
+} from './lib/niveles.js';
 
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
 
 const PREFIJO = '.';
+
+// ------------------------------------------------------------
+// Cooldown de XP
+// ------------------------------------------------------------
+//
+// Cada usuario puede recibir XP una vez cada 30 segundos
+// por chat.
+//
+// Así evitamos que alguien mande mensajes rápidamente
+// solamente para farmear XP.
+// ------------------------------------------------------------
+
+const XP_COOLDOWN =
+    30 * 1000;
+
+const cooldownXP =
+    new Map();
 
 let comandos = null;
 let botJid = null;
@@ -58,16 +94,12 @@ function obtenerCategoria(cmd) {
         .normalize('NFD')
         .replace(
             /[\u0300-\u036f]/g,
-            '');
+            ''
+        );
 }
 
 // ============================================================
 // COMANDOS DE CONTROL
-// ============================================================
-//
-// Estos comandos NO se bloquean.
-//
-// Así siempre puedes volver a activar una categoría.
 // ============================================================
 
 function esComandoControl(
@@ -87,28 +119,12 @@ function esComandoControl(
 // ============================================================
 // COMPROBAR CATEGORÍA DESACTIVADA
 // ============================================================
-//
-// IMPORTANTE:
-//
-// La configuración es GLOBAL.
-//
-// NO importa si el mensaje viene de:
-// - Grupo
-// - Chat privado
-//
-// Si la categoría está desactivada,
-// el comando queda bloqueado.
-// ============================================================
 
 function comandoDesactivado(
     cmd,
     jid,
     nombreComando
 ) {
-
-    // --------------------------------------------------------
-    // Los comandos de control siempre funcionan.
-    // --------------------------------------------------------
 
     if (
         esComandoControl(
@@ -118,17 +134,9 @@ function comandoDesactivado(
         return false;
     }
 
-    // --------------------------------------------------------
-    // Sin JID no hacemos nada.
-    // --------------------------------------------------------
-
     if (!jid) {
         return false;
     }
-
-    // --------------------------------------------------------
-    // Obtener categoría.
-    // --------------------------------------------------------
 
     const categoria =
         obtenerCategoria(cmd);
@@ -137,18 +145,223 @@ function comandoDesactivado(
         return false;
     }
 
-    // --------------------------------------------------------
-    // CONFIGURACIÓN GLOBAL
-    // --------------------------------------------------------
-    //
-    // No se comprueba @g.us.
-    //
-    // Por eso funciona también en privados.
-    // --------------------------------------------------------
-
     return !categoriaActivada(
         categoria
     );
+}
+
+// ============================================================
+// OBTENER IDENTIDAD DEL REMITENTE
+// ============================================================
+//
+// En grupos:
+//
+// participant
+// participantAlt
+//
+// En privado:
+//
+// remoteJid
+// remoteJidAlt
+//
+// Nunca usamos remoteJid del grupo como usuario.
+// ============================================================
+
+function obtenerRemitente(
+    msg,
+    isGroup,
+    jid
+) {
+
+    if (isGroup) {
+
+        return (
+            msg?.key?.participant ||
+            msg?.key?.participantAlt ||
+            null
+        );
+    }
+
+    return (
+        msg?.key?.participant ||
+        msg?.key?.remoteJid ||
+        msg?.key?.remoteJidAlt ||
+        jid ||
+        null
+    );
+}
+
+// ============================================================
+// COMPROBAR SI ES MENSAJE REAL DEL USUARIO
+// ============================================================
+
+function tieneContenidoDeUsuario(
+    msg
+) {
+
+    return Boolean(
+
+        msg.message?.conversation ||
+
+        msg.message
+            ?.extendedTextMessage ||
+
+        msg.message
+            ?.imageMessage ||
+
+        msg.message
+            ?.videoMessage ||
+
+        msg.message
+            ?.audioMessage ||
+
+        msg.message
+            ?.documentMessage ||
+
+        msg.message
+            ?.stickerMessage ||
+
+        msg.message
+            ?.contactMessage ||
+
+        msg.message
+            ?.contactsArrayMessage ||
+
+        msg.message
+            ?.locationMessage ||
+
+        msg.message
+            ?.liveLocationMessage ||
+
+        msg.message
+            ?.buttonsResponseMessage ||
+
+        msg.message
+            ?.listResponseMessage ||
+
+        msg.message
+            ?.templateButtonReplyMessage ||
+
+        msg.message
+            ?.interactiveResponseMessage
+    );
+}
+
+// ============================================================
+// DAR XP
+// ============================================================
+
+function procesarXP(
+    msg,
+    jid,
+    isGroup,
+    fromMe
+) {
+
+    // --------------------------------------------------------
+    // Los mensajes del bot nunca dan XP.
+    // --------------------------------------------------------
+
+    if (fromMe) {
+        return null;
+    }
+
+    // --------------------------------------------------------
+    // Necesitamos contenido real.
+    // --------------------------------------------------------
+
+    if (
+        !tieneContenidoDeUsuario(
+            msg
+        )
+    ) {
+        return null;
+    }
+
+    // --------------------------------------------------------
+    // Identificar usuario.
+    // --------------------------------------------------------
+
+    const usuario =
+        obtenerRemitente(
+            msg,
+            isGroup,
+            jid
+        );
+
+    if (!usuario) {
+        return null;
+    }
+
+    // --------------------------------------------------------
+    // Cooldown.
+    //
+    // La clave contiene chat + usuario.
+    // --------------------------------------------------------
+
+    const clave =
+        `${jid}|${usuario}`;
+
+    const ahora =
+        Date.now();
+
+    const ultimo =
+        cooldownXP.get(
+            clave
+        ) || 0;
+
+    if (
+        ahora - ultimo <
+        XP_COOLDOWN
+    ) {
+
+        return null;
+    }
+
+    cooldownXP.set(
+        clave,
+        ahora
+    );
+
+    // --------------------------------------------------------
+    // Dar XP.
+    // --------------------------------------------------------
+
+    return agregarXP(
+        jid,
+        usuario
+    );
+}
+
+// ============================================================
+// LIMPIAR COOLDOWN ANTIGUO
+// ============================================================
+//
+// Evita que el Map crezca indefinidamente.
+// ============================================================
+
+function limpiarCooldownXP() {
+
+    const ahora =
+        Date.now();
+
+    for (
+        const [
+            clave,
+            tiempo
+        ] of cooldownXP
+    ) {
+
+        if (
+            ahora - tiempo >
+            XP_COOLDOWN * 10
+        ) {
+
+            cooldownXP.delete(
+                clave
+            );
+        }
+    }
 }
 
 // ============================================================
@@ -179,6 +392,7 @@ export async function handleMessage(
         // ----------------------------------------------------
 
         if (!botJid) {
+
             botJid =
                 sock.user.id;
         }
@@ -208,13 +422,98 @@ export async function handleMessage(
             jid.endsWith('@g.us');
 
         // ====================================================
-        // SISTEMA AFK
+        // SISTEMA DE NIVELES / XP
         // ====================================================
         //
-        // Si el usuario estaba AFK y vuelve a escribir, se le
-        // quita automáticamente el estado y se anuncia su regreso.
-        // .afk se procesa más abajo como comando normal, por lo que
-        // entrar en AFK no se cancela en el mismo mensaje.
+        // IMPORTANTE:
+        //
+        // Se ejecuta antes del procesamiento del comando.
+        //
+        // Solo los mensajes del usuario dan XP.
+        // Los mensajes del bot NO dan XP.
+        //
+        // El cooldown evita farmear XP enviando mensajes
+        // continuamente.
+        // ====================================================
+
+        const resultadoXP =
+            procesarXP(
+                msg,
+                jid,
+                isGroup,
+                fromMe
+            );
+
+        if (
+            resultadoXP?.subio
+        ) {
+
+            const usuario =
+                obtenerRemitente(
+                    msg,
+                    isGroup,
+                    jid
+                );
+
+            const numero =
+                String(
+                    usuario || ''
+                )
+                    .split('@')[0]
+                    .split(':')[0]
+                    .replace(
+                        /\D/g,
+                        ''
+                    );
+
+            const niveles =
+                resultadoXP.nivelesSubidos ||
+                1;
+
+            const textoNivel =
+                niveles > 1
+                    ? `¡subió *${niveles} niveles*!`
+                    : `¡subió al *nivel ${resultadoXP.nivel}*!`;
+
+            await sock.sendMessage(
+                jid,
+                {
+                    text:
+                        `╭━━〔 🎉 *LEVEL UP* 〕━━⬣\n` +
+                        `┃\n` +
+                        `┃ 👤 @${numero || 'usuario'}\n` +
+                        `┃ ⭐ ${textoNivel}\n` +
+                        `┃ ✨ XP: *${resultadoXP.xp}*\n` +
+                        `┃\n` +
+                        `┃ 🚀 ¡Sigue participando!\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━━━━━⬣`,
+                    mentions:
+                        numero
+                            ? [
+                                `${numero}@s.whatsapp.net`
+                            ]
+                            : []
+                },
+                {
+                    quoted: msg
+                }
+            );
+        }
+
+        // ----------------------------------------------------
+        // LIMPIAR COOLDOWN CADA CIERTO TIEMPO
+        // ----------------------------------------------------
+
+        if (
+            Math.random() < 0.01
+        ) {
+
+            limpiarCooldownXP();
+        }
+
+        // ====================================================
+        // SISTEMA AFK
         // ====================================================
 
         const textoInicial =
@@ -224,97 +523,197 @@ export async function handleMessage(
             msg.message?.videoMessage?.caption ||
             '';
 
-        const comandoEsAfk = /^\s*\.afk(?:\s|$)/i.test(String(textoInicial));
+        const comandoEsAfk =
+            /^\s*\.afk(?:\s|$)/i.test(
+                String(
+                    textoInicial
+                )
+            );
 
-        // Solo el usuario que realmente envía un mensaje puede salir
-        // de AFK. Los mensajes enviados por el propio bot NO cuentan.
-        // En grupos usamos participant/participantAlt como identidad del
-        // remitente; remoteJid es el JID del grupo y nunca debe usarse
-        // como identidad del usuario que está escribiendo.
-        const tieneContenidoDeUsuario = Boolean(
-            msg.message?.conversation ||
-            msg.message?.extendedTextMessage ||
-            msg.message?.imageMessage ||
-            msg.message?.videoMessage ||
-            msg.message?.audioMessage ||
-            msg.message?.documentMessage ||
-            msg.message?.stickerMessage ||
-            msg.message?.contactMessage ||
-            msg.message?.contactsArrayMessage ||
-            msg.message?.locationMessage ||
-            msg.message?.liveLocationMessage ||
-            msg.message?.buttonsResponseMessage ||
-            msg.message?.listResponseMessage ||
-            msg.message?.templateButtonReplyMessage ||
-            msg.message?.interactiveResponseMessage
-        );
+        // ----------------------------------------------------
+        // Solo el usuario que realmente manda un mensaje
+        // puede salir de AFK.
+        // ----------------------------------------------------
 
-        const tieneRemitenteReal = isGroup
-            ? Boolean(msg?.key?.participant || msg?.key?.participantAlt)
-            : Boolean(msg?.key?.remoteJid);
+        const contenidoUsuario =
+            tieneContenidoDeUsuario(
+                msg
+            );
 
-        if (!fromMe && !comandoEsAfk && tieneContenidoDeUsuario && tieneRemitenteReal) {
-            const regreso = quitarAfk({ jid, msg });
+        const remitenteReal =
+            obtenerRemitente(
+                msg,
+                isGroup,
+                jid
+            );
+
+        if (
+            !fromMe &&
+            !comandoEsAfk &&
+            contenidoUsuario &&
+            remitenteReal
+        ) {
+
+            const regreso =
+                quitarAfk({
+                    jid,
+                    msg
+                });
 
             if (regreso) {
-                const participante = msg?.key?.participant || msg?.key?.remoteJid || regreso.usuario;
-                const numero = String(participante)
-                    .split('@')[0]
-                    .split(':')[0]
-                    .replace(/\D/g, '');
+
+                const participante =
+                    remitenteReal ||
+                    regreso.usuario;
+
+                const numero =
+                    String(
+                        participante
+                    )
+                        .split('@')[0]
+                        .split(':')[0]
+                        .replace(
+                            /\D/g,
+                            ''
+                        );
 
                 const frasesRegreso = [
+
                     'volvió de las profundidades 🌊',
+
                     'salió de las sombras 🌑',
+
                     'regresó al mundo real 🌎',
+
                     'ha vuelto de su viaje 🌀',
+
                     'regresó entre los vivos 👀',
+
                     'volvió a la civilización 🗿'
                 ];
 
-                const frase = frasesRegreso[Math.floor(Math.random() * frasesRegreso.length)];
-                const tiempo = formatearTiempoAfk(regreso.desde);
-                const menciones = numero ? [`${numero}@s.whatsapp.net`] : obtenerIdentificadores(msg);
+                const frase =
+                    frasesRegreso[
+                        Math.floor(
+                            Math.random() *
+                            frasesRegreso.length
+                        )
+                    ];
 
-                await sock.sendMessage(jid, {
-                    text: `╭━━〔 🟢 *REGRESO* 〕━━⬣\n┃\n┃ 👋 @${numero || 'usuario'} ${frase}.\n┃ ⏱️ Estuvo AFK: *${tiempo}*\n┃\n╰━━━━━━━━━━━━━━━━⬣`,
-                    mentions: menciones
-                }, { quoted: msg });
+                const tiempo =
+                    formatearTiempoAfk(
+                        regreso.desde
+                    );
+
+                const menciones =
+                    numero
+                        ? [
+                            `${numero}@s.whatsapp.net`
+                        ]
+                        : obtenerIdentificadores(
+                            msg
+                        );
+
+                await sock.sendMessage(
+                    jid,
+                    {
+                        text:
+                            `╭━━〔 🟢 *REGRESO* 〕━━⬣\n` +
+                            `┃\n` +
+                            `┃ 👋 @${numero || 'usuario'} ${frase}.\n` +
+                            `┃ ⏱️ Estuvo AFK: *${tiempo}*\n` +
+                            `┃\n` +
+                            `╰━━━━━━━━━━━━━━━━⬣`,
+                        mentions
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
             }
         }
 
-        // ----------------------------------------------------
+        // ====================================================
         // AVISAR SI ALGUIEN MENCIONA A UN USUARIO AFK
-        // ----------------------------------------------------
+        // ====================================================
 
         const mencionados =
-            msg.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
-            msg.message?.imageMessage?.contextInfo?.mentionedJid ||
-            msg.message?.videoMessage?.contextInfo?.mentionedJid ||
+            msg.message
+                ?.extendedTextMessage
+                ?.contextInfo
+                ?.mentionedJid ||
+
+            msg.message
+                ?.imageMessage
+                ?.contextInfo
+                ?.mentionedJid ||
+
+            msg.message
+                ?.videoMessage
+                ?.contextInfo
+                ?.mentionedJid ||
+
             [];
 
-        if (Array.isArray(mencionados) && mencionados.length) {
-            for (const mencionado of mencionados) {
-                const afk = buscarAfkPorIds({
+        if (
+            Array.isArray(
+                mencionados
+            ) &&
+            mencionados.length
+        ) {
+
+            for (
+                const mencionado
+                of mencionados
+            ) {
+
+                const afk =
+                    buscarAfkPorIds({
+                        jid,
+                        ids: [
+                            mencionado
+                        ]
+                    });
+
+                if (!afk) {
+                    continue;
+                }
+
+                const razon =
+                    afk.razon
+                        ? `\n┃ 💬 Motivo: *${afk.razon}*`
+                        : '';
+
+                const numero =
+                    String(
+                        mencionado
+                    )
+                        .split('@')[0]
+                        .split(':')[0]
+                        .replace(
+                            /\D/g,
+                            ''
+                        );
+
+                await sock.sendMessage(
                     jid,
-                    ids: [mencionado]
-                });
-
-                if (!afk) continue;
-
-                const razon = afk.razon
-                    ? `\n┃ 💬 Motivo: *${afk.razon}*`
-                    : '';
-
-                const numero = String(mencionado)
-                    .split('@')[0]
-                    .split(':')[0]
-                    .replace(/\D/g, '');
-
-                await sock.sendMessage(jid, {
-                    text: `╭━━〔 💤 *USUARIO AFK* 〕━━⬣\n┃\n┃ 👤 @${numero || 'usuario'} está AFK.\n┃ ⏱️ Desde hace: *${formatearTiempoAfk(afk.desde)}*${razon}\n┃\n╰━━━━━━━━━━━━━━━━⬣`,
-                    mentions: [mencionado]
-                }, { quoted: msg });
+                    {
+                        text:
+                            `╭━━〔 💤 *USUARIO AFK* 〕━━⬣\n` +
+                            `┃\n` +
+                            `┃ 👤 @${numero || 'usuario'} está AFK.\n` +
+                            `┃ ⏱️ Desde hace: *${formatearTiempoAfk(afk.desde)}*` +
+                            `${razon}\n` +
+                            `┃\n` +
+                            `╰━━━━━━━━━━━━━━━━⬣`,
+                        mentions: [
+                            mencionado
+                        ]
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
 
                 break;
             }
@@ -403,7 +802,6 @@ export async function handleMessage(
                     json.id || '';
 
             } catch {}
-
         } else if (
             msg.message
                 ?.listResponseMessage
@@ -453,7 +851,7 @@ export async function handleMessage(
             }
         }
 
-        // ====================================================
+                // ====================================================
         // PREFIJO
         // ====================================================
 
@@ -585,7 +983,7 @@ export async function handleMessage(
                         '┃ desactivada globalmente.\n' +
                         '┃\n' +
                         '┃ Un administrador puede\n' +
-                        `┃ activarla con:\n` +
+                        '┃ activarla con:\n' +
                         `┃ › .activar ${categoria}\n` +
                         '┃\n' +
                         '╰━━━━━━━━━━━━━━━━⬣'
