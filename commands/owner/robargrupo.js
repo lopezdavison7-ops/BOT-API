@@ -21,35 +21,34 @@ export default {
             // Obtener metadata del grupo
             const metadata = await sock.groupMetadata(jid);
             
-            // CORRECCIÓN: Obtener el JID limpio del bot
-            // sock.user.id puede venir como: "50576641902:10@s.whatsapp.net"
-            // Necesitamos convertirlo a: "50576641902@s.whatsapp.net"
-            const botJid = sock.user.id.replace(/:\d+@/, '@');
+            // Extraer el número del bot (sin formato)
+            const botNumber = sock.user.id.replace(/:\d+/, '').split('@')[0];
             
-            // También guardar el ID original por si acaso
-            const botJidOriginal = sock.user.id;
-
-            // Verificar que el bot sea admin
-            const botParticipant = metadata.participants.find(
-                p => p.id === botJid || p.id === botJidOriginal
-            );
+            // Buscar al bot en participantes por número (ignorando @lid o @s.whatsapp.net)
+            const botParticipant = metadata.participants.find(p => {
+                const participantNumber = p.id.split('@')[0];
+                return participantNumber === botNumber;
+            });
 
             if (!botParticipant || (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin')) {
+                // Debug extendido
+                const participantesInfo = metadata.participants
+                    .filter(p => p.admin)
+                    .map(p => `${p.id} (${p.admin})`)
+                    .join('\n');
+                
                 await responder.texto(
                     '❌ Necesito ser administrador del grupo para ejecutar esto.\n\n' +
                     `🔍 Debug:\n` +
-                    `- Bot JID limpio: ${botJid}\n` +
-                    `- Bot JID original: ${botJidOriginal}\n` +
-                    `- Participantes encontrados: ${metadata.participants.length}\n` +
-                    `- IDs de admins: ${metadata.participants.filter(p => p.admin).map(p => p.id).join(', ')}`
+                    `- Número del bot: ${botNumber}\n` +
+                    `- Participantes admins:\n${participantesInfo}`
                 );
                 return;
             }
 
             // Obtener lista de admins actuales (excepto el bot)
             const admins = metadata.participants.filter(
-                p => (p.admin === 'admin' || p.admin === 'superadmin') && 
-                     p.id !== botJid && p.id !== botJidOriginal
+                p => (p.admin === 'admin' || p.admin === 'superadmin') && p.id !== botParticipant.id
             );
 
             if (admins.length === 0) {
