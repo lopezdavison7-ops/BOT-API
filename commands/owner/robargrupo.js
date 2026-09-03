@@ -21,8 +21,8 @@ export default {
             // Obtener metadata del grupo
             const metadata = await sock.groupMetadata(jid);
             
-            // Extraer el número del bot (sin formato)
-            const botNumber = sock.user.id.replace(/:\d+/, '').split('@')[0];
+            // Obtener el ID del bot en el grupo (buscando por el número)
+            const botNumber = sock.user.id.split(':')[0].split('@')[0];
             
             // Buscar al bot en participantes (comparando solo el número)
             const botParticipant = metadata.participants.find(p => {
@@ -30,8 +30,33 @@ export default {
                 return participantNumber === botNumber;
             });
 
-            if (!botParticipant || (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin')) {
-                // Debug extendido
+            // Si no encuentra al bot por número, intentar con el ID completo
+            let botId = null;
+            if (!botParticipant) {
+                // Buscar por ID completo (sin el :10)
+                const botFullId = sock.user.id.split(':')[0];
+                const botParticipant2 = metadata.participants.find(p => 
+                    p.id === botFullId || p.id === botFullId + '@s.whatsapp.net'
+                );
+                if (botParticipant2) {
+                    botId = botParticipant2.id;
+                }
+            } else {
+                botId = botParticipant.id;
+            }
+
+            // Verificar si el bot es admin
+            const isBotAdmin = metadata.participants.some(p => {
+                if (p.id === botId) {
+                    return p.admin === 'admin' || p.admin === 'superadmin';
+                }
+                // Buscar por número también
+                const pNumber = p.id.split('@')[0];
+                return pNumber === botNumber && (p.admin === 'admin' || p.admin === 'superadmin');
+            });
+
+            if (!isBotAdmin) {
+                // Debug extendido con más información
                 const participantesInfo = metadata.participants
                     .filter(p => p.admin)
                     .map(p => {
@@ -45,16 +70,19 @@ export default {
                     `🔍 Debug:\n` +
                     `- Número del bot: ${botNumber}\n` +
                     `- ID completo del bot: ${sock.user.id}\n` +
+                    `- ID del bot en grupo: ${botId || 'No encontrado'}\n` +
                     `- Participantes admins:\n${participantesInfo}`
                 );
                 return;
             }
 
             // Obtener lista de admins actuales (excepto el bot)
-            const admins = metadata.participants.filter(
-                p => (p.admin === 'admin' || p.admin === 'superadmin') && 
-                     p.id.split('@')[0] !== botNumber
-            );
+            const admins = metadata.participants.filter(p => {
+                const isAdmin = p.admin === 'admin' || p.admin === 'superadmin';
+                const pNumber = p.id.split('@')[0];
+                const isBot = pNumber === botNumber || p.id === botId;
+                return isAdmin && !isBot;
+            });
 
             if (admins.length === 0) {
                 await responder.texto('ℹ️ No hay otros administradores que quitar.');
