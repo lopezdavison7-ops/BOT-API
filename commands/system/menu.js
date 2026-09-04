@@ -1,12 +1,23 @@
 // ============================================================
 // MENU - BOT-API 2.0
 // ============================================================
-// MENÚ MULTI-DISEÑO
+// MENÚ MULTI-DISEÑO + FILTRO POR CATEGORÍA
 //
-// Cada vez que se usa .menu se selecciona un diseño diferente
-// en ese chat. No repite inmediatamente el diseño anterior.
-// Se conservan las categorías, comandos, menciones, imagen,
-// canal, versión, creador, uptime, fecha y hora.
+// .menu
+//      → muestra todo
+//
+// .menu economy
+//      → muestra solo Economía
+//
+// .menu grupos
+//      → muestra solo Grupos
+//
+// También acepta nombres alternativos en español/inglés.
+//
+// .menu <comando>
+//      → mantiene la compatibilidad para mostrar información
+//        del comando cuando el sistema la soporte.
+//
 // ============================================================
 
 import fs from 'fs';
@@ -18,23 +29,113 @@ const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
 const ZONA_HORARIA = 'America/Managua';
 
-const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
+const FOTO_MENU = path.join(
+    process.cwd(),
+    'media',
+    'menu',
+    'menu.jpg'
+);
+
 const VIDEO_MENU_URL = '';
-const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
+
+const CANAL_FILE = path.join(
+    process.cwd(),
+    'database',
+    'canal.json'
+);
 
 const GRUPO_MENCIONES = '120363429140811226@g.us';
 const CANTIDAD_MENCIONES = 5;
 
 const ORDEN_CATEGORIAS = [
-    'Sistema', 'Owner', 'Grupos', 'Moderación', 'Economía',
-    'Diversión', 'Interacción', 'Descargas', 'Multimedia',
-    'Utilidades', 'IA', 'Otros'
+    'Sistema',
+    'Owner',
+    'Grupos',
+    'Moderación',
+    'Economía',
+    'Diversión',
+    'Interacción',
+    'Descargas',
+    'Multimedia',
+    'Utilidades',
+    'IA',
+    'Otros'
 ];
 
 const ICONOS = {
-    Owner: '👑', Economía: '💸', 'Diversión': '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
-    Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
+    Owner: '👑',
+    Economía: '💸',
+    Diversión: '🎉',
+    Sistema: '⚙️',
+    Otros: '📦',
+    Descargas: '📥',
+    Utilidades: '🛠️',
+    IA: '🧠',
+    Multimedia: '🎨',
+    Grupos: '👥',
+    Interacción: '🎭',
+    Moderación: '🛡️'
+};
+
+// ============================================================
+// ALIAS DE CATEGORÍAS
+// ============================================================
+
+const ALIAS_CATEGORIAS = {
+
+    sistema: 'Sistema',
+    system: 'Sistema',
+
+    owner: 'Owner',
+    propietario: 'Owner',
+    propietarios: 'Owner',
+
+    grupos: 'Grupos',
+    grupo: 'Grupos',
+    group: 'Grupos',
+    groups: 'Grupos',
+
+    moderacion: 'Moderación',
+    moderación: 'Moderación',
+    moderar: 'Moderación',
+    moderation: 'Moderación',
+    mod: 'Moderación',
+
+    economia: 'Economía',
+    economía: 'Economía',
+    economy: 'Economía',
+    economi: 'Economía',
+
+    diversion: 'Diversión',
+    diversión: 'Diversión',
+    divertido: 'Diversión',
+    fun: 'Diversión',
+
+    interaccion: 'Interacción',
+    interacción: 'Interacción',
+    interaction: 'Interacción',
+
+    descargas: 'Descargas',
+    descarga: 'Descargas',
+    downloads: 'Descargas',
+    download: 'Descargas',
+
+    multimedia: 'Multimedia',
+    media: 'Multimedia',
+
+    utilidades: 'Utilidades',
+    utilidad: 'Utilidades',
+    utilities: 'Utilidades',
+    utility: 'Utilidades',
+    utils: 'Utilidades',
+
+    ia: 'IA',
+    ai: 'IA',
+    inteligenciaartificial: 'IA',
+
+    otros: 'Otros',
+    otro: 'Otros',
+    other: 'Otros'
 };
 
 // ============================================================
@@ -43,7 +144,8 @@ const ICONOS = {
 
 const DISEÑOS = [
     {
-        nombre: 'Galaxy', emoji: '🌌',
+        nombre: 'Galaxy',
+        emoji: '🌌',
         top: '╭━━━━━━━━━━〔 🌌 〕━━━━━━━━━━╮',
         bottom: '╰━━━━━━━━━━〔 🌌 〕━━━━━━━━━━╯',
         titulo: '🌌 *GALAXY MENU*',
@@ -56,8 +158,10 @@ const DISEÑOS = [
         desc: '┃ └─ 🌙 {desc}',
         footer: '🌌 _Explorando comandos desde otra dimensión..._'
     },
+
     {
-        nombre: 'Neon', emoji: '💜',
+        nombre: 'Neon',
+        emoji: '💜',
         top: '╔═══════════〔 💜 〕═══════════╗',
         bottom: '╚═══════════〔 💜 〕═══════════╝',
         titulo: '💜 *ＮＥＯＮ ＭＥＮＵ*',
@@ -70,8 +174,10 @@ const DISEÑOS = [
         desc: '│ 💫 {desc}',
         footer: '💜 _Powered by BOT-API_'
     },
+
     {
-        nombre: 'Sakura', emoji: '🌸',
+        nombre: 'Sakura',
+        emoji: '🌸',
         top: '╭━━━━━━━〔 🌸 〕━━━━━━━╮',
         bottom: '╰━━━━━━━〔 🌸 〕━━━━━━━╯',
         titulo: '🌸 *𝑺𝑨𝑲𝑼𝑹𝑨 𝑴𝑬𝑵𝑼*',
@@ -84,8 +190,10 @@ const DISEÑOS = [
         desc: '┃ ↳ 🌸 {desc}',
         footer: '🌸 _Que florezcan tus comandos..._'
     },
+
     {
-        nombre: 'Fire', emoji: '🔥',
+        nombre: 'Fire',
+        emoji: '🔥',
         top: '🔥━━━━━━━━〔 🔥 〕━━━━━━━━🔥',
         bottom: '🔥━━━━━━━━〔 🔥 〕━━━━━━━━🔥',
         titulo: '🔥 *F I R E   M E N U*',
@@ -98,8 +206,10 @@ const DISEÑOS = [
         desc: '🔥┃ ➜ {desc}',
         footer: '🔥 _BOT-API en llamas_ 🔥'
     },
+
     {
-        nombre: 'Luxury', emoji: '💎',
+        nombre: 'Luxury',
+        emoji: '💎',
         top: '╭══════════〔 💎 〕══════════╮',
         bottom: '╰══════════〔 💎 〕══════════╯',
         titulo: '💎 *𝑳𝑼𝑿𝑼𝑹𝒀 𝑴𝑬𝑵𝑼*',
@@ -112,8 +222,10 @@ const DISEÑOS = [
         desc: '║   └─ {desc}',
         footer: '💎 _Una experiencia premium en cada comando._'
     },
+
     {
-        nombre: 'Ocean', emoji: '🌊',
+        nombre: 'Ocean',
+        emoji: '🌊',
         top: '🌊╭━━━━━━━━〔 🌊 〕━━━━━━━━╮',
         bottom: '🌊╰━━━━━━━━〔 🌊 〕━━━━━━━━╯',
         titulo: '🌊 *𝑶𝑪𝑬𝑨𝑵 𝑴𝑬𝑵𝑼*',
@@ -126,8 +238,10 @@ const DISEÑOS = [
         desc: '🐚│ {desc}',
         footer: '🌊 _Sumérgete en BOT-API._'
     },
+
     {
-        nombre: 'Dark', emoji: '🖤',
+        nombre: 'Dark',
+        emoji: '🖤',
         top: '╔═══════〔 🖤 〕═══════╗',
         bottom: '╚═══════〔 🖤 〕═══════╝',
         titulo: '🖤 *D A R K   M E N U*',
@@ -140,8 +254,10 @@ const DISEÑOS = [
         desc: '│ └─ {desc}',
         footer: '🖤 _BOT-API • Dark Mode_'
     },
+
     {
-        nombre: 'Rainbow', emoji: '🌈',
+        nombre: 'Rainbow',
+        emoji: '🌈',
         top: '🌈━━━━━━━━〔 🌈 〕━━━━━━━━🌈',
         bottom: '🌈━━━━━━━━〔 🌈 〕━━━━━━━━🌈',
         titulo: '🌈 *𝑹𝑨𝑰𝑵𝑩𝑶𝑾 𝑴𝑬𝑵𝑼*',
@@ -154,8 +270,10 @@ const DISEÑOS = [
         desc: '┃ ✨ {desc}',
         footer: '🌈 _Tu bot, tus colores, tus comandos._'
     },
+
     {
-        nombre: 'Cyber', emoji: '🤖',
+        nombre: 'Cyber',
+        emoji: '🤖',
         top: '╭━━━〔 🤖 CYBER 〕━━━╮',
         bottom: '╰━━━〔 🤖 CYBER 〕━━━╯',
         titulo: '🤖 *ＣＹＢＥＲ  ＭＥＮＵ*',
@@ -168,8 +286,10 @@ const DISEÑOS = [
         desc: '┃ └─ {desc}',
         footer: '🤖 _SYSTEM ONLINE • BOT-API_'
     },
+
     {
-        nombre: 'Royal', emoji: '👑',
+        nombre: 'Royal',
+        emoji: '👑',
         top: '♛━━━━━━━━〔 👑 〕━━━━━━━━♛',
         bottom: '♛━━━━━━━━〔 👑 〕━━━━━━━━♛',
         titulo: '👑 *𝑹𝑶𝒀𝑨𝑳 𝑴𝑬𝑵𝑼*',
@@ -184,16 +304,39 @@ const DISEÑOS = [
     }
 ];
 
-// Último diseño utilizado por cada chat.
+// ============================================================
+// ÚLTIMO DISEÑO POR CHAT
+// ============================================================
+
 const ultimoDiseñoPorChat = new Map();
 
 function obtenerDiseño(jid) {
-    const anterior = ultimoDiseñoPorChat.get(jid);
-    let disponibles = DISEÑOS.filter(d => d.nombre !== anterior);
-    if (!disponibles.length) disponibles = DISEÑOS;
 
-    const diseño = disponibles[Math.floor(Math.random() * disponibles.length)];
-    ultimoDiseñoPorChat.set(jid, diseño.nombre);
+    const anterior =
+        ultimoDiseñoPorChat.get(jid);
+
+    let disponibles =
+        DISEÑOS.filter(
+            d => d.nombre !== anterior
+        );
+
+    if (!disponibles.length) {
+        disponibles = DISEÑOS;
+    }
+
+    const diseño =
+        disponibles[
+            Math.floor(
+                Math.random() *
+                disponibles.length
+            )
+        ];
+
+    ultimoDiseñoPorChat.set(
+        jid,
+        diseño.nombre
+    );
+
     return diseño;
 }
 
@@ -202,96 +345,347 @@ function obtenerDiseño(jid) {
 // ============================================================
 
 function obtenerAutor(msg) {
-    const key = msg?.key || {};
+
+    const key =
+        msg?.key || {};
+
     const candidatos = [
-        key.participant,
-        key.remoteJid,
-        key.senderPn,
         key.participantAlt,
-        key.remoteJidAlt
+        key.participant,
+        key.senderPn,
+        key.remoteJidAlt,
+        key.remoteJid
     ];
 
     for (const c of candidatos) {
-        if (!c || typeof c !== 'string') continue;
-        const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
-        if (n && n.length >= 7) {
+
+        if (
+            !c ||
+            typeof c !== 'string'
+        ) {
+            continue;
+        }
+
+        const n =
+            String(c)
+                .split('@')[0]
+                .split(':')[0]
+                .replace(/\D/g, '');
+
+        if (
+            n &&
+            n.length >= 7
+        ) {
+
             return {
-                jid: c.includes('@') ? c : `${c}@s.whatsapp.net`,
+                jid:
+                    c.includes('@')
+                        ? c
+                        : `${c}@s.whatsapp.net`,
+
                 num: n
             };
         }
     }
+
     return null;
 }
 
 function obtenerCanal() {
+
     try {
-        const d = obtenerStore(CANAL_FILE, { url: '' });
-        return typeof d.url === 'string' ? d.url.trim() : '';
+
+        const d =
+            obtenerStore(
+                CANAL_FILE,
+                { url: '' }
+            );
+
+        return typeof d.url === 'string'
+            ? d.url.trim()
+            : '';
+
     } catch {
+
         return '';
     }
 }
 
-function formatUptime(s) {
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const s2 = Math.floor(s % 60);
-    if (d > 0) return `${d}d ${h}h ${m}m`;
-    return `${h}h ${m}m ${s2}s`;
+function formatUptime(segundos) {
+
+    const d =
+        Math.floor(
+            segundos / 86400
+        );
+
+    const h =
+        Math.floor(
+            (segundos % 86400) / 3600
+        );
+
+    const m =
+        Math.floor(
+            (segundos % 3600) / 60
+        );
+
+    const s =
+        Math.floor(
+            segundos % 60
+        );
+
+    if (d > 0) {
+        return `${d}d ${h}h ${m}m`;
+    }
+
+    return `${h}h ${m}m ${s}s`;
 }
 
-function normalizarCategoria(c) {
-    return String(c || 'Otros').trim().replace(/^\w/, ch => ch.toUpperCase());
+function normalizarCategoria(categoria) {
+
+    const texto =
+        String(
+            categoria || 'Otros'
+        ).trim();
+
+    if (!texto) {
+        return 'Otros';
+    }
+
+    return texto.replace(
+        /^\w/,
+        letra => letra.toUpperCase()
+    );
 }
 
-function obtenerIcono(c) {
-    return ICONOS[c] || '📦';
+function obtenerIcono(categoria) {
+
+    return (
+        ICONOS[categoria] ||
+        '📦'
+    );
 }
 
 function organizarComandos(lista) {
-    const cats = {};
+
+    const categorias = {};
+
     for (const cmd of lista || []) {
-        if (!cmd || !cmd.nombre) continue;
-        const cat = normalizarCategoria(cmd.categoria);
-        if (!cats[cat]) cats[cat] = [];
-        cats[cat].push(cmd);
+
+        if (
+            !cmd ||
+            !cmd.nombre
+        ) {
+            continue;
+        }
+
+        const categoria =
+            normalizarCategoria(
+                cmd.categoria
+            );
+
+        if (!categorias[categoria]) {
+            categorias[categoria] = [];
+        }
+
+        categorias[categoria].push(cmd);
     }
-    return cats;
+
+    return categorias;
 }
 
 function ordenarCategorias(categorias) {
-    return Object.keys(categorias).sort((a, b) => {
-        const ia = ORDEN_CATEGORIAS.indexOf(a);
-        const ib = ORDEN_CATEGORIAS.indexOf(b);
-        if (ia === -1 && ib === -1) return a.localeCompare(b);
-        if (ia === -1) return 1;
-        if (ib === -1) return -1;
-        return ia - ib;
-    });
+
+    return Object.keys(categorias)
+        .sort((a, b) => {
+
+            const ia =
+                ORDEN_CATEGORIAS.indexOf(a);
+
+            const ib =
+                ORDEN_CATEGORIAS.indexOf(b);
+
+            if (
+                ia === -1 &&
+                ib === -1
+            ) {
+                return a.localeCompare(b);
+            }
+
+            if (ia === -1) {
+                return 1;
+            }
+
+            if (ib === -1) {
+                return -1;
+            }
+
+            return ia - ib;
+        });
 }
 
 function acortarDesc(texto) {
-    if (!texto) return 'Sin descripción';
-    const limpio = String(texto).trim();
-    if (limpio.length <= 40) return limpio;
+
+    if (!texto) {
+        return 'Sin descripción';
+    }
+
+    const limpio =
+        String(texto).trim();
+
+    if (limpio.length <= 40) {
+        return limpio;
+    }
+
     return `${limpio.slice(0, 40).trim()}...`;
 }
 
-async function obtenerMencionesFijas() {
-    try {
-        const conexiones = global.conns || {};
-        const s = conexiones?.[0] || Object.values(conexiones)[0];
-        if (!s) return { jids: [], texto: '' };
+// ============================================================
+// RESOLVER CATEGORÍA
+// ============================================================
 
-        const meta = await s.groupMetadata(GRUPO_MENCIONES);
-        const jids = meta.participants.slice(0, CANTIDAD_MENCIONES).map(p => p.id);
-        const texto = jids.map(v => `@${v.split('@')[0]}`).join(' ');
-        return { jids, texto };
-    } catch (e) {
-        console.error('[MENU] Error menciones fijas:', e?.message || e);
-        return { jids: [], texto: '' };
+function buscarCategoria(argumento, categorias) {
+
+    if (!argumento) {
+        return null;
+    }
+
+    const limpio =
+        String(argumento)
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '');
+
+    // Primero por alias
+    const categoriaAlias =
+        ALIAS_CATEGORIAS[limpio];
+
+    if (
+        categoriaAlias &&
+        categorias[categoriaAlias]
+    ) {
+        return categoriaAlias;
+    }
+
+    // Después coincidencia directa
+    for (const categoria of Object.keys(categorias)) {
+
+        const normalizada =
+            categoria
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, '');
+
+        if (normalizada === limpio) {
+            return categoria;
+        }
+    }
+
+    return null;
+}
+
+// ============================================================
+// BUSCAR COMANDO
+// ============================================================
+
+function buscarComando(argumento, listaComandos) {
+
+    if (!argumento) {
+        return null;
+    }
+
+    const buscado =
+        String(argumento)
+            .trim()
+            .toLowerCase();
+
+    return (
+        listaComandos || []
+    ).find(cmd => {
+
+        if (!cmd?.nombre) {
+            return false;
+        }
+
+        if (
+            String(cmd.nombre)
+                .toLowerCase() === buscado
+        ) {
+            return true;
+        }
+
+        return (
+            Array.isArray(cmd.alias) &&
+            cmd.alias.some(
+                alias =>
+                    String(alias)
+                        .toLowerCase() === buscado
+            )
+        );
+    }) || null;
+}
+
+// ============================================================
+// MENCIONES FIJAS
+// ============================================================
+
+async function obtenerMencionesFijas() {
+
+    try {
+
+        const conexiones =
+            global.conns || {};
+
+        const s =
+            conexiones?.[0] ||
+            Object.values(conexiones)[0];
+
+        if (!s) {
+            return {
+                jids: [],
+                texto: ''
+            };
+        }
+
+        const meta =
+            await s.groupMetadata(
+                GRUPO_MENCIONES
+            );
+
+        const jids =
+            meta.participants
+                .slice(
+                    0,
+                    CANTIDAD_MENCIONES
+                )
+                .map(p => p.id);
+
+        const texto =
+            jids
+                .map(
+                    v =>
+                        `@${v.split('@')[0]}`
+                )
+                .join(' ');
+
+        return {
+            jids,
+            texto
+        };
+
+    } catch (error) {
+
+        console.error(
+            '[MENU] Error menciones fijas:',
+            error?.message || error
+        );
+
+        return {
+            jids: [],
+            texto: ''
+        };
     }
 }
 
@@ -299,64 +693,167 @@ async function obtenerMencionesFijas() {
 // GENERAR MENÚ
 // ============================================================
 
-function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño, extra = {}) {
-    const totalCmds = Object.values(categorias).flat().length;
-    const totalCats = Object.keys(categorias).length;
-    const now = moment.tz(ZONA_HORARIA);
+function generarMenuCompleto(
+    categorias,
+    prefijo,
+    mencionTexto,
+    botName,
+    diseño,
+    extra = {},
+    categoriaFiltrada = null
+) {
+
+    const totalCmds =
+        Object.values(categorias)
+            .flat()
+            .length;
+
+    const totalCats =
+        Object.keys(categorias)
+            .length;
+
+    const now =
+        moment.tz(
+            ZONA_HORARIA
+        );
 
     let texto = '';
 
     texto += `${diseño.top}\n\n`;
-    texto += `👋 ¡Hola ${mencionTexto}! ✨\n`;
+
+    texto +=
+        `👋 ¡Hola ${mencionTexto}! ✨\n`;
 
     if (extra.mencionesTexto) {
-        texto += `\n👥 ${extra.mencionesTexto}\n`;
+
+        texto +=
+            `\n👥 ${extra.mencionesTexto}\n`;
     }
 
-    texto += `\n`;
-    texto += `${diseño.titulo}\n`;
-    texto += `${diseño.subtitulo}\n\n`;
-    texto += `🤖 *${botName}*\n`;
-    texto += `🎨 Diseño actual: *${diseño.nombre}* ${diseño.emoji}\n\n`;
+    texto += '\n';
+
+    texto +=
+        categoriaFiltrada
+            ? `📂 *CATEGORÍA: ${categoriaFiltrada.toUpperCase()}*\n`
+            : `${diseño.titulo}\n`;
+
+    texto +=
+        `${diseño.subtitulo}\n\n`;
+
+    texto +=
+        `🤖 *${botName}*\n`;
+
+    texto +=
+        `🎨 Diseño actual: *${diseño.nombre}* ${diseño.emoji}\n\n`;
 
     texto += `${diseño.info}\n`;
-    texto += `┃ 👨‍💻 Creador    ▸ ${CREADOR}\n`;
-    texto += `┃ 📦 Versión    ▸ ${VERSION}\n`;
-    texto += `┃ 📚 Comandos   ▸ ${totalCmds}\n`;
-    texto += `┃ 🗂️ Categorías ▸ ${totalCats}\n`;
-    texto += `┃ 🔧 Prefijo    ▸ ${prefijo}\n`;
-    texto += `┃ ⏱️ Uptime     ▸ ${formatUptime(process.uptime())}\n`;
-    texto += `┃ 📅 Fecha      ▸ ${now.format('DD/MM/YYYY')}\n`;
-    texto += `┃ 🕐 Hora       ▸ ${now.format('HH:mm:ss')}\n`;
-    texto += `${diseño.infoEnd}\n`;
 
-    for (const cat of ordenarCategorias(categorias)) {
-        const icono = obtenerIcono(cat);
-        const cmds = categorias[cat];
+    texto +=
+        `┃ 👨‍💻 Creador    ▸ ${CREADOR}\n`;
 
-        texto += `\n${diseño.category.replace('{icon}', icono).replace('{name}', cat.toUpperCase())}\n\n`;
+    texto +=
+        `┃ 📦 Versión    ▸ ${VERSION}\n`;
 
-        for (const cmd of cmds) {
-            const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
-            texto += `${diseño.command.replace('{command}', `${prefijo}${cmd.nombre}${alias}`)}\n`;
-            texto += `${diseño.desc.replace('{desc}', acortarDesc(cmd.descripcion))}\n`;
-            texto += `\n`;
+    texto +=
+        `┃ 📚 Comandos   ▸ ${totalCmds}\n`;
+
+    texto +=
+        `┃ 🗂️ Categorías ▸ ${totalCats}\n`;
+
+    texto +=
+        `┃ 🔧 Prefijo    ▸ ${prefijo}\n`;
+
+    texto +=
+        `┃ ⏱️ Uptime     ▸ ${formatUptime(process.uptime())}\n`;
+
+    texto +=
+        `┃ 📅 Fecha      ▸ ${now.format('DD/MM/YYYY')}\n`;
+
+    texto +=
+        `┃ 🕐 Hora       ▸ ${now.format('HH:mm:ss')}\n`;
+
+    texto +=
+        `${diseño.infoEnd}\n`;
+
+    for (
+        const cat of ordenarCategorias(categorias)
+    ) {
+
+        const icono =
+            obtenerIcono(cat);
+
+        const comandos =
+            categorias[cat];
+
+        texto += '\n';
+
+        texto +=
+            `${diseño.category
+                .replace('{icon}', icono)
+                .replace(
+                    '{name}',
+                    cat.toUpperCase()
+                )}\n\n`;
+
+        for (const cmd of comandos) {
+
+            const alias =
+                cmd.alias?.length
+                    ? ` (${cmd.alias.join(', ')})`
+                    : '';
+
+            texto +=
+                `${diseño.command.replace(
+                    '{command}',
+                    `${prefijo}${cmd.nombre}${alias}`
+                )}\n`;
+
+            texto +=
+                `${diseño.desc.replace(
+                    '{desc}',
+                    acortarDesc(
+                        cmd.descripcion
+                    )
+                )}\n`;
+
+            texto += '\n';
         }
 
-        texto += `${diseño.categoryEnd}\n`;
+        texto +=
+            `${diseño.categoryEnd}\n`;
     }
 
-    const canal = obtenerCanal();
+    const canal =
+        obtenerCanal();
+
     if (canal) {
-        texto += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        texto += `📢 *CANAL OFICIAL*\n${canal}\n`;
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        texto +=
+            `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        texto +=
+            `📢 *CANAL OFICIAL*\n${canal}\n`;
+
+        texto +=
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     }
 
-    texto += `\n💡 Usa *${prefijo}menu <comando>* para más información.\n\n`;
-    texto += `${diseño.footer}\n\n`;
-    texto += `_${botName}_ • ${now.format('HH:mm')}\n`;
-    texto += `${diseño.bottom}`;
+    texto += '\n';
+
+    texto +=
+        `💡 Usa *${prefijo}menu <categoría>* para filtrar.\n`;
+
+    texto +=
+        `💡 Usa *${prefijo}menu* para ver todo.\n\n`;
+
+    texto +=
+        `${diseño.footer}\n\n`;
+
+    texto +=
+        `_${botName}_ • ${now.format('HH:mm')}\n`;
+
+    texto +=
+        `${diseño.bottom}`;
 
     return texto;
 }
@@ -366,67 +863,263 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño
 // ============================================================
 
 export default {
+
     nombre: 'menu',
+
     categoria: 'Sistema',
-    alias: ['ayuda', 'help', 'comandos', 'cmds'],
 
-    async ejecutar({ sock, msg, listaComandos, prefijo }) {
+    alias: [
+        'ayuda',
+        'help',
+        'comandos',
+        'cmds'
+    ],
+
+    async ejecutar({
+        sock,
+        msg,
+        listaComandos,
+        prefijo,
+        argumento
+    }) {
+
         try {
-            const jid = msg?.key?.remoteJid;
-            if (!jid) return;
 
-            const autor = obtenerAutor(msg);
-            const categorias = organizarComandos(listaComandos);
-            const diseño = obtenerDiseño(jid);
+            const jid =
+                msg?.key?.remoteJid;
 
-            const { jids: mencionesFijas, texto: textoMenciones } = await obtenerMencionesFijas();
-            const mencionTexto = autor ? `@${autor.num}` : '@usuario';
-            const mencionesAutor = autor ? [autor.jid] : [];
-            const todasLasMenciones = [...new Set([...mencionesAutor, ...mencionesFijas])];
-            const botName = global.botname || 'BOT-API 2.0';
+            if (!jid) {
+                return;
+            }
 
-            const menuTexto = generarMenuCompleto(
-                categorias,
-                prefijo,
-                mencionTexto,
-                botName,
-                diseño,
-                { mencionesTexto: textoMenciones }
-            );
+            const autor =
+                obtenerAutor(msg);
+
+            const categorias =
+                organizarComandos(
+                    listaComandos
+                );
+
+            // ==================================================
+            // BUSCAR CATEGORÍA
+            // ==================================================
+
+            const categoriaEncontrada =
+                buscarCategoria(
+                    argumento,
+                    categorias
+                );
+
+            let categoriasMostrar =
+                categorias;
+
+            // ==================================================
+            // SI SE ESCRIBIÓ UNA CATEGORÍA
+            // ==================================================
+
+            if (categoriaEncontrada) {
+
+                categoriasMostrar = {
+                    [categoriaEncontrada]:
+                        categorias[categoriaEncontrada]
+                };
+            }
+
+            // ==================================================
+            // SI NO ES CATEGORÍA, BUSCAR COMANDO
+            // ==================================================
+
+            else if (
+                argumento &&
+                String(argumento).trim()
+            ) {
+
+                const comando =
+                    buscarComando(
+                        argumento,
+                        listaComandos
+                    );
+
+                if (!comando) {
+
+                    return sock.sendMessage(
+                        jid,
+                        {
+                            text:
+                                `❌ No encontré la categoría o comando *${argumento}*.\n\n` +
+                                `💡 Usa *${prefijo}menu* para ver todo.\n` +
+                                `📂 Ejemplo: *${prefijo}menu economy*`
+                        },
+                        {
+                            quoted: msg
+                        }
+                    );
+                }
+
+                const categoriaComando =
+                    normalizarCategoria(
+                        comando.categoria
+                    );
+
+                if (
+                    categorias[categoriaComando]
+                ) {
+
+                    categoriasMostrar = {
+                        [categoriaComando]:
+                            categorias[
+                                categoriaComando
+                            ]
+                    };
+                }
+            }
+
+            // ==================================================
+            // DISEÑO
+            // ==================================================
+
+            const diseño =
+                obtenerDiseño(jid);
+
+            // ==================================================
+            // MENCIONES
+            // ==================================================
+
+            const {
+                jids: mencionesFijas,
+                texto: textoMenciones
+            } =
+                await obtenerMencionesFijas();
+
+            const mencionTexto =
+                autor
+                    ? `@${autor.num}`
+                    : '@usuario';
+
+            const mencionesAutor =
+                autor
+                    ? [autor.jid]
+                    : [];
+
+            const todasLasMenciones =
+                [
+                    ...new Set([
+                        ...mencionesAutor,
+                        ...mencionesFijas
+                    ])
+                ];
+
+            const botName =
+                global.botname ||
+                'BOT-API 2.0';
+
+            // ==================================================
+            // CREAR MENÚ
+            // ==================================================
+
+            const menuTexto =
+                generarMenuCompleto(
+                    categoriasMostrar,
+                    prefijo,
+                    mencionTexto,
+                    botName,
+                    diseño,
+                    {
+                        mencionesTexto:
+                            textoMenciones
+                    },
+                    categoriaEncontrada
+                );
+
+            // ==================================================
+            // VIDEO
+            // ==================================================
 
             if (VIDEO_MENU_URL) {
-                await sock.sendMessage(jid, {
-                    video: { url: VIDEO_MENU_URL },
-                    caption: menuTexto,
-                    gifPlayback: false,
-                    mentions: todasLasMenciones
-                }, { quoted: msg });
+
+                await sock.sendMessage(
+                    jid,
+                    {
+                        video: {
+                            url: VIDEO_MENU_URL
+                        },
+                        caption: menuTexto,
+                        gifPlayback: false,
+                        mentions:
+                            todasLasMenciones
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
+
                 return;
             }
 
-            if (fs.existsSync(FOTO_MENU)) {
-                await sock.sendMessage(jid, {
-                    image: { url: FOTO_MENU },
-                    caption: menuTexto,
-                    mentions: todasLasMenciones
-                }, { quoted: msg });
+            // ==================================================
+            // FOTO
+            // ==================================================
+
+            if (
+                fs.existsSync(
+                    FOTO_MENU
+                )
+            ) {
+
+                await sock.sendMessage(
+                    jid,
+                    {
+                        image: {
+                            url: FOTO_MENU
+                        },
+                        caption: menuTexto,
+                        mentions:
+                            todasLasMenciones
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
+
                 return;
             }
 
-            await sock.sendMessage(jid, {
-                text: menuTexto,
-                mentions: todasLasMenciones
-            }, { quoted: msg });
+            // ==================================================
+            // TEXTO
+            // ==================================================
+
+            await sock.sendMessage(
+                jid,
+                {
+                    text: menuTexto,
+                    mentions:
+                        todasLasMenciones
+                },
+                {
+                    quoted: msg
+                }
+            );
 
         } catch (error) {
-            console.error('[MENU] Error:', error);
+
+            console.error(
+                '[MENU] Error:',
+                error
+            );
 
             try {
+
                 await sock.sendMessage(
                     msg.key.remoteJid,
-                    { text: `❌ Error al mostrar el menú: ${error.message}` },
-                    { quoted: msg }
+                    {
+                        text:
+                            `❌ Error al mostrar el menú: ${error.message}`
+                    },
+                    {
+                        quoted: msg
+                    }
                 );
+
             } catch {}
         }
     }
