@@ -1,171 +1,189 @@
-// commands/ai/chtgpt.js
 // ============================================================
-// COMANDO: CHTGPT
 // BOT-API
-//
-// Uso:
-// .chtgpt Q es agua
-//
-// Consulta la API de YO SOY YO y devuelve la respuesta.
+// COMANDO: CHATGPT
 // ============================================================
 
-import axios from 'axios';
-import config from '../../config.js';
+import { config } from '../../config.js';
 
-const API_URL =
-    'https://apiyosoyyo-ofc.onrender.com/api/deepseek';
+const API_URL = 'https://api.lempi.lat/ai/chatgpt';
+
+function obtenerTexto(msg) {
+    return (
+        msg?.message?.conversation ||
+        msg?.message?.extendedTextMessage?.text ||
+        msg?.message?.imageMessage?.caption ||
+        msg?.message?.videoMessage?.caption ||
+        msg?.message?.documentMessage?.caption ||
+        ''
+    );
+}
+
+function limpiarPregunta(texto) {
+    return texto
+        .replace(/^[.!/#]chatgpt\b/i, '')
+        .trim();
+}
+
+function extraerRespuesta(data) {
+    if (!data) return null;
+
+    if (typeof data === 'string') return data;
+
+    return (
+        data.result ||
+        data.response ||
+        data.answer ||
+        data.message ||
+        data.text ||
+        data.data?.result ||
+        data.data?.response ||
+        data.data?.answer ||
+        data.data?.message ||
+        data.data?.text ||
+        null
+    );
+}
 
 export default {
-    nombre: 'chtgpt',
-
+    nombre: 'chatgpt',
     categoria: 'IA',
 
     alias: [
-        'chatgpt',
+        'gpt',
         'ia',
-        'deepseek'
+        'ask',
+        'chat'
     ],
 
-    descripcion:
-        'Pregunta a la inteligencia artificial.',
+    descripcion: 'Pregunta a ChatGPT mediante la API de Lempi.',
 
-    ejecutar: async ({
-        msg,
-        responder
-    }) => {
+    async ejecutar({ sock, msg, prefijo }) {
+        const remoteJid = msg?.key?.remoteJid;
 
-        // --------------------------------------------------------
-        // OBTENER TEXTO DEL COMANDO
-        // --------------------------------------------------------
+        if (!remoteJid) return;
 
-        const texto =
-            msg?.body?.trim() ||
-            msg?.message?.conversation?.trim() ||
-            msg?.message?.extendedTextMessage?.text?.trim() ||
-            '';
+        const pregunta = limpiarPregunta(obtenerTexto(msg));
 
-        const prompt =
-            texto
-                .replace(
-                    /^\.chtgpt\b/i,
-                    ''
-                )
-                .trim();
-
-        // --------------------------------------------------------
-        // COMPROBAR PREGUNTA
-        // --------------------------------------------------------
-
-        if (!prompt) {
-
-            await responder.texto(
-                `╭〔 🤖 𝐂𝐇𝐓𝐆𝐏𝐓 〕⬣\n` +
-                `┃\n` +
-                `┃ ❓ Escribe una pregunta.\n` +
-                `┃\n` +
-                `┃ Ejemplo:\n` +
-                `┃ *.chtgpt Q es agua*\n` +
-                `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+        if (!pregunta) {
+            return await sock.sendMessage(
+                remoteJid,
+                {
+                    text:
+                        `╭〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
+                        `┃\n` +
+                        `┃ ❗ Escribe una pregunta.\n` +
+                        `┃\n` +
+                        `┃ 💡 Ejemplo:\n` +
+                        `┃ ${prefijo || '.'}chatgpt Hola\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━⬣`
+                },
+                { quoted: msg }
             );
-
-            return;
         }
 
-        // --------------------------------------------------------
-        // API KEY
-        // --------------------------------------------------------
-
-        const apiKey =
-            config.YOSOYYO_API_KEY ||
-            process.env.YOSOYYO_API_KEY;
+        const apiKey = config?.LEMPI_APIKEY;
 
         if (!apiKey) {
-
-            console.error(
-                '[COMANDO chtgpt] Falta YOSOYYO_API_KEY'
+            console.error('[CHATGPT] No existe LEMPI_APIKEY en config.');
+            return await sock.sendMessage(
+                remoteJid,
+                {
+                    text: '❌ La API de ChatGPT no está configurada.'
+                },
+                { quoted: msg }
             );
-
-            await responder.texto(
-                '❌ La API de IA no está configurada.'
-            );
-
-            return;
         }
 
+        await sock.sendMessage(remoteJid, {
+            react: {
+                text: '🤔',
+                key: msg.key
+            }
+        });
+
         try {
+            const url =
+                `${API_URL}?q=${encodeURIComponent(pregunta)}` +
+                `&apikey=${encodeURIComponent(apiKey)}`;
 
-            // ----------------------------------------------------
-            // CONSULTAR API
-            // ----------------------------------------------------
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json'
+                }
+            });
 
-            const respuesta =
-                await axios.get(
-                    API_URL,
-                    {
-                        params: {
-                            prompt,
-                            apiKey
-                        },
-                        timeout: 60000
-                    }
-                );
+            const textoRespuesta = await response.text();
 
-            const datos =
-                respuesta.data;
+            let data;
 
-            // ----------------------------------------------------
-            // OBTENER RESPUESTA
-            // ----------------------------------------------------
-
-            const answer =
-                datos?.result?.answer;
-
-            if (
-                !datos?.status ||
-                !answer
-            ) {
-
-                console.error(
-                    '[COMANDO chtgpt] Respuesta inesperada:',
-                    datos
-                );
-
-                await responder.texto(
-                    '❌ La IA no devolvió una respuesta válida.'
-                );
-
-                return;
+            try {
+                data = JSON.parse(textoRespuesta);
+            } catch {
+                throw new Error('La API devolvió una respuesta inválida.');
             }
 
-            // ----------------------------------------------------
-            // ENVIAR RESPUESTA
-            // ----------------------------------------------------
+            if (!response.ok) {
+                throw new Error(
+                    data?.message ||
+                    data?.error ||
+                    `HTTP ${response.status}`
+                );
+            }
 
-            await responder.texto(
-                `╭〔 🤖 𝐂𝐇𝐓𝐆𝐏𝐓 〕⬣\n` +
+            const respuesta = extraerRespuesta(data);
+
+            if (!respuesta) {
+                throw new Error('La API no devolvió ninguna respuesta.');
+            }
+
+            const texto =
+                `╭〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
                 `┃\n` +
-                `┃ ❓ *${prompt}*\n` +
+                `┃ 🧠 𝐑𝐞𝐬𝐩𝐮𝐞𝐬𝐭𝐚:\n` +
                 `┃\n` +
-                `┃ ${answer}\n` +
+                `┃ ${String(respuesta).replace(/\n/g, '\n┃ ')}\n` +
                 `┃\n` +
-                `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+                `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕━━⬣`;
+
+            await sock.sendMessage(
+                remoteJid,
+                { text: texto },
+                { quoted: msg }
             );
+
+            await sock.sendMessage(remoteJid, {
+                react: {
+                    text: '✅',
+                    key: msg.key
+                }
+            });
 
         } catch (error) {
+            console.error('[CHATGPT] Error:', error);
 
-            console.error(
-                '[COMANDO chtgpt] Error:',
-                error?.response?.data ||
-                error.message ||
-                error
-            );
+            await sock.sendMessage(remoteJid, {
+                react: {
+                    text: '❌',
+                    key: msg.key
+                }
+            });
 
-            await responder.texto(
-                `❌ *Error al consultar la IA.*\n\n` +
-                `Inténtalo nuevamente en unos segundos.`
+            await sock.sendMessage(
+                remoteJid,
+                {
+                    text:
+                        `╭〔 ❌ 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
+                        `┃\n` +
+                        `┃ Error al consultar la IA.\n` +
+                        `┃\n` +
+                        `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
+                        `┃\n` +
+                        `╰━━━━━━━━━━━━⬣`
+                },
+                { quoted: msg }
             );
         }
     }
