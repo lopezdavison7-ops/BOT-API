@@ -1,6 +1,7 @@
 // ============================================================
 // BOT-API
 // COMANDO: SHAZAM
+// VERSION: 2.0 - AJUSTADO PARA BOT-API
 // Identifica una canción desde un audio o video citado.
 // ============================================================
 
@@ -14,6 +15,9 @@ function obtenerContextInfo(message) {
         message?.message?.videoMessage?.contextInfo ||
         message?.message?.documentMessage?.contextInfo ||
         message?.message?.audioMessage?.contextInfo ||
+        message?.message?.ephemeralMessage?.message?.extendedTextMessage?.contextInfo ||
+        message?.message?.ephemeralMessage?.message?.audioMessage?.contextInfo ||
+        message?.message?.ephemeralMessage?.message?.videoMessage?.contextInfo ||
         message?.message?.viewOnceMessageV2?.message?.extendedTextMessage?.contextInfo ||
         message?.message?.viewOnceMessage?.message?.extendedTextMessage?.contextInfo ||
         null
