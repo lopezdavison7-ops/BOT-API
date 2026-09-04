@@ -136,7 +136,7 @@ export default {
             const releaseDate = track.releaseDate || 'Desconocida';
             const label = track.label || 'Desconocida';
 
-            const texto = `╭〔 🖥️ 𝐓𝐄𝐑𝐌𝐈𝐍𝐀𝐋 𝐄𝐗𝐄𝐂 〕━⬣
+            const texto = `╭〔 BOT-API〕━⬣
 
 ┃ 🎵 𝐒𝐇𝐀𝐙𝐀𝐌 𝐑𝐄𝐒𝐔𝐋𝐓
 
