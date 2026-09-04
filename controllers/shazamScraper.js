@@ -4,8 +4,6 @@
 // ============================================================
 
 import fetch from 'node-fetch';
-import { FormData, Blob } from 'formdata-node';
-import { fileTypeFromBuffer } from 'file-type';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -77,9 +75,10 @@ async function recognizeUrl(audioUrl, startTime = 0) {
 }
 
 async function uploadUguu(buffer) {
-    const tipo = await fileTypeFromBuffer(buffer);
-    const ext = tipo?.ext || 'mp3';
-    const mime = tipo?.mime || 'audio/mpeg';
+    // Node.js 18+ incluye FormData y Blob de forma nativa.
+    // Así evitamos dependencias externas que impedían cargar el comando.
+    const ext = 'mp3';
+    const mime = 'audio/mpeg';
 
     const blob = new Blob([buffer], { type: mime });
     const form = new FormData();
