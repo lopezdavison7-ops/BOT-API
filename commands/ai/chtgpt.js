@@ -1,117 +1,152 @@
 // ============================================================
 // BOT-API
-// COMANDO: CHATGPT
+// COMANDO: CHTGPT
+// ChatGPT mediante API LEMPI
+// La API Key se lee desde config.js
 // ============================================================
 
-import { config } from '../../config.js';
+import fetch from 'node-fetch';
+import config from '../../config.js';
 
 const API_URL = 'https://api.lempi.lat/ai/chatgpt';
 
-function obtenerTexto(msg) {
+// ------------------------------------------------------------
+// Obtener API Key desde config.js
+// ------------------------------------------------------------
+function obtenerApiKey() {
     return (
-        msg?.message?.conversation ||
-        msg?.message?.extendedTextMessage?.text ||
-        msg?.message?.imageMessage?.caption ||
-        msg?.message?.videoMessage?.caption ||
-        msg?.message?.documentMessage?.caption ||
+        config?.LEMPI_APIKEY ||
+        config?.LEMPI_API_KEY ||
+        config?.LEMPI_KEY ||
         ''
     );
 }
 
-function limpiarPregunta(texto) {
-    return texto
-        .replace(/^[.!/#]chatgpt\b/i, '')
-        .trim();
-}
-
+// ------------------------------------------------------------
+// Extraer respuesta de diferentes formatos JSON
+// ------------------------------------------------------------
 function extraerRespuesta(data) {
     if (!data) return null;
 
-    if (typeof data === 'string') return data;
+    if (typeof data === 'string') {
+        return data.trim();
+    }
 
     return (
-        data.result ||
+        data.resultado ||
+        data.respuesta ||
         data.response ||
         data.answer ||
-        data.message ||
         data.text ||
-        data.data?.result ||
+        data.message ||
+        data.data?.resultado ||
+        data.data?.respuesta ||
         data.data?.response ||
         data.data?.answer ||
-        data.data?.message ||
         data.data?.text ||
+        data.data?.message ||
         null
     );
 }
 
+// ------------------------------------------------------------
+// Comando
+// ------------------------------------------------------------
 export default {
-    nombre: 'chatgpt',
+    nombre: 'chtgpt',
+
     categoria: 'IA',
 
     alias: [
+        'chatgpt',
         'gpt',
         'ia',
         'ask',
         'chat'
     ],
 
-    descripcion: 'Pregunta a ChatGPT mediante la API de Lempi.',
+    descripcion: 'Habla con ChatGPT mediante la API de LEMPI.',
 
-    async ejecutar({ sock, msg, prefijo }) {
-        const remoteJid = msg?.key?.remoteJid;
-
-        if (!remoteJid) return;
-
-        const pregunta = limpiarPregunta(obtenerTexto(msg));
-
-        if (!pregunta) {
-            return await sock.sendMessage(
-                remoteJid,
-                {
-                    text:
-                        `╭〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
-                        `┃\n` +
-                        `┃ ❗ Escribe una pregunta.\n` +
-                        `┃\n` +
-                        `┃ 💡 Ejemplo:\n` +
-                        `┃ ${prefijo || '.'}chatgpt Hola\n` +
-                        `┃\n` +
-                        `╰━━━━━━━━━━━━⬣`
-                },
-                { quoted: msg }
-            );
-        }
-
-        const apiKey = config?.LEMPI_APIKEY;
-
-        if (!apiKey) {
-            console.error('[CHATGPT] No existe LEMPI_APIKEY en config.');
-            return await sock.sendMessage(
-                remoteJid,
-                {
-                    text: '❌ La API de ChatGPT no está configurada.'
-                },
-                { quoted: msg }
-            );
-        }
-
-        await sock.sendMessage(remoteJid, {
-            react: {
-                text: '🤔',
-                key: msg.key
-            }
-        });
+    ejecutar: async ({
+        msg,
+        argumento,
+        responder
+    }) => {
 
         try {
+
+            const pregunta = String(argumento || '').trim();
+
+            // ------------------------------------------------
+            // Validar pregunta
+            // ------------------------------------------------
+            if (!pregunta) {
+
+                await responder.texto(
+                    '╭━━〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ❌ Escribe algo para preguntarle a la IA.\n' +
+                    '┃\n' +
+                    '┃ 📌 Ejemplo:\n' +
+                    '┃ *.chtgpt Hola, ¿cómo estás?*\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+
+                return;
+            }
+
+            // ------------------------------------------------
+            // Obtener API Key
+            // ------------------------------------------------
+            const apiKey = obtenerApiKey();
+
+            if (!apiKey) {
+
+                console.error(
+                    '[CHTGPT] ❌ No se encontró LEMPI_APIKEY en config.js'
+                );
+
+                await responder.texto(
+                    '╭━━〔 ❌ 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ No está configurada la API Key.\n' +
+                    '┃\n' +
+                    '┃ Configura LEMPI_APIKEY en config.js\n' +
+                    '┃ y reinicia el bot.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+
+                return;
+            }
+
+            // ------------------------------------------------
+            // Reacción de espera
+            // ------------------------------------------------
+            try {
+                await responder.reaccion('🤖');
+            } catch {}
+
+            // ------------------------------------------------
+            // Construir URL
+            // ------------------------------------------------
             const url =
                 `${API_URL}?q=${encodeURIComponent(pregunta)}` +
                 `&apikey=${encodeURIComponent(apiKey)}`;
 
+            console.log(
+                `[CHTGPT] Procesando pregunta: ${pregunta}`
+            );
+
+            // ------------------------------------------------
+            // Petición a la API
+            // ------------------------------------------------
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    Accept: 'application/json'
+                    'Accept': 'application/json'
                 }
             });
 
@@ -122,69 +157,79 @@ export default {
             try {
                 data = JSON.parse(textoRespuesta);
             } catch {
-                throw new Error('La API devolvió una respuesta inválida.');
+                data = textoRespuesta;
             }
 
+            // ------------------------------------------------
+            // Error HTTP
+            // ------------------------------------------------
             if (!response.ok) {
+
+                console.error(
+                    '[CHTGPT] API ERROR:',
+                    response.status,
+                    textoRespuesta
+                );
+
                 throw new Error(
-                    data?.message ||
-                    data?.error ||
-                    `HTTP ${response.status}`
+                    `La API respondió con HTTP ${response.status}`
                 );
             }
 
+            // ------------------------------------------------
+            // Obtener respuesta
+            // ------------------------------------------------
             const respuesta = extraerRespuesta(data);
 
             if (!respuesta) {
-                throw new Error('La API no devolvió ninguna respuesta.');
+
+                console.error(
+                    '[CHTGPT] Respuesta inesperada:',
+                    data
+                );
+
+                throw new Error(
+                    'La API no devolvió una respuesta válida.'
+                );
             }
 
-            const texto =
-                `╭〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
-                `┃\n` +
-                `┃ 🧠 𝐑𝐞𝐬𝐩𝐮𝐞𝐬𝐭𝐚:\n` +
-                `┃\n` +
-                `┃ ${String(respuesta).replace(/\n/g, '\n┃ ')}\n` +
-                `┃\n` +
-                `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕━━⬣`;
-
-            await sock.sendMessage(
-                remoteJid,
-                { text: texto },
-                { quoted: msg }
+            // ------------------------------------------------
+            // Enviar respuesta
+            // ------------------------------------------------
+            await responder.texto(
+                '╭━━〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
+                '┃\n' +
+                `┃ ${respuesta}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
 
-            await sock.sendMessage(remoteJid, {
-                react: {
-                    text: '✅',
-                    key: msg.key
-                }
-            });
+            try {
+                await responder.reaccion('✅');
+            } catch {}
 
         } catch (error) {
-            console.error('[CHATGPT] Error:', error);
 
-            await sock.sendMessage(remoteJid, {
-                react: {
-                    text: '❌',
-                    key: msg.key
-                }
-            });
-
-            await sock.sendMessage(
-                remoteJid,
-                {
-                    text:
-                        `╭〔 ❌ 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━⬣\n` +
-                        `┃\n` +
-                        `┃ Error al consultar la IA.\n` +
-                        `┃\n` +
-                        `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
-                        `┃\n` +
-                        `╰━━━━━━━━━━━━⬣`
-                },
-                { quoted: msg }
+            console.error(
+                '[CHTGPT] ❌ Error:',
+                error?.stack || error?.message || error
             );
+
+            try {
+                await responder.reaccion('❌');
+            } catch {}
+
+            try {
+                await responder.texto(
+                    '╭━━〔 ❌ 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ No pude obtener una respuesta de la IA.\n' +
+                    '┃\n' +
+                    `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+            } catch {}
         }
     }
 };
