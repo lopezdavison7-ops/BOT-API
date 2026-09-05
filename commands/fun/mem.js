@@ -1,14 +1,13 @@
-// commands/juegos/mem.js
+// commands/fun/mem.js
 export default {
     nombre: 'mem',
-    categoria: 'fun',
+    categoria: 'Juegos',
     alias: ['memoria', 'memory', 'juego'],
     descripcion: 'Juega al memorama contra la IA',
     ejecutar: async ({ msg, responder, sock }) => {
         try {
             const from = msg.key.remoteJid;
-            
-            // Aquí va el HTML del juego (copiado de tu amigo pero adaptado al juego de memoria)
+
             const htmlPayload = `<style>
 * { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; box-sizing: border-box; }
 body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; touch-action: manipulation; }
@@ -140,7 +139,6 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Helv
 })();
 </script>`;
 
-            // Este método es el de tu amigo. Si tu bot no tiene las firmas, NO funcionará.
             await sock.relayMessage(from, {
                 messageContextInfo: {
                     deviceListMetadata: {},
