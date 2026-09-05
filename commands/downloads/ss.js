@@ -4,7 +4,7 @@ import axios from 'axios';
 import config from '../../config.js';
 
 const API_URL =
-    'https://api-yosoyyo-api-ofc.onrender.com/api/ssweb';
+    'https://api-yosoyyo-api-ofc.onrender.com/api/ssweb?url=https://google.com&apiKey=yosoyyo_sk_p7i2ekmm';
 
 export default {
     nombre: 'ss',
