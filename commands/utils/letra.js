@@ -14,7 +14,7 @@ import axios from 'axios';
 import config from '../../config.js';
 
 const API_URL =
-    'https://api-yosoyyo-api-ofc.onrender.com/api/lyrics';
+    'https://api-yosoyyo-api-ofc.onrender.com/api/lyrics?q=bohemian';
 
 export default {
     nombre: 'letra',
