@@ -1,230 +1,107 @@
 // commands/utils/reloj.js
-// ============================================================
-// COMANDO: RELOJ
-// Genera una tarjeta de reloj (estilo neón) como IMAGEN, no
-// texto — se arma en SVG y se convierte a PNG con `sharp` (ya
-// es dependencia del proyecto, no se agrega nada pesado como
-// un navegador headless).
-//
-// Uso: .reloj            -> Nicaragua (Managua) por defecto
-// Uso: .reloj mexico      -> hora de México
-// Uso: .reloj listar      -> muestra las regiones disponibles
-// ============================================================
-
-import sharp from 'sharp';
-import moment from 'moment-timezone';
-
-// ============================================================
-// REGIONES DISPONIBLES
-// ============================================================
-const REGIONES = {
-    nicaragua: { nombre: 'Nicaragua', zona: 'America/Managua' },
-    managua: { nombre: 'Nicaragua', zona: 'America/Managua' },
-    mexico: { nombre: 'México', zona: 'America/Mexico_City' },
-    'méxico': { nombre: 'México', zona: 'America/Mexico_City' },
-    espana: { nombre: 'España', zona: 'Europe/Madrid' },
-    'españa': { nombre: 'España', zona: 'Europe/Madrid' },
-    colombia: { nombre: 'Colombia', zona: 'America/Bogota' },
-    argentina: { nombre: 'Argentina', zona: 'America/Argentina/Buenos_Aires' },
-    chile: { nombre: 'Chile', zona: 'America/Santiago' },
-    peru: { nombre: 'Perú', zona: 'America/Lima' },
-    'perú': { nombre: 'Perú', zona: 'America/Lima' },
-    venezuela: { nombre: 'Venezuela', zona: 'America/Caracas' },
-    honduras: { nombre: 'Honduras', zona: 'America/Tegucigalpa' },
-    guatemala: { nombre: 'Guatemala', zona: 'America/Guatemala' },
-    salvador: { nombre: 'El Salvador', zona: 'America/El_Salvador' },
-    costarica: { nombre: 'Costa Rica', zona: 'America/Costa_Rica' },
-    panama: { nombre: 'Panamá', zona: 'America/Panama' },
-    'panamá': { nombre: 'Panamá', zona: 'America/Panama' },
-    dominicana: { nombre: 'República Dominicana', zona: 'America/Santo_Domingo' },
-    ecuador: { nombre: 'Ecuador', zona: 'America/Guayaquil' },
-    bolivia: { nombre: 'Bolivia', zona: 'America/La_Paz' },
-    paraguay: { nombre: 'Paraguay', zona: 'America/Asuncion' },
-    uruguay: { nombre: 'Uruguay', zona: 'America/Montevideo' },
-    usa: { nombre: 'Estados Unidos (NY)', zona: 'America/New_York' },
-    eeuu: { nombre: 'Estados Unidos (NY)', zona: 'America/New_York' }
-};
-
-const REGION_DEFECTO = 'nicaragua';
-
-function normalizar(texto) {
-    return String(texto || '')
-        .toLowerCase()
-        .trim();
-}
-
-function formatearUptime(segundos) {
-    const h = Math.floor(segundos / 3600);
-    const m = Math.floor((segundos % 3600) / 60);
-    const s = Math.floor(segundos % 60);
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-function escaparXML(texto) {
-    return String(texto)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-// ============================================================
-// GENERAR EL SVG DE LA TARJETA
-// ============================================================
-function generarSVG({ hora, minuto, segundo, meridiano, fecha, diaSemana, zonaTexto, unixTime, uptimeTexto }) {
-    const ancho = 700;
-    const alto = 940;
-
-    return `
-<svg width="${ancho}" height="${alto}" viewBox="0 0 ${ancho} ${alto}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
-      <feMerge>
-        <feMergeNode in="blur" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
-    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0b0f16" />
-      <stop offset="100%" stop-color="#050709" />
-    </linearGradient>
-  </defs>
-
-  <rect width="${ancho}" height="${alto}" fill="url(#fondo)" />
-
-  <rect x="40" y="40" width="${ancho - 80}" height="${alto - 80}" rx="28"
-        fill="#0d1420" stroke="#22d3ee" stroke-width="2" filter="url(#glow)" />
-
-  <circle cx="${ancho - 100}" cy="110" r="9" fill="#22c55e" filter="url(#glow)" />
-
-  <text x="80" y="105" font-family="Arial, sans-serif" font-size="20" fill="#22d3ee" font-weight="bold">🕐 RELOJ EN VIVO</text>
-  <text x="80" y="150" font-family="Arial, sans-serif" font-size="30" fill="#ffffff" font-weight="bold">${escaparXML(zonaTexto)}</text>
-
-  <line x1="80" y1="185" x2="${ancho - 80}" y2="185" stroke="#1e2937" stroke-width="2" />
-
-  <text x="${ancho / 2}" y="400" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="110" fill="#22d3ee" font-weight="bold" filter="url(#glow)">${hora}:${minuto}:${segundo}</text>
-  <text x="${ancho - 100}" y="360" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="30" fill="#9ca3af" font-weight="bold">${meridiano}</text>
-
-  <line x1="80" y1="450" x2="${ancho - 80}" y2="450" stroke="#1e2937" stroke-width="2" />
-
-  <text x="${ancho / 2}" y="510" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="32" fill="#ffffff" font-weight="bold">${escaparXML(fecha)}</text>
-  <text x="${ancho / 2}" y="550" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="24" fill="#22d3ee" font-weight="bold">${escaparXML(diaSemana.toUpperCase())}</text>
-
-  <line x1="80" y1="590" x2="${ancho - 80}" y2="590" stroke="#1e2937" stroke-width="2" />
-
-  <rect x="80" y="630" width="${ancho - 160}" height="90" rx="14" fill="#111827" stroke="#1e2937" />
-  <text x="${ancho / 2}" y="665" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="16" fill="#9ca3af" letter-spacing="2">⏱️ BOT ACTIVO DESDE HACE</text>
-  <text x="${ancho / 2}" y="700" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="26" fill="#22d3ee" font-weight="bold">${uptimeTexto}</text>
-
-  <rect x="80" y="740" width="${(ancho - 176) / 2}" height="100" rx="14" fill="#111827" stroke="#1e2937" />
-  <text x="${80 + (ancho - 176) / 4}" y="775" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="14" fill="#9ca3af" letter-spacing="2">ZONA HORARIA</text>
-  <text x="${80 + (ancho - 176) / 4}" y="808" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="22" fill="#22d3ee" font-weight="bold">${escaparXML(zonaTexto)}</text>
-
-  <rect x="${80 + (ancho - 176) / 2 + 16}" y="740" width="${(ancho - 176) / 2}" height="100" rx="14" fill="#111827" stroke="#1e2937" />
-  <text x="${80 + (ancho - 176) / 2 + 16 + (ancho - 176) / 4}" y="775" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="14" fill="#9ca3af" letter-spacing="2">UNIX TIME</text>
-  <text x="${80 + (ancho - 176) / 2 + 16 + (ancho - 176) / 4}" y="808" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="22" fill="#22d3ee" font-weight="bold">${unixTime}</text>
-
-  <text x="${ancho / 2}" y="880" text-anchor="middle" font-family="Arial, sans-serif"
-        font-size="14" fill="#4b5563">Generado por BOT-API</text>
-</svg>`;
-}
+import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
     nombre: 'reloj',
-
     categoria: 'Utilidades',
-
-    alias: [
-        'relojlive'
-    ],
-
-    descripcion:
-        'Tarjeta de reloj en vivo (imagen). Uso: .reloj <región opcional>. Ej: .reloj mexico',
-
-    ejecutar: async ({
-        sock,
-        msg,
-        jid,
-        responder,
-        argumento
-    }) => {
-
-        const entrada = normalizar(argumento);
-
-        if (entrada === 'listar' || entrada === 'regiones') {
-            const lista = [...new Set(Object.values(REGIONES).map(r => r.nombre))].sort();
-            await responder.texto(
-                '╭〔 🌎 𝐑𝐄𝐆𝐈𝐎𝐍𝐄𝐒 〕⬣\n┃\n' +
-                lista.map(n => `┃ • ${n}`).join('\n') +
-                '\n┃\n╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
-        }
-
-        const region = REGIONES[entrada || REGION_DEFECTO];
-
-        if (!region) {
-            await responder.texto(
-                '╭〔 ⚠️ 𝐑𝐄𝐋𝐎𝐉 〕⬣\n' +
-                '┃\n' +
-                `┃ ❌ No reconozco "${argumento}".\n` +
-                '┃\n' +
-                '┃ 📌 Uso: .reloj <región>\n' +
-                '┃ 📌 Ejemplo: .reloj mexico\n' +
-                '┃ 📌 Ver todas: .reloj listar\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
-        }
-
+    alias: ['clock', 'hora', 'time'],
+    descripcion: 'Reloj analógico y digital en vivo dentro del chat',
+    uso: '.reloj',
+    ejecutar: async ({ msg, responder, sock }) => {
         try {
-            const ahora = moment.tz(region.zona);
+            const from = msg.key.remoteJid;
 
-            const hora24 = ahora.hour();
-            const meridiano = hora24 >= 12 ? 'PM' : 'AM';
-            const hora12 = hora24 % 12 === 0 ? 12 : hora24 % 12;
+            const htmlPayload = `<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #eee; }
+.rl-wrap { width: 100%; max-width: 540px; margin: auto; padding: 12px; }
+.rl-card { background: rgba(15,18,28,.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(0,243,255,.25); border-radius: 20px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,243,255,.15), 0 0 20px rgba(157,78,221,.2); }
+.rl-header { padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, rgba(0,243,255,.05), rgba(157,78,221,.05)); }
+.rl-title { font-size: 19px; font-weight: 900; color: #fff; text-shadow: 0 0 10px rgba(0,243,255,.6); letter-spacing: 1px; }
+.rl-sub { font-size: 10px; letter-spacing: 2px; color: #00f3ff; font-weight: 700; text-transform: uppercase; }
+.rl-body { padding: 24px 18px; text-align: center; }
+.rl-clock { position: relative; width: 220px; height: 220px; border-radius: 50%; margin: 0 auto 18px; background: radial-gradient(circle at 50% 50%, #1a2238 0%, #0b1120 70%); border: 3px solid rgba(0,243,255,.4); box-shadow: inset 0 0 30px rgba(0,243,255,.15), 0 0 25px rgba(0,243,255,.3); }
+.rl-clock::before { content: ''; position: absolute; width: 14px; height: 14px; background: #fff; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 10; box-shadow: 0 0 10px #00f3ff; }
+.rl-num { position: absolute; top: 50%; left: 50%; transform-origin: 0 50%; font-weight: 800; font-size: 14px; color: #00f3ff; text-shadow: 0 0 6px rgba(0,243,255,.6); width: 100px; }
+.rl-num span { display: inline-block; transform: translateX(-50%); }
+.rl-hand { position: absolute; bottom: 50%; left: 50%; transform-origin: 50% 100%; border-radius: 8px; transition: transform .2s cubic-bezier(.4,2,.6,1); }
+.rl-hand-h { width: 4px; height: 55px; background: #fff; margin-left: -2px; box-shadow: 0 0 8px rgba(255,255,255,.6); }
+.rl-hand-m { width: 3px; height: 80px; background: #a5b4fc; margin-left: -1.5px; box-shadow: 0 0 8px rgba(165,180,252,.6); }
+.rl-hand-s { width: 2px; height: 95px; background: #ff4757; margin-left: -1px; box-shadow: 0 0 10px #ff4757; }
+.rl-digital { font-family: 'Courier New', monospace; font-size: 44px; font-weight: 900; letter-spacing: 2px; color: #fff; text-shadow: 0 0 14px rgba(0,243,255,.8), 0 0 28px rgba(0,243,255,.4); margin-bottom: 10px; }
+.rl-ampm { display: inline-block; font-size: 14px; font-weight: 800; color: #00f3ff; margin-left: 8px; letter-spacing: 2px; }
+.rl-date { font-size: 15px; color: #c7cfdd; letter-spacing: 1px; margin-top: 4px; text-transform: capitalize; }
+.rl-date b { color: #fff; }
+.rl-tz { margin-top: 10px; font-size: 11px; color: #8fc7ff; letter-spacing: 2px; text-transform: uppercase; }
+@keyframes rlPulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+.rl-dot { display: inline-block; width: 8px; height: 8px; background: #00ff87; border-radius: 50%; box-shadow: 0 0 8px #00ff87; animation: rlPulse 1.5s infinite; margin-right: 8px; vertical-align: middle; }
+</style>
+<div class="rl-wrap">
+  <div class="rl-card">
+    <div class="rl-header">
+      <div><div class="rl-sub">ALEX BOT</div><div class="rl-title">⏰ Reloj</div></div>
+      <span class="rl-dot"></span>
+    </div>
+    <div class="rl-body">
+      <div class="rl-clock" id="rlClock">
+        <div class="rl-hand rl-hand-h" id="rlH"></div>
+        <div class="rl-hand rl-hand-m" id="rlM"></div>
+        <div class="rl-hand rl-hand-s" id="rlS"></div>
+      </div>
+      <div class="rl-digital" id="rlDigi">--:--:--<span class="rl-ampm">--</span></div>
+      <div class="rl-date" id="rlDate">Cargando...</div>
+      <div class="rl-tz" id="rlTz">Zona horaria</div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+const clock = document.getElementById('rlClock');
+const handH = document.getElementById('rlH');
+const handM = document.getElementById('rlM');
+const handS = document.getElementById('rlS');
+const digi = document.getElementById('rlDigi');
+const dateEl = document.getElementById('rlDate');
+const tzEl = document.getElementById('rlTz');
+const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// Colocar números del 1 al 12
+for (let i = 1; i <= 12; i++) {
+  const angle = i * 30;
+  const div = document.createElement('div');
+  div.className = 'rl-num';
+  div.style.transform = 'rotate(' + angle + 'deg)';
+  div.innerHTML = '<span style="transform: translateX(-50%) rotate(-' + angle + 'deg)">' + i + '</span>';
+  clock.appendChild(div);
+}
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+function tick(){
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const s = now.getSeconds();
+  const ms = now.getMilliseconds();
+  const sDeg = (s + ms/1000) * 6;
+  const mDeg = (m + s/60) * 6;
+  const hDeg = ((h % 12) + m/60) * 30;
+  handH.style.transform = 'rotate(' + hDeg + 'deg)';
+  handM.style.transform = 'rotate(' + mDeg + 'deg)';
+  handS.style.transform = 'rotate(' + sDeg + 'deg)';
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  digi.innerHTML = pad(h12) + ':' + pad(m) + ':' + pad(s) + '<span class="rl-ampm">' + ampm + '</span>';
+  dateEl.innerHTML = dias[now.getDay()] + ', <b>' + now.getDate() + '</b> de <b>' + meses[now.getMonth()] + '</b> ' + now.getFullYear();
+}
+try { tzEl.textContent = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e){}
+tick();
+setInterval(tick, 1000);
+})();
+</script>`;
 
-            const svg = generarSVG({
-                hora: String(hora12).padStart(2, '0'),
-                minuto: ahora.format('mm'),
-                segundo: ahora.format('ss'),
-                meridiano,
-                fecha: ahora.format('DD [de] MMMM [de] YYYY'),
-                diaSemana: ahora.format('dddd'),
-                zonaTexto: region.nombre,
-                unixTime: ahora.unix(),
-                uptimeTexto: formatearUptime(process.uptime())
-            });
-
-            const buffer = await sharp(Buffer.from(svg))
-                .png()
-                .toBuffer();
-
-            const chatJid = jid || msg.key.remoteJid;
-
-            await sock.sendMessage(
-                chatJid,
-                {
-                    image: buffer,
-                    caption: `🕐 Hora actual en *${region.nombre}*`
-                },
-                { quoted: msg }
-            );
-
+            await enviarHtmlInteractivo(sock, from, htmlPayload, '@RELOJ', 'reloj');
         } catch (error) {
-            console.error('[RELOJ] Error:', error?.message || error);
-            await responder.texto('❌ No se pudo generar la tarjeta del reloj.');
+            console.error('[RELOJ] Error:', error);
+            await responder.texto('❌ Error al abrir el reloj.');
         }
     }
 };
