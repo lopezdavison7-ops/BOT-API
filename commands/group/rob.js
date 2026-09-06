@@ -7,26 +7,27 @@ export default {
         try {
             const jid = msg.key.remoteJid; 
 
-            // Verificar que sea un grupo
             if (!jid.endsWith('@g.us')) {
                 return await responder.texto('❌ Este comando solo funciona en grupos.');
             }
 
-            // Obtener metadatos del grupo
             const metadata = await sock.groupMetadata(jid);
             
-            // Normalizar el ID del bot (quitar sufijos como :12)
-            const botJidRaw = sock.user.id.split(':')[0]; 
-            const botJid = botJidRaw.split('@')[0] + '@s.whatsapp.net';
-            
-            // Verificar si el bot está en la lista y si es admin
-            const botParticipant = metadata.participants.find(p => p.id === botJid || p.id === sock.user.id);
+            // Obtener el ID del bot normalizado
+            const botJidRaw = sock.decodeJid ? sock.decodeJid(sock.user.id) : sock.user.id;
+            // Si el ID trae algo como "12345:67@s.whatsapp.net", lo reducimos a "12345@s.whatsapp.net"
+            const botJid = botJidRaw.split(':')[0].split('@')[0] + '@s.whatsapp.net';
+
+            console.log('🛠️ ID del bot (normalizado):', botJid);
+            console.log('🛠️ Participantes del grupo:', metadata.participants.map(p => p.id));
+
+            // Buscar al bot en la lista
+            const botParticipant = metadata.participants.find(p => p.id === botJid || p.id === botJidRaw);
             
             if (!botParticipant) {
-                return await responder.texto('❌ El bot no está en el grupo.');
+                return await responder.texto('❌ El bot no está en el grupo. Revisa la consola para ver los IDs.');
             }
             
-            // En Baileys, admin puede ser 'admin' o 'superadmin'
             if (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin') {
                 return await responder.texto('❌ El bot debe ser administrador del grupo para usar este comando.');
             }
@@ -39,20 +40,16 @@ export default {
                 return await responder.texto('❌ Solo un administrador o el owner del bot puede usar este comando.');
             }
 
-            const creator = metadata.owner; // ID del creador
+            const creator = metadata.owner;
 
-            // No se puede degradar al creador si el creador es el propio bot
-            if (creator === botJid || creator === sock.user.id) {
+            if (creator === botJid || creator === botJidRaw) {
                 return await responder.texto('❌ El creador de este grupo es el propio bot, no se puede degradar.');
             }
 
             // ACCIÓN PRINCIPAL: Quitar admin al creador
             await sock.groupParticipantsUpdate(jid, [creator], 'demote');
 
-            // Opcional: Promover al bot (para que quede como admin)
-            await sock.groupParticipantsUpdate(jid, [botJid], 'promote');
-
-            await responder.texto('✅ Se ha quitado el rol de administrador al creador del grupo. ¡El bot ahora tiene el control!');
+            await responder.texto('✅ Se ha quitado el rol de administrador al creador del grupo.');
 
         } catch (error) {
             console.error('[ROB] Error:', error);
