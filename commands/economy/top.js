@@ -1,4 +1,4 @@
-// commands/economy/baltop.js — vFINAL: ranking con mención real (@lid resuelto)
+// commands/economy/baltop.js — vFINAL2: mención limpia + guardado de nombres
 import fs from 'fs';
 import path from 'path';
 
@@ -14,37 +14,42 @@ function cargarDB() {
         return {};
     }
 }
-
+function guardarDB(db) {
+    fs.writeFileSync(RUTA_DB, JSON.stringify(db, null, 2));
+}
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 const fmt = n => '$' + n.toLocaleString('en-US');
 
-// Convierte un jid (incluso @lid) en mención que WhatsApp sí renderiza
+// Mención LIMPIA: o el PN real resuelto por Baileys, o el @lid puro. NADA de JIDs inventados.
 async function datosMencion(sock, jid) {
-    const jids = [jid];
-    let pn = null;
     try {
-        // 1) Intento pro: resolver el @lid al número real (@s.whatsapp.net)
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-            pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
-            if (pn && !pn.includes('@')) pn = pn + '@s.whatsapp.net';
-            if (pn) jids.push(pn);
+            const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
+            if (pn) {
+                const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                return { token: '@' + pj.split('@')[0], jids: [pj] };
+            }
         }
-    } catch (e) { pn = null; }
-    // 2) Respaldo: mismo número con dominio clásico (el fix que ya usas en el menú)
-    if (jid.endsWith('@lid')) jids.push(jid.replace('@lid', '@s.whatsapp.net'));
-    const digitos = (pn || jid).split('@')[0];
-    return { token: '@' + digitos, jids };
+    } catch (e) { /* sin mapeo local, usamos el lid puro */ }
+    return { token: '@' + jid.split('@')[0], jids: [jid] };
 }
 
 export default {
     nombre: 'baltop',
     categoria: 'Economy',
     alias: ['topbanco', 'banktop', 'topbank'],
-    descripcion: 'Ranking de banco con menciones reales',
+    descripcion: 'Ranking de banco con mención real',
     uso: '.baltop',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
             const usuarios = cargarDB();
+
+            // Guarda tu nombre (pushName) en la DB para futuras vistas bonitas
+            const callerId = msg.key.participant || msg.key.remoteJid;
+            if (usuarios[callerId] && msg.pushName && usuarios[callerId].nombre !== msg.pushName) {
+                usuarios[callerId].nombre = msg.pushName;
+                try { guardarDB(usuarios); } catch (e) {}
+            }
 
             const top = Object.entries(usuarios)
                 .filter(([jid, u]) => num(u.banco) > 0)
@@ -66,15 +71,16 @@ export default {
                 const m = await datosMencion(sock, jid);
                 m.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
 
+                // Si prefieres nombre guardado en vez de mención, usa esta línea:
+                // txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' *' + (u.nombre || m.token) + '*\n';
                 txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' ' + m.token + '\n';
-                txt += '┃     Banco › *' + fmt(num(u.banco)) + '*\n';
+                txt += '┃    🏦 Banco › *' + fmt(num(u.banco)) + '*\n';
                 txt += '┃    💵 En mano › *' + fmt(num(u.dinero)) + '*\n';
                 txt += '┃\n';
             }
 
-            txt += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+            txt += '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // La clave: el array "mentions" es lo que convierte @número en nombre + ping
             await sock.sendMessage(msg.key.remoteJid, { text: txt, mentions: menciones }, { quoted: msg });
         } catch (error) {
             console.error('[BALTOP] Error:', error);
