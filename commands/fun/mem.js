@@ -1,9 +1,13 @@
 // commands/fun/mem.js
+// Memoria: TÚ vs 💻 BOT-API ⚡ con dificultades reales
+import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
+
 export default {
     nombre: 'mem',
     categoria: 'Juegos',
     alias: ['memoria', 'memory', 'juego'],
-    descripcion: 'Juega al memorama contra la IA',
+    descripcion: 'Memorama contra 💻 BOT-API  con 3 dificultades',
+    uso: '.mem',
     ejecutar: async ({ msg, responder, sock }) => {
         try {
             const from = msg.key.remoteJid;
@@ -11,183 +15,194 @@ export default {
             const htmlPayload = `<style>
 * { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; box-sizing: border-box; }
 body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; touch-action: manipulation; }
-.mem-wrap { width: 100%; max-width: 540px; margin: auto; padding: 12px; }
-.mem-card { background: rgba(15, 18, 28, 0.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(0, 243, 255, 0.25); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 243, 255, 0.15), 0 0 15px rgba(157, 78, 221, 0.2); }
-.mem-header { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, rgba(0,243,255,0.05), rgba(157,78,221,0.05)); }
-.mem-title { font-size: 19px; font-weight: 900; color: #fff; text-shadow: 0 0 10px rgba(0, 243, 255, 0.6); letter-spacing: 1px; }
-.mem-sub { font-size: 10px; letter-spacing: 2px; color: #00f3ff; font-weight: 700; text-transform: uppercase; }
-.mem-body { padding: 20px; }
-.mem-dif { display: flex; justify-content: space-between; margin-bottom: 15px; }
-.btn-dif { padding: 8px 15px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 12px; color: #fff; }
+.mv-wrap { width: 100%; max-width: 540px; margin: auto; padding: 12px; }
+.mv-card { background: rgba(15,18,28,.95); border: 1px solid rgba(0,243,255,.25); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,243,255,.15), 0 0 15px rgba(157,78,221,.2); }
+.mv-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, rgba(0,243,255,.05), rgba(157,78,221,.05)); }
+.mv-title { font-size: 18px; font-weight: 900; color: #fff; text-shadow: 0 0 10px rgba(0,243,255,.6); letter-spacing: 1px; }
+.mv-sub { font-size: 10px; letter-spacing: 2px; color: #00f3ff; font-weight: 700; text-transform: uppercase; }
+.mv-body { padding: 16px; }
+.mv-dif { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 14px; }
+.btn-dif { flex: 1; padding: 9px 6px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 12px; color: #fff; opacity: .55; }
+.btn-dif.active { opacity: 1; box-shadow: 0 0 12px rgba(255,255,255,.35); }
 .facil { background: #22c55e; }
-.normal { background: #eab308; }
+.medio { background: #eab308; }
 .dificil { background: #ef4444; }
-.mem-scores { display: flex; justify-content: space-around; margin-bottom: 15px; }
-.mem-box { background: #1e293b; padding: 10px; border-radius: 10px; width: 40%; text-align: center; }
-.mem-box h3 { margin: 0; font-size: 12px; color: #00f3ff; }
-.mem-box h1 { margin: 5px 0; font-size: 24px; }
-.mem-board { display: grid; gap: 5px; margin: 0 auto; width: fit-content; background: #1e293b; padding: 10px; border-radius: 10px; }
-.mem-card { width: 40px; height: 40px; background: #334155; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; border: 2px solid #475569; }
-.mem-card.flip { background: #f8fafc; border-color: #94a3b8; }
-#memStatus { margin: 15px 0; font-size: 16px; text-align: center; }
-#memNewGame { padding: 10px 20px; background: #22c55e; border: none; border-radius: 10px; color: white; font-size: 16px; cursor: pointer; display: none; margin: 10px auto; text-align: center; width: fit-content; }
+.mv-scores { display: flex; justify-content: space-around; margin-bottom: 12px; gap: 8px; }
+.mv-box { background: #1e293b; padding: 8px 10px; border-radius: 10px; width: 50%; text-align: center; }
+.mv-box.bot { border: 1px solid rgba(0,243,255,.4); }
+.mv-box h3 { margin: 0; font-size: 11px; color: #00f3ff; letter-spacing: 1px; }
+.mv-box h1 { margin: 4px 0 0; font-size: 24px; }
+.mv-stats { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 12px; }
+.mv-stat { background: #16233a; border-radius: 8px; padding: 6px 4px; flex: 1; text-align: center; }
+.mv-stat small { display: block; font-size: 9px; letter-spacing: 1.5px; color: #64748b; font-weight: 700; }
+.mv-stat b { font-size: 14px; color: #fff; }
+.mv-board { display: grid; gap: 5px; margin: 0 auto; width: fit-content; background: #1e293b; padding: 10px; border-radius: 10px; }
+.mv-cell { width: 44px; height: 44px; background: #334155; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; border: 2px solid #475569; }
+.mv-cell.flip { background: #f8fafc; border-color: #94a3b8; }
+#mvStatus { margin: 12px 0; font-size: 15px; text-align: center; font-weight: 700; color: #8fc7ff; min-height: 20px; }
+#mvNew { padding: 10px 20px; background: #22c55e; border: none; border-radius: 10px; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; display: none; margin: 0 auto; text-align: center; width: fit-content; }
+@keyframes mvPulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 </style>
-
-<div class="mem-wrap">
-  <div class="mem-card">
-    <div class="mem-header">
-      <div>
-        <div class="mem-sub">MEMORIA PvAI</div>
-        <div class="mem-title">Encuentra las parejas</div>
-      </div>
-      <div style="width:8px;height:8px;background:#00ff87;border-radius:50%;box-shadow:0 0 8px #00ff87;animation:pulse 1.5s infinite;"></div>
+<div class="mv-wrap">
+  <div class="mv-card">
+    <div class="mv-header">
+      <div><div class="mv-sub">MEMORIA PvP</div><div class="mv-title">🧠 Tú vs  BOT-API ⚡</div></div>
+      <div style="width:8px;height:8px;background:#00ff87;border-radius:50%;box-shadow:0 0 8px #00ff87;animation:mvPulse 1.5s infinite"></div>
     </div>
-    <div class="mem-body">
-      <div class="mem-dif">
-        <button class="btn-dif facil" onclick="startGame(4,4)">Fácil</button>
-        <button class="btn-dif normal" onclick="startGame(4,5)">Normal</button>
-        <button class="btn-dif dificil" onclick="startGame(6,4)">Difícil</button>
+    <div class="mv-body">
+      <div class="mv-dif">
+        <button class="btn-dif facil" id="mvFacil">🟢 Fácil</button>
+        <button class="btn-dif medio" id="mvMedio">🟡 Medio</button>
+        <button class="btn-dif dificil" id="mvDificil">🔴 Difícil</button>
       </div>
-      <div class="mem-scores">
-        <div class="mem-box"><h3>TÚ</h3><h1 id="pScore">0</h1></div>
-        <div class="mem-box"><h3>IA</h3><h1 id="aiScore">0</h1></div>
+      <div class="mv-scores">
+        <div class="mv-box"><h3>👤 TÚ</h3><h1 id="mvP">0</h1></div>
+        <div class="mv-box bot"><h3>💻 BOT-API ⚡</h3><h1 id="mvB">0</h1></div>
       </div>
-      <div id="memStatus">¡Tu turno! Encuentra una pareja.</div>
-      <div class="mem-board" id="memBoard"></div>
-      <button id="memNewGame" onclick="startGame(4,4)">🔄 Nuevo juego</button>
+      <div class="mv-stats">
+        <div class="mv-stat"><small>TURNO</small><b id="mvTurn">TÚ</b></div>
+        <div class="mv-stat"><small>PAREJAS</small><b id="mvPairs">0/8</b></div>
+        <div class="mv-stat"><small>TIEMPO</small><b id="mvTime">0s</b></div>
+      </div>
+      <div class="mv-board" id="mvBoard"></div>
+      <div id="mvStatus">¡Tu turno! Encuentra una pareja.</div>
+      <button id="mvNew">🔄 Nuevo juego</button>
     </div>
   </div>
 </div>
-
-<style>
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-</style>
-
 <script>
-(function() {
-  const board = document.getElementById('memBoard');
-  const pScoreEl = document.getElementById('pScore');
-  const aiScoreEl = document.getElementById('aiScore');
-  const statusEl = document.getElementById('memStatus');
-  const newGameBtn = document.getElementById('memNewGame');
-  const emojis = ['🎯','👽','⚽','🦊','🍎','🎸','🦄','🚗','🏀','🚀','🌍','💎','🐸','🎩','🍕','🎁','👑','🔥','🎲','💡','🐱','🌸','🎃','⭐'];
-  
-  let cards = [], flipped = [], pScore = 0, aiScore = 0, turn = 'p', pairs = 0, totalPairs = 0;
-
-  function startGame(rows, cols) {
-    totalPairs = (rows * cols) / 2;
-    pairs = 0; pScore = 0; aiScore = 0; turn = 'p';
-    updateScores(); statusEl.innerText = "¡Tu turno! Encuentra una pareja.";
-    const usedEmojis = emojis.slice(0, totalPairs);
-    cards = [...usedEmojis, ...usedEmojis].sort(() => Math.random() - 0.5);
-    board.innerHTML = ''; board.style.gridTemplateColumns = `repeat(${cols}, 40px)`;
-    
-    cards.forEach((emoji, index) => {
-      const card = document.createElement('div');
-      card.classList.add('mem-card'); card.dataset.index = index; card.dataset.emoji = emoji;
-      card.onclick = () => flipCard(card, 'p');
-      board.appendChild(card);
-    });
-    newGameBtn.style.display = 'none';
+(function(){
+var board = document.getElementById('mvBoard');
+var pEl = document.getElementById('mvP'), bEl = document.getElementById('mvB');
+var turnEl = document.getElementById('mvTurn'), pairsEl = document.getElementById('mvPairs'), timeEl = document.getElementById('mvTime');
+var statusEl = document.getElementById('mvStatus'), newBtn = document.getElementById('mvNew');
+var btns = { facil: document.getElementById('mvFacil'), medio: document.getElementById('mvMedio'), dificil: document.getElementById('mvDificil') };
+var DIFS = {
+  facil:   { cols: 4, rows: 4, mem: 0.35, use: 0.5,  delay: 900, name: 'FÁCIL' },
+  medio:   { cols: 5, rows: 4, mem: 0.7,  use: 0.85, delay: 600, name: 'MEDIO' },
+  dificil: { cols: 6, rows: 4, mem: 1,    use: 1,    delay: 400, name: 'DIFÍCIL' }
+};
+var EMO = ['🎯','','⚽','🦊','🍎','🎸','🦄','🚗','','🚀','','💎','','🎩','','🎁','','🔥','','💡','','🌸','','⭐'];
+var cards = [], flipped = [], known = {}, dif = DIFS.facil, difKey = 'facil';
+var pScore = 0, bScore = 0, pairs = 0, totalPairs = 0, turn = 'p', locked = false, over = false;
+var seconds = 0, clock = null;
+function startClock(){ stopClock(); seconds = 0; timeEl.textContent = '0s'; clock = setInterval(function(){ seconds++; timeEl.textContent = seconds + 's'; }, 1000); }
+function stopClock(){ if(clock){ clearInterval(clock); clock = null; } }
+function startGame(key){
+  difKey = key; dif = DIFS[key];
+  totalPairs = (dif.cols * dif.rows) / 2;
+  pairs = 0; pScore = 0; bScore = 0; turn = 'p'; locked = false; over = false;
+  flipped = []; known = {}; cards = [];
+  pEl.textContent = '0'; bEl.textContent = '0';
+  pairsEl.textContent = '0/' + totalPairs;
+  turnEl.textContent = 'TÚ';
+  for(var k in btns){ btns[k].classList.toggle('active', k === key); }
+  var used = EMO.slice(0, totalPairs);
+  var deck = used.concat(used).sort(function(){ return Math.random() - 0.5; });
+  board.innerHTML = '';
+  board.style.gridTemplateColumns = 'repeat(' + dif.cols + ', 44px)';
+  deck.forEach(function(emoji, index){
+    var cell = document.createElement('div');
+    cell.className = 'mv-cell';
+    cell.dataset.index = index;
+    cell.dataset.emoji = emoji;
+    cell.addEventListener('click', function(){ flipCard(cell, 'p'); });
+    board.appendChild(cell);
+    cards.push(cell);
+  });
+  newBtn.style.display = 'none';
+  statusEl.textContent = '🟢🟡🔴 ' + dif.name + ' • ¡Tu turno! Encuentra una pareja.';
+  startClock();
+}
+function available(){ return cards.filter(function(c){ return c.style.visibility !== 'hidden' && flipped.indexOf(c) === -1; }); }
+function flipCard(card, player){
+  if(over || locked || turn !== player) return;
+  if(card.style.visibility === 'hidden' || card.classList.contains('flip')) return;
+  card.classList.add('flip');
+  card.textContent = card.dataset.emoji;
+  flipped.push(card);
+  if(player === 'ai'){ known[card.dataset.index] = card.dataset.emoji; }
+  else if(Math.random() < dif.mem){ known[card.dataset.index] = card.dataset.emoji; }
+  if(flipped.length === 2){ locked = true; setTimeout(function(){ checkMatch(player); }, 700); }
+}
+function checkMatch(player){
+  var c1 = flipped[0], c2 = flipped[1];
+  if(c1.dataset.emoji === c2.dataset.emoji){
+    c1.style.visibility = 'hidden'; c2.style.visibility = 'hidden';
+    flipped = []; locked = false; pairs++;
+    if(player === 'p'){ pScore++; pEl.textContent = pScore; } else { bScore++; bEl.textContent = bScore; }
+    pairsEl.textContent = pairs + '/' + totalPairs;
+    if(pairs === totalPairs){ endGame(); return; }
+    if(player === 'p'){ statusEl.textContent = '✅ ¡Pareja! Sigues tú.'; }
+    else { statusEl.textContent = '⚡ 💻 BOT-API encontró pareja...'; setTimeout(aiTurn, dif.delay); }
+  } else {
+    setTimeout(function(){
+      c1.classList.remove('flip'); c1.textContent = '';
+      c2.classList.remove('flip'); c2.textContent = '';
+      flipped = []; locked = false;
+      turn = (player === 'p') ? 'ai' : 'p';
+      if(turn === 'ai'){ setTimeout(aiTurn, dif.delay); }
+      else { turnEl.textContent = 'TÚ'; statusEl.textContent = '¡Tu turno! Encuentra una pareja.'; }
+    }, 900);
   }
-
-  function updateScores() {
-    pScoreEl.innerText = pScore; aiScoreEl.innerText = aiScore;
+}
+function findKnownPair(avail){
+  var map = {};
+  for(var i = 0; i < avail.length; i++){
+    var e = known[avail[i].dataset.index];
+    if(!e) continue;
+    if(map[e]){ return [map[e], avail[i]]; }
+    map[e] = avail[i];
   }
-
-  function flipCard(card, player) {
-    if (turn !== player || card.classList.contains('flip') || flipped.length === 2) return;
-    card.classList.add('flip'); card.innerText = card.dataset.emoji; flipped.push(card);
-    if (flipped.length === 2) checkMatch(player);
+  return null;
+}
+function pickSecond(first, avail){
+  var e = first.dataset.emoji, cands = [], rest = [];
+  for(var i = 0; i < avail.length; i++){
+    var c = avail[i];
+    if(c === first || c.style.visibility === 'hidden') continue;
+    rest.push(c);
+    if(known[c.dataset.index] === e){ cands.push(c); }
   }
-
-  function checkMatch(player) {
-    const [c1, c2] = flipped;
-    if (c1.dataset.emoji === c2.dataset.emoji) {
-      c1.style.visibility = 'hidden'; c2.style.visibility = 'hidden'; flipped = []; pairs++;
-      if (player === 'p') pScore++; else aiScore++;
-      updateScores();
-      if (pairs === totalPairs) {
-        statusEl.innerText = `¡Fin! Tú: ${pScore} | IA: ${aiScore}`;
-        newGameBtn.style.display = 'block'; return;
-      }
-      if (player === 'p') turn = 'p'; else turn = 'ai';
-      setTimeout(() => aiTurn(), 800);
-    } else {
-      setTimeout(() => {
-        c1.classList.remove('flip'); c2.classList.remove('flip'); c1.innerText = ''; c2.innerText = '';
-        flipped = []; turn = (player === 'p') ? 'ai' : 'p';
-        if (turn === 'ai') setTimeout(() => aiTurn(), 500);
-        else statusEl.innerText = "¡Tu turno! Encuentra una pareja.";
-      }, 1000);
-    }
-  }
-
-  function aiTurn() {
-    statusEl.innerText = "Turno de la IA...";
-    const available = Array.from(board.children).filter(c => !c.classList.contains('flip') && c.style.visibility !== 'hidden');
-    if (available.length < 2) return;
-    let knownPairs = [];
-    for(let i=0; i<available.length; i++) { for(let j=i+1; j<available.length; j++) { if(available[i].dataset.emoji === available[j].dataset.emoji) knownPairs.push([available[i], available[j]]); } }
-    let choice;
-    if (knownPairs.length > 0) choice = knownPairs[0];
-    else { choice = [available[Math.floor(Math.random() * available.length)], available[Math.floor(Math.random() * available.length)]]; if(choice[0] === choice[1]) choice[1] = available[(available.indexOf(choice[0]) + 1) % available.length]; }
-    setTimeout(() => { flipCard(choice[0], 'ai'); setTimeout(() => flipCard(choice[1], 'ai'), 300); }, 500);
-  }
-
-  startGame(4, 4);
+  if(cands.length && Math.random() < dif.use){ return cands[0]; }
+  return rest[Math.floor(Math.random() * rest.length)];
+}
+function aiTurn(){
+  if(over) return;
+  turn = 'ai'; turnEl.textContent = 'BOT-API';
+  statusEl.textContent = '🤖 Turno de 💻 BOT-API ⚡...';
+  var avail = available();
+  if(avail.length < 2){ return; }
+  var pair = findKnownPair(avail);
+  var first, second = null;
+  if(pair && Math.random() < dif.use){ first = pair[0]; second = pair[1]; }
+  else { first = avail[Math.floor(Math.random() * avail.length)]; }
+  setTimeout(function(){
+    flipCard(first, 'ai');
+    setTimeout(function(){
+      var sec = second ? second : pickSecond(first, avail);
+      flipCard(sec, 'ai');
+    }, 350);
+  }, 450);
+}
+function endGame(){
+  over = true; stopClock(); locked = true;
+  var txt;
+  if(pScore > bScore){ txt = '🏆 ¡GANASTE! Superaste a 💻 BOT-API ⚡ en ' + seconds + 's'; }
+  else if(bScore > pScore){ txt = '😈 💻 BOT-API ⚡ gana ' + bScore + '-' + pScore + '. ¡Revancha!'; }
+  else { txt = '🤝 ¡Empate técnico contra 💻 BOT-API !'; }
+  statusEl.textContent = txt;
+  newBtn.style.display = 'block';
+}
+btns.facil.addEventListener('click', function(){ startGame('facil'); });
+btns.medio.addEventListener('click', function(){ startGame('medio'); });
+btns.dificil.addEventListener('click', function(){ startGame('dificil'); });
+newBtn.addEventListener('click', function(){ startGame(difKey); });
+startGame('facil');
 })();
 </script>`;
 
-            await sock.relayMessage(from, {
-                messageContextInfo: {
-                    deviceListMetadata: {},
-                    deviceListMetadataVersion: 2,
-                    botMetadata: {
-                        messageDisclaimerText: '',
-                        botResponseId: 'b2e40280-433c-45d8-9c1a-270bec558860',
-                        verificationMetadata: {
-                            proofs: [{
-                                version: 1, useCase: 1,
-                                signature: 'TklYRUwuTWVzc2FnZUJ1aWxkZXJWNC43LVZlcmlmaWNhdGlvblNpZ25hdHVyZS5NZXRhZGF0YeN55YRyad2+ZA==',
-                                certificateChain: [
-                                    'TklYRUwuTWVzc2FnZUJ1aWxkZXJWNC43LUNlcnRpZmljYXRlQ2hhaW4uTWV0YWRhdGEOvtJr968bbpKdZreOTwkk9aPN++XPE60RfuzNLkXXc7LE8BOkJOWRpo2oNXaRJ3uCNJ43HY3A+oetnvHSfcxWqmvvTSrBOI5V1NOD6RMsZ/st1XVPUx83AGps1l5jYBOYzqMNy6un2tToJ2Bt9bXRo29tWLZTu8m7TNY/hISwVpVc5tjSet5U7btPN+dMIx2UvykB1jcbWGsdklheeuz8RXSStNXzeaGvsf1lpZ/ugLE4b2BdmlRNKrY6zLE4qFtRYQoS7axOyQX+4QUyN2m9bfm7urQmn+QRSXJwMO7X5kAJJLbkVGJFt9Pm9VXPwQVrK2aaqiXlpusj+7DfDw00OULmYMmZDTqXM0nUVLxj13z0LhMQoQhhNG8utdUn4uKOFceliTZ/xiP+A54GnX9620641bqw3ctfh9NNXPsTEK8hAUD7FDqUhVntHmoEYYEHq8X1tHHZYP49/f2iezTiE8AUaoZo42/jIWQIKohOGNUib2hEqMkW8NsR8vPihvNuqPc0zKZcl6359YFQdjiiW8kCRD/rsDOr9v1eYLFZKYloFyzFqEgj+jcG/V47elOjShJ5CCPwatXwP6HIloVwtgygFsnOFmCg6Ojoivfoz8Nw1qxFwg5OU2cq/1WbWNELKnaFg4eUWCAIJ/3ZIJsEPkgemZxGhE+hdiNn9dkQYBJs1kx2BxdIkJmQ9vJSKkrMz6lTxZM3IJ9mhmKS6zYdU1ppeAao0/ayte997DQParb/AHLN79g0iW1ad0z8ir5jAl0q3a+UZPTSa4YiSqC2PZ/gfxG5wvL2mKmeKowG0RXjmEp5iNxrni+T/HRLZOoH7y0DQ24nMCPg',
-                                    'TklYRUwuTWVzc2FnZUJ1aWxkZXJWNC43LUNlcnRpZmljYXRlQ2hhaW4uTWV0YWRhdGHsL0Ccm0ELINFZ2IaBhKaeWnVuh0o6nZLCioCn9xpSADzwIS5VCWO+1eVXT2atJOyf7FYlpB0/JA3Us+aQtekuIkHu/zBXijORZ4ClF4+sF3cSTNg6gY/+6iwLK/zs3bMg+GeJrcI65vXfs95Shxlb2Rd5GRT2/2yBmR6Zkf5QwMJuptUHWtM26WY7/xlkEKGFYDZVqOSylusiOzSALa815zC6dCiHoJNLBEKMlaZZQOk57/+OYoU5zzTaEgLhyvNFHSyAlyLQ3SGFtVHAaJZHSmmSPyJowCOB+92Gkk6SWVMsk6FbU8QJWFtlhzV/W/gZ7WzUlS/AKgN0th9/cq20ToFkW7X9c+rtYavufmuieqFhXgaMD8AGsoN9QC/HzNC9D1nydPfFYEUr9BHVy2nF5gM58Y59r2rT8p5LPARIkUp8g+5DLhyW0tdZFZ1305o4AHCayZnp5rjcU2Xi/c1Qf/djBGakmijlMs4aMzKJYD0c4Q8jdI7sNyd876K2wRD+L6KeD2QB3PtCS4P7BWAl5gh5CJ6ZBrwcaKXZqcSjEwm52MqVCgYZdapAaNYUy/QndttjLOG0wxxwuX1hIhMjPnIKZR1kwnqD5EqlHpilrnojRZvjVGN4zEKmilS8rNstt4HHs/D849W+Q6LRVWiWMs0cT2IugrX+Skxd8En7Gq52UEmuVBrSTpN+UpIu20NsVb9lsvuYh3XO441606tOEY2eKcZJdTtqrOTNqbbTk0zVn1yhbOCvmfctBNDhTwaC5QMi0P9wjU5XI9SBtkdQLizc5oqpoiHeqgb8+aJHVLcbgIJ/KLZKtRWFDfzRNM02Csx4etUUapVd2NA/L0oMs/O5T9sVj9FBJ7q99GWr3PVmxJb36mHZLXC4k1gGN9swE0LtzYsUdT5tUo9ri/hS3W/SM+F1p4Kh4QIgRcG3ciIHGN44bnDh3HDCz0fDnzKYw0bclMxZPctEyJ5gEOPF6OAkjD9dEaRGq/tEPf1k9Aub+v2dEjnfrYWAm4E5Zfhs2Xh0CT0k+SzhgKd0K/46ChJ20G5+blwpIvahvTVS68+aVIX6CwXs4tcVx6FnmVsMOOkIasfaqQLZYbNBkuLoZnQAq4j8yRekrQ=='
-                                ]
-                            }]
-                        }
-                    }
-                },
-                botForwardedMessage: {
-                    message: {
-                        richResponseMessage: {
-                            messageType: 1,
-                            submessages: [{ messageType: 2, messageText: '@MEMORIA' }],
-                            unifiedResponse: {
-                                data: Buffer.from(JSON.stringify({
-                                    response_id: 'mem-' + Date.now(),
-                                    sections: [{
-                                        view_model: {
-                                            primitive: {
-                                                __typename: 'GenAIaeacdsnwHtmlPrimitive',
-                                                payload: htmlPayload,
-                                                trusted_sources: ['nixel.dev']
-                                            },
-                                            __typename: 'GenAISingleLayoutViewModel'
-                                        }
-                                    }]
-                                })).toString('base64')
-                            },
-                            contextInfo: {
-                                forwardingScore: 1, isForwarded: true,
-                                forwardedAiBotMessageInfo: { botJid: '867051314767696@bot' },
-                                forwardOrigin: 4
-                            }
-                        }
-                    }
-                }
-            }, {});
-
+            await enviarHtmlInteractivo(sock, from, htmlPayload, '@MEMORIA', 'mem');
         } catch (error) {
             console.error('[MEM] Error:', error);
             await responder.texto('❌ Error al iniciar el juego.');
