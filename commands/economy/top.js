@@ -1,206 +1,84 @@
-// commands/economy/top.js
-import {
-    obtenerTodos
-} from '../../database/economia.js';
+// commands/economy/baltop.js
+// 💎 TOP BANCO: ranking por dinero depositado (no por dinero en mano)
+import fs from 'fs';
+import path from 'path';
 
-function normalizarJID(id) {
+const RUTA_DB = path.join(process.cwd(), 'database', 'users.json');
 
-    if (!id) return null;
-
-    if (id.endsWith('@s.whatsapp.net')) {
-        return id;
+function cargarUsuarios() {
+    try {
+        if (!fs.existsSync(RUTA_DB)) return {};
+        const data = JSON.parse(fs.readFileSync(RUTA_DB, 'utf8'));
+        return (data && typeof data === 'object') ? data : {};
+    } catch (e) {
+        console.error('[BALTOP] Error leyendo users.json:', e);
+        return {};
     }
-
-    if (id.endsWith('@lid')) {
-        return id;
-    }
-
-    if (/^\d+$/.test(id)) {
-        return `${id}@s.whatsapp.net`;
-    }
-
-    if (id.endsWith('@g.us')) {
-        return null;
-    }
-
-    return null;
 }
 
-function formatearDinero(cantidad) {
-
-    if (cantidad >= 1000000) {
-        return `${(cantidad / 1000000).toFixed(1)}M`;
-    }
-
-    if (cantidad >= 1000) {
-        return `${(cantidad / 1000).toFixed(1)}K`;
-    }
-
-    return cantidad.toLocaleString();
+// Lee el banco aceptando varios nombres de campo por si tu DB usa otro
+function bancoDe(u) {
+    if (!u || typeof u !== 'object') return 0;
+    const v = u.banco ?? u.bank ?? u.banca ?? u.balanceBanco ?? 0;
+    return (typeof v === 'number' && isFinite(v)) ? v : 0;
 }
+function manoDe(u) {
+    if (!u || typeof u !== 'object') return 0;
+    const v = u.dinero ?? u.money ?? u.cash ?? 0;
+    return (typeof v === 'number' && isFinite(v)) ? v : 0;
+}
+function nombreDe(u, jid) {
+    return u.nombre || u.name || u.username || jid.split('@')[0];
+}
+const fmt = n => '$' + n.toLocaleString('en-US');
 
 export default {
-
     nombre: 'baltop',
-
-    categoria: 'economia',
-
-    alias: [
-        'ranking',
-        'rich',
-        'ricos'
-    ],
-
-    descripcion:
-        'Muestra el ranking de usuarios con más dinero.',
-
-    ejecutar: async ({
-        sock,
-        msg,
-        responder
-    }) => {
-
+    categoria: 'Economy',
+    alias: ['topbanco', 'banktop', 'topbank'],
+    descripcion: 'Ranking de usuarios con más dinero en el banco',
+    uso: '.baltop',
+    ejecutar: async ({ responder }) => {
         try {
-
-            const datos =
-                obtenerTodos();
-
-            const usuarios =
-                Object.entries(datos)
-
-                    .map(([id, usuario]) => {
-
-                        const jid =
-                            normalizarJID(id);
-
-                        return {
-                            id,
-                            jid,
-
-                            dinero:
-                                Number(
-                                    usuario?.dinero || 0
-                                ),
-
-                            personajes:
-                                Array.isArray(
-                                    usuario?.personajes
-                                )
-                                    ? usuario.personajes.length
-                                    : 0
-                        };
-                    })
-
-                    .filter(
-                        usuario =>
-                            usuario.jid &&
-                            usuario.dinero > 0
-                    )
-
-                    .sort(
-                        (a, b) =>
-                            b.dinero - a.dinero
-                    )
-
-                    .slice(0, 10);
-
-            if (usuarios.length === 0) {
-
-                await responder.texto(
-
-                    `╭━━〔 💎 𝐓𝐎𝐏 𝐃𝐈𝐍𝐄𝐑𝐎 💎 〕━━⬣\n` +
-                    `┃\n` +
-                    `┃ 🏆 𝐑𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐃Ó𝐋𝐀𝐑𝐄𝐒\n` +
-                    `┃ 👑 𝐀𝐮́𝐧 𝐧𝐨 𝐡𝐚𝐲 𝐮𝐬𝐮𝐚𝐫𝐢𝐨𝐬\n` +
-                    `┃ 💵 𝐜𝐨𝐧 𝐝𝐢𝐧𝐞𝐫𝐨\n` +
-                    `┃\n` +
-                    `╰━━━━━━━━━━━━━━━━⬣\n\n` +
-                    `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`
-
-                );
-
-                return;
+            const usuarios = cargarUsuarios();
+            const lista = [];
+            // Soporta DB como objeto {jid: user} o como array [{jid, ...}]
+            if (Array.isArray(usuarios)) {
+                usuarios.forEach((u, i) => lista.push({ jid: u.jid || u.id || String(i), u }));
+            } else {
+                Object.entries(usuarios).forEach(([jid, u]) => lista.push({ jid, u }));
             }
 
-            const menciones = [];
+            const top = lista
+                .filter(x => bancoDe(x.u) > 0)          // ← ANTES filtraba por dinero en mano
+                .sort((a, b) => bancoDe(b.u) - bancoDe(a.u)) // ← ANTES ordenaba por dinero en mano
+                .slice(0, 10);
 
-            let texto =
+            if (!top.length) {
+                return await responder.texto(
+                    '╭━━〔 💎 𝐓𝐎𝐏 𝐁𝐀𝐍𝐂𝐎 💎 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ 👑 Aún no hay nadie con dinero\n' +
+                    '┃ 🏦 en el banco. ¡Sé el primero!\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
+            }
 
-                `╭━━〔 💎 𝐓𝐎𝐏 𝐃𝐈𝐍𝐄𝐑𝐎 💎 〕━━⬣\n` +
-                `┃ 🏆 𝐑𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐃Ó𝐋𝐀𝐑𝐄𝐒\n` +
-                `┃ 👑 𝐋𝐨𝐬 𝐦𝐚́𝐬 𝐫𝐢𝐜𝐨𝐬 𝐝𝐞𝐥 𝐠𝐫𝐮𝐩𝐨\n` +
-                `┃ 📄 𝐏𝐠: 1/1\n` +
-                `╰━━━━━━━━━━━━━━━━⬣\n\n`;
+            const medallas = ['👑', '', ''];
+            let txt = '╭━━〔 💎 𝐓𝐎𝐏 𝐁𝐀𝐍𝐂𝐎 💎 〕━━⬣\n\n┃  𝐑𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐁𝐀𝐍𝐂𝐎\n┃\n';
+            top.forEach((x, i) => {
+                txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' *' + nombreDe(x.u, x.jid) + '*\n';
+                txt += '┃    🏦 Banco › *' + fmt(bancoDe(x.u)) + '*\n';
+                txt += '┃    💵 En mano › *' + fmt(manoDe(x.u)) + '*\n';
+                txt += '┃\n';
+            });
+            txt += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            usuarios.forEach(
-                (usuario, indice) => {
-
-                    const medallas = [
-                        '🥇',
-                        '🥈',
-                        '🥉'
-                    ];
-
-                    const puesto =
-                        medallas[indice] ||
-                        `🏅 ${indice + 1}`;
-
-                    const numero =
-                        usuario.jid
-                            .split('@')[0];
-
-                    const mencion =
-                        `@${numero}`;
-
-                    menciones.push(
-                        usuario.jid
-                    );
-
-                    texto +=
-
-                        `┃ ${puesto} ${mencion}\n` +
-                        `┃ 💵 $${formatearDinero(usuario.dinero)} dólares\n`;
-
-                    if (
-                        indice <
-                        usuarios.length - 1
-                    ) {
-                        texto += `┃\n`;
-                    }
-                }
-            );
-
-            texto +=
-
-                `\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
-
-            await sock.sendMessage(
-
-                msg.key.remoteJid,
-
-                {
-                    text: texto,
-                    mentions: menciones
-                },
-
-                {
-                    quoted: msg
-                }
-            );
-
+            await responder.texto(txt);
         } catch (error) {
-
-            console.error(
-                '[COMANDO top] Error:',
-                error
-            );
-
-            await responder.texto(
-
-                `❌ *TOP*\n\n` +
-                `No se pudo mostrar el ranking.`
-
-            );
+            console.error('[BALTOP] Error:', error);
+            await responder.texto('❌ Error al leer el ranking del banco.');
         }
     }
 };
