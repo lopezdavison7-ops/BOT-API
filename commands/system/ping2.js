@@ -1,8 +1,11 @@
-// commands/system/ping2.js — ⚡ Panel de diagnóstico bonito en HTML
+// commands/system/ping2.js — ⚡ Panel de diagnóstico bonito en HTML (v2 fix)
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
+
+// Si una stat falla, devuelve default en vez de tronar todo el comando
+function safe(fn, def) { try { return fn(); } catch (e) { return def; } }
 
 function fmtDur(s) {
     s = Math.floor(s);
@@ -38,27 +41,27 @@ export default {
             const from = msg.key.remoteJid;
             const tInicio = Date.now();
 
-            // Latencia desde que llegó el mensaje hasta que empieza a procesar
             const tsMsg = Number(msg.messageTimestamp || 0) * 1000;
-            const latRecv = tsMsg > 0 ? Math.max(0, tInicio - tsMsg) : 0;
+            const latRecv = Number.isFinite(tsMsg) && tsMsg > 0 ? Math.max(0, tInicio - tsMsg) : 0;
 
-            // Stats del servidor
-            const mem = process.memoryUsage();
-            const ramTotal = os.totalmem();
-            const ramUsada = ramTotal - os.freeem();
-            const ramPct = Math.min(100, Math.round((ramUsada / ramTotal) * 100));
-            const cpus = os.cpus().length;
-            const cpuPct = Math.min(100, Math.round((os.loadavg()[0] / cpus) * 100));
-            let usuarios = 0;
-            try { usuarios = Object.keys(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'database', 'economia.json'), 'utf8'))).length; } catch (e) {}
-            const cmds = contarComandos(path.join(process.cwd(), 'commands'));
-            let ws = '🟡 N/D';
-            try {
+            // Stats blindadas con safe()
+            const mem = safe(() => process.memoryUsage(), { rss: 0 });
+            const ramTotal = safe(() => os.totalmem(), 1);
+            const ramUsada = ramTotal - safe(() => os.freemem(), 0);   // ✅ FIX: freemem (no freeem)
+            const ramPct = Math.min(100, Math.max(0, Math.round((ramUsada / (ramTotal || 1)) * 100)));
+            const cpus = safe(() => os.cpus().length, 1);
+            const cpuPct = Math.min(100, Math.max(0, Math.round((safe(() => os.loadavg()[0], 0) / cpus) * 100)));
+            const usuarios = safe(() => Object.keys(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'database', 'economia.json'), 'utf8'))).length, 0);
+            const cmds = safe(() => contarComandos(path.join(process.cwd(), 'commands')), 0);
+            const ws = safe(() => {
                 const r = sock && sock.ws ? sock.ws.readyState : -1;
-                ws = r === 1 ? '🟢 Conectado' : (r === 3 ? '🔴 Cerrado' : '🟡 Estado ' + r);
-            } catch (e) {}
-            const ahora = new Date();
-            const hora = ahora.toLocaleString('es-MX', { hour12: false });
+                return r === 1 ? '🟢 Conectado' : (r === 3 ? '🔴 Cerrado' : '🟡 Estado ' + r);
+            }, '🟡 N/D');
+            const upBot = safe(() => fmtDur(process.uptime()), '—');
+            const upOs = safe(() => fmtDur(os.uptime()), '—');
+            const nodeV = safe(() => process.version, '—');
+            const plat = safe(() => (os.platform() + ' ' + os.arch()).replace(/'/g, ''), '—');
+            const hora = safe(() => new Date().toLocaleString('es-MX', { hour12: false }), '—');
 
             const proc = Date.now() - tInicio;
             const ping = latRecv + proc;
@@ -80,7 +83,7 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Aria
 .p2-bars { margin: 8px 0 12px; }
 .p2-bar-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 11px; font-weight: 700; color: #94a3b8; }
 .p2-bar-row b { width: 62px; text-align: left; color: #e2e8f0; }
-.p2-bar-row span { width: 74px; text-align: right; font-family: monospace; }
+.p2-bar-row span { width: 84px; text-align: right; font-family: monospace; font-size: 10px; }
 .p2-track { flex: 1; height: 8px; background: #1e293b; border-radius: 6px; overflow: hidden; }
 .p2-fill { height: 100%; width: 0%; border-radius: 6px; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
 #p2RamFill { background: linear-gradient(90deg, #00f3ff, #7b3cff); }
@@ -124,7 +127,7 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Aria
 </div>
 <script>
 (function(){
-var CFG = { ping: ${ping}, recv: ${latRecv}, proc: ${proc}, color: '${color}', ramPct: ${ramPct}, ramTxt: '${fmtBytes(mem.rss)} RSS', cpuPct: ${cpuPct}, upBot: '${fmtDur(process.uptime())}', upOs: '${fmtDur(os.uptime())}', users: ${usuarios}, cmds: ${cmds}, ws: '${ws}', node: '${process.version}', hora: '${hora}', plat: '${(os.platform() + ' ' + os.arch()).replace(/'/g, '')}' };
+var CFG = { ping: ${ping}, recv: ${latRecv}, proc: ${proc}, color: '${color}', ramPct: ${ramPct}, ramTxt: '${fmtBytes(mem.rss)} RSS', cpuPct: ${cpuPct}, upBot: '${upBot}', upOs: '${upOs}', users: ${usuarios}, cmds: ${cmds}, ws: '${ws}', node: '${nodeV}', hora: '${hora}', plat: '${plat}' };
 var cv = document.getElementById('p2Gauge'), ctx = cv.getContext('2d');
 var pingEl = document.getElementById('p2Ping');
 var W = cv.width, H = cv.height, CX = W / 2, CY = H - 10, R = 105;
