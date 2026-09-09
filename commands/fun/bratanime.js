@@ -1,61 +1,68 @@
-// commands/fun/bratanime.js — 🎌 Sticker meme usando memegen.link (sin API key)
+// commands/fun/bratanime.js — 🌸 Sticker de chica anime con texto estilo brat
 import fetch from 'node-fetch';
 import sharp from 'sharp';
 
-// Templates que SÍ existen en memegen.link
-const TEMPLATES = {
-    drake:      { id: 'drake',      nombre: 'Drake Hotline' },
-    spongebob:  { id: 'spongebob',  nombre: 'Mocking Spongebob' },
-    stonks:     { id: 'stonks',     nombre: 'Stonks' },
-    brain:      { id: 'brain',      nombre: 'Expanding Brain' },
-    doge:       { id: 'doge',       nombre: 'Doge' },
-    distracted: { id: 'distracted', nombre: 'Distracted Boyfriend' },
-    buzz:       { id: 'buzz',       nombre: 'Buzz Lightyear' },
-    woah:       { id: 'woah',       nombre: 'Woah' },
-    change:     { id: 'change',     nombre: 'Change My Mind' },
-    sad:        { id: 'sad',        nombre: 'Sad Pablo' }
+// Categorías SFW de waifu.pics (sin API key)
+const CATS = {
+    waifu: 'waifu', chica: 'waifu', girl: 'waifu',
+    neko: 'neko', gata: 'neko',
+    shinobu: 'shinobu',
+    megumin: 'megumin'
 };
+
+function escapeXml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function wrapText(text, maxChars) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+        if ((cur + ' ' + w).trim().length > maxChars && cur) { lines.push(cur); cur = w; }
+        else cur = (cur ? cur + ' ' : '') + w;
+    }
+    if (cur) lines.push(cur);
+    return lines.slice(0, 3);
+}
 
 export default {
     nombre: 'bratanime',
     categoria: 'Stickers',
-    alias: ['memesticker', 'memememe', 'memecartel'],
-    descripcion: 'Genera sticker meme sin API key',
-    uso: '.bratanime [estilo] <texto>',
+    alias: ['waifusticker', 'animebrat', 'nekosticker'],
+    descripcion: 'Sticker de chica anime random con tu texto estilo brat',
+    uso: '.bratanime [categoria] <texto>',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
         try {
             const args = String(argumento || '').trim().split(/\s+/);
             if (!args[0]) {
                 return await responder.texto(
-                    '╭━━〔 🎌 𝐁𝐑𝐀𝐓 𝐌𝐄𝐌𝐄 〕━━⬣\n' +
+                    '╭━━〔 🌸 𝐑𝐓 𝐍𝐌 〕━━\n' +
                     '┃\n' +
-                    '┃ Uso: .bratanime [estilo] <texto>\n' +
+                    '┃ Uso: .bratanime [cat] <texto>\n' +
                     '┃\n' +
                     '┃ Ejemplos:\n' +
-                    '┃  • .bratanime hola mundo\n' +
-                    '┃  • .bratanime drake no/si\n' +
-                    '┃  • .bratanime stonks subió mi bal\n' +
+                    '┃  • .bratanime hola seño\n' +
+                    '┃  • .bratanime neko buenas noches\n' +
+                    '┃  • .bratanime shinobu te amo\n' +
                     '┃\n' +
-                    '┃ Estilos: drake (default), spongebob,\n' +
-                    '┃ stonks, brain, doge, distracted,\n' +
-                    '┃ buzz, woah, change, sad\n' +
+                    '┃ Cats: waifu/chica (default), neko,\n' +
+                    '┃ shinobu, megumin\n' +
                     '┃\n' +
-                    '┃ Tip: usa "/" para separar arriba/abajo\n' +
+                    '┃ Cada uso = chica anime RANDOM 🎲\n' +
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
             }
 
-            // Parseo: primer token puede ser estilo
+            // Parseo: primer token puede ser categoría
             const primer = args[0].toLowerCase();
-            let template;
+            let cat = 'waifu';
             let texto;
-            
-            if (TEMPLATES[primer]) {
-                template = TEMPLATES[primer];
+            if (CATS[primer]) {
+                cat = CATS[primer];
                 texto = args.slice(1).join(' ');
             } else {
-                template = TEMPLATES.drake;  // Default: drake
                 texto = args.join(' ');
             }
 
@@ -63,42 +70,44 @@ export default {
                 return await responder.texto('❌ Falta el texto. Ejemplo: .bratanime hola');
             }
 
-            // Separar texto en top/bottom si tiene "/"
-            let topText = '';
-            let bottomText = texto;
-            if (texto.includes('/')) {
-                const parts = texto.split('/');
-                topText = parts[0].trim();
-                bottomText = parts.slice(1).join('/').trim();
-            }
+            // 1) Imagen anime random de waifu.pics (SFW, sin API key)
+            const apiResp = await fetch('https://api.waifu.pics/sfw/' + cat);
+            if (!apiResp.ok) throw new Error('waifu.pics respondió ' + apiResp.status);
+            const apiData = await apiResp.json();
+            if (!apiData.url) throw new Error('waifu.pics no devolvió imagen');
 
-            // Codificar textos para URL (memegen.link usa "_" como espacio)
-            const encodeText = (t) => encodeURIComponent(t.replace(/\s+/g, '_'));
-            const topEncoded = encodeText(topText);
-            const bottomEncoded = encodeText(bottomText);
+            // 2) Descargar la imagen
+            const imgResp = await fetch(apiData.url);
+            if (!imgResp.ok) throw new Error('No se pudo descargar la imagen');
+            const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
 
-            // Construir URL de memegen.link
-            const url = topText 
-                ? `https://api.memegen.link/images/${template.id}/${topEncoded}/${bottomEncoded}.png`
-                : `https://api.memegen.link/images/${template.id}/_/${bottomEncoded}.png`;
+            // 3) Recortar a cuadrado 512x512 (cover, centrado)
+            const base = await sharp(imgBuffer)
+                .resize(512, 512, { fit: 'cover', position: 'centre' })
+                .png()
+                .toBuffer();
 
-            console.log('[BRATANIME] URL:', url);
+            // 4) Texto estilo brat: barra oscura + texto blanco con blur
+            const lines = wrapText(texto, 18);
+            const fontSize = (Math.max(...lines.map(l => l.length)) > 24) ? 28 : (Math.max(...lines.map(l => l.length)) > 16 ? 34 : 42);
+            const barH = lines.length * 46 + 26;
+            const textosSvg = lines.map((l, i) =>
+                '<text x="256" y="' + (512 - barH + 42 + i * 46) + '" font-family="Arial Black, Arial, sans-serif" font-size="' + fontSize + '" font-style="italic" font-weight="900" fill="#ffffff" text-anchor="middle" filter="url(#blur)">' + escapeXml(l) + '</text>'
+            ).join('');
 
-            // Descargar la imagen
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error('API respondió ' + resp.status + ' - Template no válido');
-            const buffer = await resp.arrayBuffer();
+            const svg = '<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">' +
+                '<defs><filter id="blur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.1"/></filter></defs>' +
+                '<rect x="0" y="' + (512 - barH) + '" width="512" height="' + barH + '" fill="rgba(0,0,0,0.55)"/>' +
+                textosSvg +
+                '</svg>';
 
-            // Convertir a WebP (sticker) 512x512
-            const stickerBuffer = await sharp(Buffer.from(buffer))
-                .resize(512, 512, { 
-                    fit: 'contain', 
-                    background: { r: 0, g: 0, b: 0, alpha: 0 } 
-                })
+            // 5) Componer imagen + texto y convertir a sticker WebP
+            const stickerBuffer = await sharp(base)
+                .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
                 .webp({ quality: 85 })
                 .toBuffer();
 
-            // Enviar como sticker
+            // 6) Enviar como sticker
             await sock.sendMessage(msg.key.remoteJid, {
                 sticker: stickerBuffer,
                 mimetype: 'image/webp'
@@ -106,7 +115,7 @@ export default {
 
         } catch (error) {
             console.error('[BRATANIME] Error:', error);
-            await responder.texto('❌ Error generando sticker: ' + (error.message || error));
+            await responder.texto('❌ Error generando sticker anime: ' + (error.message || error));
         }
     }
 };
