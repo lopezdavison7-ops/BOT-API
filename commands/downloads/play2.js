@@ -5,6 +5,9 @@
 //
 // Busca y descarga videos de YouTube en MP4.
 // Usa Lempi API para búsqueda y descarga de video.
+//
+// ✅ ANTI-403: headers de navegador real + reintentos con
+//    URL nueva cuando un servidor de video rechaza (403/404).
 // ============================================================
 
 import 'dotenv/config';
@@ -17,6 +20,26 @@ const API_KEY = config.LEMPI_API_KEY || '';
 const TIMEOUT_BUSQUEDA = 30000;
 const TIMEOUT_API = 45000;
 const MEDIA_TIMEOUT = 300000;
+
+const MAX_INTENTOS_STREAM = 3;
+
+// ============================================================
+// HEADERS DE NAVEGADOR REAL
+// ============================================================
+// Varios servidores de video devuelven 403 si el User-Agent no
+// parece un navegador de verdad. Con estos headers se evita.
+// ============================================================
+
+const HEADERS_MEDIA = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'video/mp4,video/*,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Referer': 'https://www.youtube.com/',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'Sec-Fetch-Dest': 'video',
+    'Connection': 'keep-alive'
+};
 
 async function fetchConTimeout(url, opciones = {}, timeout = 30000) {
     const controller = new AbortController();
@@ -34,7 +57,7 @@ function limpiarTexto(texto = '') {
 
 function limpiarNombre(nombre = 'Video') {
     return String(nombre)
-        .replace(/[\\/:*?"<>|]/g, '')
+        .replace(/[/:*?"<>|]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 80) || 'Video';
@@ -171,15 +194,60 @@ async function obtenerVideo(videoUrl) {
     };
 }
 
-async function obtenerStream(url) {
-    console.log('[PLAY2] 🚀 Abriendo stream del video...');
+// ============================================================
+// ABRIR STREAM (una sola tentativa, headers de navegador)
+// ============================================================
+
+async function abrirStream(url) {
     const respuesta = await fetchConTimeout(url, {
-        headers: { Accept: 'video/mp4,*/*', 'User-Agent': 'BOT-API/2.0' }
+        headers: HEADERS_MEDIA
     }, MEDIA_TIMEOUT);
 
-    if (!respuesta.ok) throw new Error(`Servidor video HTTP ${respuesta.status}`);
-    if (!respuesta.body) throw new Error('El servidor no devolvió un stream.');
+    if (!respuesta.ok) {
+        throw new Error(`Servidor video HTTP ${respuesta.status}`);
+    }
+
+    if (!respuesta.body) {
+        throw new Error('El servidor no devolvió un stream.');
+    }
+
     return Readable.fromWeb(respuesta.body);
+}
+
+// ============================================================
+// STREAM CON REINTENTOS ANTI-403
+// ============================================================
+// Si un servidor rechaza (403/404/410), se pide una URL NUEVA
+// a la API (cae en otro servidor) y se reintenta, hasta 3 veces.
+// ============================================================
+
+async function obtenerStreamConReintentos(videoUrlApi) {
+    let video = await obtenerVideo(videoUrlApi);
+    let ultimoError = null;
+
+    for (let intento = 1; intento <= MAX_INTENTOS_STREAM; intento++) {
+        try {
+            console.log(`[PLAY2] 🚀 Abriendo stream (intento ${intento}/${MAX_INTENTOS_STREAM})...`);
+            return {
+                stream: await abrirStream(video.download),
+                video
+            };
+        } catch (error) {
+            ultimoError = error;
+            console.error(
+                `[PLAY2] ⚠️ Intento ${intento} falló:`,
+                error?.message || error
+            );
+
+            if (intento < MAX_INTENTOS_STREAM) {
+                console.log('[PLAY2] 🔁 Pidiendo URL nueva a la API...');
+                await new Promise(r => setTimeout(r, 1000 * intento));
+                video = await obtenerVideo(videoUrlApi);
+            }
+        }
+    }
+
+    throw ultimoError;
 }
 
 async function obtenerThumbnail(url) {
@@ -198,7 +266,7 @@ async function obtenerThumbnail(url) {
 
 function crearInformacion(resultado) {
     return (
-        '╭━━〔 🎬 𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
+        '╭━━〔 🎬 𝐏𝐋𝐀𝐘 〕━━\n' +
         '┃\n' +
         `┃ 🎬 *${resultado.titulo}*\n` +
         '┃\n' +
@@ -226,14 +294,14 @@ export default {
 
         if (!consulta) {
             await responder.texto(
-                '╭━━〔 🎬 𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
+                '╭━━〔  𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe un video.\n' +
                 '┃\n' +
                 '┃ Ejemplo:\n' +
                 '┃ › .play2 Bad Bunny\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '╰━━━━━━━━━━━━━━━━'
             );
             return;
         }
@@ -266,7 +334,6 @@ export default {
         try {
             const resultado = await buscarYouTube(consulta);
             const promesaThumbnail = obtenerThumbnail(resultado.thumbnail);
-            const promesaVideo = obtenerVideo(resultado.videoUrl);
 
             let thumbnail = await promesaThumbnail;
 
@@ -276,13 +343,15 @@ export default {
                 await responder.texto(crearInformacion(resultado));
             }
 
-            const video = await promesaVideo;
+            // ------------------------------------------------
+            // DESCARGA CON REINTENTOS ANTI-403
+            // ------------------------------------------------
+            const { stream, video } = await obtenerStreamConReintentos(resultado.videoUrl);
 
             if (!thumbnail && video.thumbnail && video.thumbnail !== resultado.thumbnail) {
                 thumbnail = await obtenerThumbnail(video.thumbnail);
             }
 
-            const stream = await obtenerStream(video.download);
             const titulo = limpiarNombre(video.titulo || resultado.titulo);
 
             console.log(`[PLAY2] 📤 Enviando: ${titulo}`);
