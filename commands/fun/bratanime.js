@@ -1,14 +1,36 @@
-// commands/fun/bratanime.js — 🌸 Sticker de chica anime con texto estilo brat
+// commands/fun/bratanime.js — 🌸 Sticker anime con sistema de fallback (3 APIs)
 import fetch from 'node-fetch';
 import sharp from 'sharp';
 
-// Categorías SFW de waifu.pics (sin API key)
-const CATS = {
-    waifu: 'waifu', chica: 'waifu', girl: 'waifu',
-    neko: 'neko', gata: 'neko',
-    shinobu: 'shinobu',
-    megumin: 'megumin'
-};
+// Sistema de fallback: si una API falla, prueba la siguiente
+const API_SOURCES = [
+    {
+        name: 'waifu.pics',
+        getUrl: (cat) => `https://api.waifu.pics/sfw/${cat}`,
+        parse: (data) => data.url,
+        cats: { waifu: 'waifu', chica: 'waifu', neko: 'neko', shinobu: 'shinobu', megumin: 'megumin' }
+    },
+    {
+        name: 'waifu.im',
+        getUrl: (cat) => {
+            const tags = { waifu: 'waifu', chica: 'waifu', neko: 'neko', shinobu: 'waifu', megumin: 'waifu' };
+            return `https://api.waifu.im/search?included_tags=${tags[cat] || 'waifu'}&is_nsfw=false`;
+        },
+        parse: (data) => data.images && data.images[0] && data.images[0].url,
+        cats: { waifu: 'waifu', chica: 'waifu', neko: 'neko' }
+    },
+    {
+        name: 'nekos.life',
+        getUrl: (cat) => {
+            const eps = { waifu: 'waifu', chica: 'waifu', neko: 'neko', shinobu: 'waifu', megumin: 'waifu' };
+            return `https://nekos.life/api/v2/img/${eps[cat] || 'waifu'}`;
+        },
+        parse: (data) => data.url,
+        cats: { waifu: 'waifu', chica: 'waifu', neko: 'neko' }
+    }
+];
+
+const DEFAULT_CAT = 'waifu';
 
 function escapeXml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -26,11 +48,35 @@ function wrapText(text, maxChars) {
     return lines.slice(0, 3);
 }
 
+// Intenta obtener imagen de varias APIs hasta que una funcione
+async function obtenerAnime(cat) {
+    const errores = [];
+    for (const src of API_SOURCES) {
+        if (!src.cats[cat]) continue; // Esta fuente no soporta esta categoría
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const resp = await fetch(src.getUrl(cat), { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            const url = src.parse(data);
+            if (!url) throw new Error('No devolvió URL');
+            console.log('[BRATANIME] ✅', src.name, '→', url.slice(0, 80));
+            return { url, source: src.name };
+        } catch (e) {
+            errores.push(src.name + ': ' + (e.message || e));
+            console.log('[BRATANIME] ❌', src.name, 'falló:', e.message);
+        }
+    }
+    throw new Error('Todas las APIs fallaron:\n' + errores.join('\n'));
+}
+
 export default {
     nombre: 'bratanime',
     categoria: 'Stickers',
     alias: ['waifusticker', 'animebrat', 'nekosticker'],
-    descripcion: 'Sticker de chica anime random con tu texto estilo brat',
+    descripcion: 'Sticker de chica anime random con texto estilo brat',
     uso: '.bratanime [categoria] <texto>',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
         try {
@@ -55,12 +101,13 @@ export default {
                 );
             }
 
-            // Parseo: primer token puede ser categoría
             const primer = args[0].toLowerCase();
-            let cat = 'waifu';
+            let cat = DEFAULT_CAT;
             let texto;
-            if (CATS[primer]) {
-                cat = CATS[primer];
+            const todasCats = {};
+            API_SOURCES.forEach(s => Object.assign(todasCats, s.cats));
+            if (todasCats[primer]) {
+                cat = todasCats[primer];
                 texto = args.slice(1).join(' ');
             } else {
                 texto = args.join(' ');
@@ -70,18 +117,15 @@ export default {
                 return await responder.texto('❌ Falta el texto. Ejemplo: .bratanime hola');
             }
 
-            // 1) Imagen anime random de waifu.pics (SFW, sin API key)
-            const apiResp = await fetch('https://api.waifu.pics/sfw/' + cat);
-            if (!apiResp.ok) throw new Error('waifu.pics respondió ' + apiResp.status);
-            const apiData = await apiResp.json();
-            if (!apiData.url) throw new Error('waifu.pics no devolvió imagen');
+            // 1) Obtener imagen con fallback automático
+            const { url, source } = await obtenerAnime(cat);
 
             // 2) Descargar la imagen
-            const imgResp = await fetch(apiData.url);
-            if (!imgResp.ok) throw new Error('No se pudo descargar la imagen');
+            const imgResp = await fetch(url);
+            if (!imgResp.ok) throw new Error('No se pudo descargar la imagen (' + imgResp.status + ')');
             const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
 
-            // 3) Recortar a cuadrado 512x512 (cover, centrado)
+            // 3) Recortar a cuadrado 512x512
             const base = await sharp(imgBuffer)
                 .resize(512, 512, { fit: 'cover', position: 'centre' })
                 .png()
@@ -101,7 +145,7 @@ export default {
                 textosSvg +
                 '</svg>';
 
-            // 5) Componer imagen + texto y convertir a sticker WebP
+            // 5) Componer y convertir a sticker WebP
             const stickerBuffer = await sharp(base)
                 .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
                 .webp({ quality: 85 })
