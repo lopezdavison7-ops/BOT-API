@@ -1,12 +1,10 @@
-// commands/system/ping2.js — ⚡ Panel de diagnóstico bonito en HTML (v2 fix)
+// commands/system/ping2.js — ⚡ Diagnóstico 100% real (mediciones verdaderas)
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
-// Si una stat falla, devuelve default en vez de tronar todo el comando
 function safe(fn, def) { try { return fn(); } catch (e) { return def; } }
-
 function fmtDur(s) {
     s = Math.floor(s);
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -29,25 +27,47 @@ function contarComandos(dir) {
     } catch (e) {}
     return n;
 }
+// Convierte el timestamp de WhatsApp (número o Long de protobuf) a ms reales
+function tsAMs(ts) {
+    try {
+        if (ts && typeof ts === 'object' && typeof ts.toNumber === 'function') return ts.toNumber() * 1000;
+        const n = Number(ts || 0);
+        return Number.isFinite(n) ? n * 1000 : 0;
+    } catch (e) { return 0; }
+}
 
 export default {
     nombre: 'ping2',
     categoria: 'System',
     alias: ['latencia', 'status', 'diagnostico'],
-    descripcion: 'Panel de diagnóstico completo del bot en HTML',
+    descripcion: 'Diagnóstico 100% real: red, server y webview medidos de verdad',
     uso: '.ping2',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
             const from = msg.key.remoteJid;
-            const tInicio = Date.now();
+            const tHandler = Date.now();
 
-            const tsMsg = Number(msg.messageTimestamp || 0) * 1000;
-            const latRecv = Number.isFinite(tsMsg) && tsMsg > 0 ? Math.max(0, tInicio - tsMsg) : 0;
+            // 1) RECEPCIÓN REAL: timestamp del server de WA → inicio del handler
+            const tsMsg = tsAMs(msg.messageTimestamp);
+            const recv = tsMsg > 0 ? Math.max(0, tHandler - tsMsg) : 0;
 
-            // Stats blindadas con safe()
+            // 2) SONDAS RTT REALES al server de WhatsApp (3 muestras, solo lectura)
+            const muestras = [];
+            for (let i = 0; i < 3; i++) {
+                const a = Date.now();
+                try {
+                    await sock.profilePictureUrl(sock.user.id, 'preview', true);
+                    muestras.push(Date.now() - a);
+                } catch (e) {}
+            }
+            const rttAvg = muestras.length ? Math.round(muestras.reduce((x, y) => x + y, 0) / muestras.length) : 0;
+            const rttMin = muestras.length ? Math.min(...muestras) : 0;
+            const rttMax = muestras.length ? Math.max(...muestras) : 0;
+
+            // 3) STATS REALES del proceso/server
             const mem = safe(() => process.memoryUsage(), { rss: 0 });
             const ramTotal = safe(() => os.totalmem(), 1);
-            const ramUsada = ramTotal - safe(() => os.freemem(), 0);   // ✅ FIX: freemem (no freeem)
+            const ramUsada = ramTotal - safe(() => os.freemem(), 0);
             const ramPct = Math.min(100, Math.max(0, Math.round((ramUsada / (ramTotal || 1)) * 100)));
             const cpus = safe(() => os.cpus().length, 1);
             const cpuPct = Math.min(100, Math.max(0, Math.round((safe(() => os.loadavg()[0], 0) / cpus) * 100)));
@@ -55,7 +75,7 @@ export default {
             const cmds = safe(() => contarComandos(path.join(process.cwd(), 'commands')), 0);
             const ws = safe(() => {
                 const r = sock && sock.ws ? sock.ws.readyState : -1;
-                return r === 1 ? '🟢 Conectado' : (r === 3 ? '🔴 Cerrado' : '🟡 Estado ' + r);
+                return r === 1 ? '🟢 Conectado' : (r === 3 ? '🔴 Cerrado' : '🟡 ' + r);
             }, '🟡 N/D');
             const upBot = safe(() => fmtDur(process.uptime()), '—');
             const upOs = safe(() => fmtDur(os.uptime()), '—');
@@ -63,10 +83,14 @@ export default {
             const plat = safe(() => (os.platform() + ' ' + os.arch()).replace(/'/g, ''), '—');
             const hora = safe(() => new Date().toLocaleString('es-MX', { hour12: false }), '—');
 
-            const proc = Date.now() - tInicio;
-            const ping = latRecv + proc;
-            const color = ping < 300 ? '#22c55e' : (ping < 800 ? '#eab308' : '#ef4444');
-            const calidad = ping < 300 ? 'EXCELENTE' : (ping < 800 ? 'ESTABLE' : 'SATURADO');
+            // 4) PROCESO REAL: handler → payload listo
+            const serverNow = Date.now();
+            const proc = serverNow - tHandler;
+
+            // 5) TOTAL REAL = recepción + proceso + RTT de red
+            const total = recv + proc + rttAvg;
+            const color = total < 300 ? '#22c55e' : (total < 800 ? '#eab308' : '#ef4444');
+            const calidad = total < 300 ? 'EXCELENTE' : (total < 800 ? 'ESTABLE' : 'SATURADO');
 
             const htmlPayload = `<style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
@@ -98,7 +122,7 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Aria
 <div class="p2-wrap">
   <div class="p2-card">
     <div class="p2-header">
-      <div><div class="p2-sub">DIAGNÓSTICO EN VIVO</div><div class="p2-title">⚡ PING² · BOT-API</div></div>
+      <div><div class="p2-sub">MEDICIONES 100% REALES</div><div class="p2-title">⚡ PING² · BOT-API</div></div>
       <div style="width:9px;height:9px;background:${color};border-radius:50%;box-shadow:0 0 10px ${color};animation:p2Pulse 1.4s infinite"></div>
     </div>
     <div class="p2-body">
@@ -110,16 +134,18 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Aria
         <div class="p2-bar-row"><b>⚙️ CPU</b><div class="p2-track"><div class="p2-fill" id="p2CpuFill"></div></div><span id="p2CpuTxt">—</span></div>
       </div>
       <div class="p2-grid">
-        <div class="p2-chip"><small>📨 RECEPCIÓN</small><b id="p2Recv">—</b></div>
-        <div class="p2-chip"><small>⚙️ PROCESO</small><b id="p2Proc">—</b></div>
+        <div class="p2-chip"><small>📨 RECEPCIÓN WA</small><b id="p2Recv">—</b></div>
+        <div class="p2-chip"><small>⚙️ PROCESO BOT</small><b id="p2Proc">—</b></div>
+        <div class="p2-chip"><small>📤 RTT RED (x3)</small><b id="p2Rtt">—</b></div>
+        <div class="p2-chip"><small>📶 JITTER MIN/MAX</small><b id="p2Jit">—</b></div>
         <div class="p2-chip"><small>🖥 UPTIME BOT</small><b id="p2UpBot">—</b></div>
         <div class="p2-chip"><small>🌐 UPTIME SERVER</small><b id="p2UpOs">—</b></div>
-        <div class="p2-chip"><small>👥 USUARIOS</small><b id="p2Users">—</b></div>
+        <div class="p2-chip"><small>👥 USUARIOS DB</small><b id="p2Users">—</b></div>
         <div class="p2-chip"><small>🎮 COMANDOS</small><b id="p2Cmds">—</b></div>
-        <div class="p2-chip"><small>📡 SOCKET</small><b id="p2Ws">—</b></div>
+        <div class="p2-chip"><small>📡 SOCKET WS</small><b id="p2Ws">—</b></div>
         <div class="p2-chip"><small>📦 NODE</small><b id="p2Node">—</b></div>
-        <div class="p2-chip"><small>🕒 HORA SERVER</small><b id="p2Hora">—</b></div>
         <div class="p2-chip"><small>🎬 FPS WEBVIEW</small><b id="p2Fps">—</b></div>
+        <div class="p2-chip"><small>🕓 RELOJ TUYO vs SERVER</small><b id="p2Delta">—</b></div>
       </div>
       <div class="p2-foot" id="p2Foot"></div>
     </div>
@@ -127,7 +153,9 @@ body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Aria
 </div>
 <script>
 (function(){
-var CFG = { ping: ${ping}, recv: ${latRecv}, proc: ${proc}, color: '${color}', ramPct: ${ramPct}, ramTxt: '${fmtBytes(mem.rss)} RSS', cpuPct: ${cpuPct}, upBot: '${upBot}', upOs: '${upOs}', users: ${usuarios}, cmds: ${cmds}, ws: '${ws}', node: '${nodeV}', hora: '${hora}', plat: '${plat}' };
+var CFG = { total: ${total}, recv: ${recv}, proc: ${proc}, rtt: ${rttAvg}, jitMin: ${rttMin}, jitMax: ${rttMax}, color: '${color}', ramPct: ${ramPct}, ramTxt: '${fmtBytes(mem.rss)} RSS', cpuPct: ${cpuPct}, upBot: '${upBot}', upOs: '${upOs}', users: ${usuarios}, cmds: ${cmds}, ws: '${ws}', node: '${nodeV}', hora: '${hora}', plat: '${plat}', serverNow: ${serverNow} };
+var t0 = Date.now(), perf0 = performance.now();
+var deltaReloj = t0 - CFG.serverNow;
 var cv = document.getElementById('p2Gauge'), ctx = cv.getContext('2d');
 var pingEl = document.getElementById('p2Ping');
 var W = cv.width, H = cv.height, CX = W / 2, CY = H - 10, R = 105;
@@ -154,15 +182,16 @@ function drawGauge(needle){
   ctx.stroke();
   ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(CX, CY, 5, 0, 6.2832); ctx.fill();
 }
-var t0 = performance.now(), start = null;
+var start = null;
 function ease(t){ return 1 - Math.pow(1 - t, 3); }
 function anim(now){
   if (start === null) start = now;
   var k = Math.min(1, (now - start) / 1100);
-  var v = CFG.ping * ease(k);
+  var v = CFG.total * ease(k);
   drawGauge(v);
   pingEl.textContent = Math.round(v) + ' ms';
   if (k < 1) requestAnimationFrame(anim);
+  else pingEl.textContent = CFG.total + ' ms';
 }
 requestAnimationFrame(anim);
 setTimeout(function(){
@@ -173,14 +202,16 @@ document.getElementById('p2RamTxt').textContent = CFG.ramTxt + ' · ' + CFG.ramP
 document.getElementById('p2CpuTxt').textContent = CFG.cpuPct + '% load';
 document.getElementById('p2Recv').textContent = CFG.recv + ' ms';
 document.getElementById('p2Proc').textContent = CFG.proc + ' ms';
+document.getElementById('p2Rtt').textContent = CFG.rtt > 0 ? CFG.rtt + ' ms' : '—';
+document.getElementById('p2Jit').textContent = CFG.rtt > 0 ? CFG.jitMin + '/' + CFG.jitMax + ' ms' : '—';
 document.getElementById('p2UpBot').textContent = CFG.upBot;
 document.getElementById('p2UpOs').textContent = CFG.upOs;
 document.getElementById('p2Users').textContent = CFG.users;
 document.getElementById('p2Cmds').textContent = CFG.cmds;
 document.getElementById('p2Ws').textContent = CFG.ws;
 document.getElementById('p2Node').textContent = CFG.node;
-document.getElementById('p2Hora').textContent = CFG.hora;
-document.getElementById('p2Foot').textContent = '🖥 ' + CFG.plat + ' · render webview: ' + Math.round(performance.now() - t0) + ' ms';
+document.getElementById('p2Delta').textContent = (deltaReloj >= 0 ? '+' : '') + deltaReloj + ' ms';
+document.getElementById('p2Foot').textContent = '🖥 ' + CFG.plat + ' · 🕒 server: ' + CFG.hora + ' · render: ' + Math.round(performance.now() - perf0) + ' ms';
 var frames = 0, fpsStart = performance.now();
 function fps(now){
   frames++;
