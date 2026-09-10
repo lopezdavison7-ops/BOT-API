@@ -1,4 +1,4 @@
-// commands/interaction/reacciones.js — 🎭 32 reacciones anime con video + mención real
+// commands/interaction/reacciones.js — 🎭 33 reacciones anime en GIF + mención real
 import fetch from 'node-fetch';
 
 const REACCIONES = {
@@ -39,6 +39,7 @@ const REACCIONES = {
 
 const TIPOS = Object.keys(REACCIONES);
 
+// Detecta qué reacción se invocó leyendo el texto original del mensaje
 function detectarTipo(msg) {
     const texto = msg.message?.conversation
         || msg.message?.extendedTextMessage?.text
@@ -50,6 +51,7 @@ function detectarTipo(msg) {
     return TIPOS.includes(invocado) ? invocado : null;
 }
 
+// Extrae menciones del mensaje (soporta @lid y @s.whatsapp.net)
 function extraerMenciones(msg) {
     const ctx = msg.message?.extendedTextMessage?.contextInfo
         || msg.message?.imageMessage?.contextInfo
@@ -59,37 +61,36 @@ function extraerMenciones(msg) {
     return Array.isArray(mencionados) ? mencionados : [];
 }
 
+// Mención LIMPIA: PN real resuelto o @lid puro. NADA de JIDs inventados.
 async function datosMencion(sock, jid) {
-    const jids = [jid];
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
             if (pn) {
                 const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                jids.push(pj);
-                return { token: '@' + pj.split('@')[0], jids };
+                return { token: '@' + pj.split('@')[0], jids: [pj] };
             }
         }
-    } catch (e) {}
-    if (jid.endsWith('@lid')) jids.push(jid.replace('@lid', '@s.whatsapp.net'));
-    return { token: '@' + jid.split('@')[0], jids };
+    } catch (e) { /* sin mapeo local */ }
+    return { token: '@' + jid.split('@')[0], jids: [jid] };
 }
 
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...TIPOS, 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime: angry, hug, kill, kiss, pat, slap... +30 más',
+    descripcion: 'Reacciones anime en GIF: angry, hug, kill, kiss, pat, slap... +30 más',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
         try {
             const from = msg.key.remoteJid;
 
+            // Lista de todas las reacciones
             const textoOriginal = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().trim();
             if (/^\s*[.!/](reacciones|reaction|reactionlist)\s*$/i.test(textoOriginal) || argumento?.trim().toLowerCase() === 'help') {
                 const lista = TIPOS.map(t => REACCIONES[t].emoji + ' ' + t).join('  ·  ');
                 return await responder.texto(
-                    '╭━━〔 🎭 𝐑𝐄𝐀𝐂𝐈𝐎𝐍𝐄𝐒 𝐀𝐍𝐈𝐌𝐄 〕━━⬣\n' +
+                    '╭━━〔 🎭 𝐑𝐄𝐂𝐎𝐄 𝐀𝐈𝐄 〕━━\n' +
                     '┃\n' +
                     '┃ Usa: .<tipo> [@usuario]\n' +
                     '┃ Ej: .kill @alguien · .hug · .slap\n' +
@@ -100,6 +101,7 @@ export default {
                 );
             }
 
+            // Detectar qué reacción se invocó
             const tipo = detectarTipo(msg);
             if (!tipo) {
                 return await responder.texto('❌ Reacción no válida. Usa .reacciones para ver todas.');
@@ -108,9 +110,11 @@ export default {
             const data = REACCIONES[tipo];
             const videoUrl = data.videos[Math.floor(Math.random() * data.videos.length)];
 
+            // Autor de la reacción
             const autorJid = msg.key.participant || msg.key.remoteJid;
             const autorMen = await datosMencion(sock, autorJid);
 
+            // Target (si mencionaron a alguien)
             const mencionados = extraerMenciones(msg).filter(j => j !== autorJid);
             let caption, menciones = [...autorMen.jids];
 
@@ -122,6 +126,7 @@ export default {
                 caption = `${data.emoji} ${autorMen.token} *${data.self}*`;
             }
 
+            // Descargar el video
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
             const vidResp = await fetch(videoUrl, { signal: controller.signal });
@@ -129,12 +134,13 @@ export default {
             if (!vidResp.ok) throw new Error('Video respondió ' + vidResp.status);
             const vidBuffer = Buffer.from(await vidResp.arrayBuffer());
 
+            // Enviar como GIF (loop automático en el chat)
             await sock.sendMessage(from, {
                 video: vidBuffer,
                 mimetype: 'video/mp4',
+                gifPlayback: true,
                 caption,
-                mentions: menciones,
-                gifPlayback: false
+                mentions: menciones
             }, { quoted: msg });
 
         } catch (error) {
