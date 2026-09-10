@@ -1,729 +1,146 @@
-// ============================================================
-// BOT-API
-// COMANDO: REACCION
-// ============================================================
-// Reacciones GIF usando database/anime.json.
-//
-// Ejemplos:
-// .hug
-// .hug @usuario
-// .hug respondiendo un mensaje
-// .kiss @usuario
-// .pat @usuario
-//
-// Compatible con:
-// - Nueva estructura recursiva de comandos
-// - Baileys 7
-// - Node.js moderno
-// ============================================================
+// commands/interaction/reacciones.js — 🎭 32 reacciones anime (PARTE 1/2)
+import fetch from 'node-fetch';
 
-import fs from 'fs';
-import path from 'path';
+const REACCIONES = {
+  angry:    { self: "está furioso/a",             target: "está furioso/a con",            emoji: "😡", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b3fdb76c39.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be96ac752d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2f63e591be.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/712040c297.mp4"] },
+  bath:     { self: "se está bañando",            target: "se baña junto a",               emoji: "🛁", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6295b8c041.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/38a2241162.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3fb9740eef.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e748493aa9.mp4"] },
+  bite:     { self: "se muerde a sí mismo",       target: "muerde a",                      emoji: "😬", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4140bc2f28.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b04fc17494.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/63bb388035.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/56aebcb2ea.mp4"] },
+  bleh:     { self: "se saca la lengua",          target: "le saca la lengua a",           emoji: "😝", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/006ba5556a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8370ebb329.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e0862f6761.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7fe38d833c.mp4"] },
+  blush:    { self: "se sonroja",                 target: "se sonroja por",                emoji: "☺️", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/27e2b1104b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f02931cc79.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a9fca1e6a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0292d63bbc.mp4"] },
+  bored:    { self: "está aburrido/a",            target: "está aburrido/a de",            emoji: "😑", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d1437c05a6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/55f668ef05.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9e5482e641.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b27a530165.mp4"] },
+  clap:     { self: "se aplaude a sí mismo",      target: "le aplaude a",                  emoji: "👏", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2b5bb45998.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a937dbc61c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f8ec47a3f2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2181289bb9.mp4"] },
+  coffee:   { self: "toma café tranquilo/a",      target: "toma café pensando en",         emoji: "☕", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/219c5a89b7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/31b80f901d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a7761ceedc.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/07df0366ed.mp4"] },
+  cry:      { self: "llora",                      target: "llora por",                     emoji: "😢", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b79fce84d5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/dd26822d9a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/c54fc328de.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2c4c1039ae.mp4"] },
+  cuddle:   { self: "se acurruca solo/a",         target: "se acurruca con",               emoji: "🤗", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0613060e12.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2e0a770c30.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/324999251a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3e5d93c849.mp4"] },
+  dance:    { self: "baila solo/a",               target: "baila con",                     emoji: "💃", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3a2b027ee7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7ea032e20f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be8392dd68.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7ece5ac35b.mp4"] },
+  drunk:    { self: "está borracho/a",            target: "está borracho/a por",           emoji: "🍺", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2feae282de.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/127c0820bd.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6911db461f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9b22e99ddf.mp4"] },
+  eat:      { self: "está comiendo",              target: "come frente a",                 emoji: "🍜", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/ee941f7baf.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6083d8f12a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a58d888a58.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/bba920bb2d.mp4"] },
+  facepalm: { self: "se da un facepalm",          target: "se da un facepalm por",         emoji: "🤦", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/51bb8762ac.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1c49c203b9.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0906825871.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1a6c762666.mp4"] },
+  happy:    { self: "está feliz",                 target: "está feliz con",                emoji: "😊", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8c35ee09a4.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/78b56befb8.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a9cfe8c25d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/57f55bf8df.mp4"] },
+  hug:      { self: "se abraza a sí mismo",       target: "abraza a",                      emoji: "🤗", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7bef690da7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/67bae006db.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d3249d8807.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/15683d855e.mp4"] }
+};// (continuación del objeto REACCIONES)
+  kill:     { self: "quiere autodestruirse",      target: "quiere matar a",                emoji: "🔪", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/02c521383b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/94a522d0bd.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/44d02783f3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/196ae9d291.mp4"] },
+  kiss:     { self: "se tira un beso al espejo",  target: "le llena la carita de besitos a", emoji: "💋", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4ff07288ee.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/ce510b67c8.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa15c6ac5c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d9c3493c73.mp4"] },
+  laugh:    { self: "se ríe solo/a",              target: "se ríe de",                     emoji: "😂", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2f3731235f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b112780a5a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e08d760e5a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/c86e858e9d.mp4"] },
+  lick:     { self: "se lame el labio",           target: "lame a",                        emoji: "👅", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4bda625d3d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/23a545f27a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/09d5d52abf.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/da16559384.mp4"] },
+  love:     { self: "se ama a sí mismo",          target: "ama a",                         emoji: "❤️", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/fec823db8b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/73329b64c9.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6a788cf7a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8113b2774c.mp4"] },
+  pat:      { self: "se acaricia la cabeza",      target: "acaricia la cabeza de",         emoji: "🥰", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1c3cd5d64b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/73509c8f87.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6a81d38227.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/590262909b.mp4"] },
+  poke:     { self: "se pica a sí mismo",         target: "molesta (poke) a",              emoji: "👉", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/263affc4c2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/cf47db1dce.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/76f2bcce0c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/93b5135827.mp4"] },
+  pout:     { self: "hace pucheros",              target: "hace pucheros por",             emoji: "😡", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b3524f151.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/22f694c285.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/5bfca56869.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/91c2aac9e3.mp4"] },
+  punch:    { self: "se golpea solo/a",           target: "golpea a",                      emoji: "👊", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f53f89c8d5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2a13d90ed4.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8ed0a8dc87.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/01be60a41e.mp4"] },
+  run:      { self: "sale corriendo",             target: "huye de",                       emoji: "🏃", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/5f2e7ffa77.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/fefcbdcc80.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f25ab9250c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/10e625a814.mp4"] },
+  sad:      { self: "está triste",                target: "está triste por",               emoji: "😔", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1db59a2438.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1db492db24.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/56dd412254.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4c53e50d39.mp4"] },
+  scared:   { self: "se asusta solo/a",           target: "se asusta de",                  emoji: "😨", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3ba7464666.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/97c6ecc1e5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3fbc999de6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa59f5a8d2.mp4"] },
+  shy:      { self: "se pone tímido/a",           target: "se pone tímido/a con",          emoji: "😳", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b8e063062.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/db06acbd0f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/97fdab3b08.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/34de85c05d.mp4"] },
+  slap:     { self: "se abofetea a sí mismo",     target: "abofetea a",                    emoji: "👋", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4fcbb04a12.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e4c1ac962d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e890d1fc39.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/54d9a5a3ac.mp4"] },
+  sleep:    { self: "se queda dormido/a",         target: "se queda dormido/a cerca de",   emoji: "😴", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e6e04aae5d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/798f87eef6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/94a1fd3e7a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f3bde98d73.mp4"] },
+  smoke:    { self: "fuma tranquilo/a",           target: "fuma pensando en",              emoji: "🚬", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/58fa4809a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/721adf16f3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9535cb9a55.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b238024da.mp4"] },
+  think:    { self: "piensa en sus cosas",        target: "piensa en",                     emoji: "🤔", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be310f02b3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f35004c537.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa04882cf0.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7f567b121c.mp4"] }
+};
 
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
+const TIPOS = Object.keys(REACCIONES);
 
-const ANIME_FILE = path.join(
-    process.cwd(),
-    'database',
-    'anime.json'
-);
-
-// ============================================================
-// COMANDOS DISPONIBLES
-// ============================================================
-
-const REACCIONES = [
-    'hug',
-    'kiss',
-    'pat',
-    'slap',
-    'poke',
-    'cuddle',
-    'wave',
-    'smile',
-    'dance',
-    'cry',
-    'happy',
-    'angry',
-    'love',
-    'bite',
-    'blush',
-    'highfive',
-    'handhold',
-    'feed',
-    'bonk',
-    'yeet',
-    'wink',
-    'stare',
-    'tickle',
-    'punch',
-    'kill'
-];
-
-// ============================================================
-// OBTENER COMANDO REAL
-// ============================================================
-
-function obtenerTipo(msg) {
-    const texto =
-        msg?.message?.conversation ||
-        msg?.message?.extendedTextMessage?.text ||
-        '';
-
-    if (!texto) {
-        return 'hug';
-    }
-
-    const partes =
-        texto
-            .trim()
-            .split(/\s+/);
-
-    const comando =
-        partes[0]
-            ?.replace(/^\./, '')
-            .toLowerCase();
-
-    return comando || 'hug';
+function detectarTipo(msg) {
+    const texto = msg.message?.conversation
+        || msg.message?.extendedTextMessage?.text
+        || msg.message?.imageMessage?.caption
+        || '';
+    const match = texto.match(/^\s*[.!/](\w+)/);
+    if (!match) return null;
+    const invocado = match[1].toLowerCase();
+    return TIPOS.includes(invocado) ? invocado : null;
 }
 
-// ============================================================
-// OBTENER AUTOR
-// ============================================================
-
-function obtenerAutor(msg) {
-    const key =
-        msg?.key || {};
-
-    const candidatos = [
-        key.participant,
-        key.senderPn,
-        key.participantAlt,
-        key.remoteJid
-    ];
-
-    for (const candidato of candidatos) {
-        if (!candidato) {
-            continue;
-        }
-
-        const jid =
-            String(candidato);
-
-        if (jid.endsWith('@g.us')) {
-            continue;
-        }
-
-        return jid;
-    }
-
-    return null;
+function extraerMenciones(msg) {
+    const ctx = msg.message?.extendedTextMessage?.contextInfo
+        || msg.message?.imageMessage?.contextInfo
+        || msg.message?.videoMessage?.contextInfo
+        || {};
+    const mencionados = ctx.mentionedJid || [];
+    return Array.isArray(mencionados) ? mencionados : [];
 }
 
-// ============================================================
-// OBTENER MENCIÓN
-// ============================================================
-
-function obtenerMencion(msg) {
-    const contexto =
-        msg?.message
-            ?.extendedTextMessage
-            ?.contextInfo;
-
-    const mencionados =
-        contexto?.mentionedJid || [];
-
-    if (
-        Array.isArray(mencionados) &&
-        mencionados.length > 0
-    ) {
-        return mencionados[0];
-    }
-
-    return null;
-}
-
-// ============================================================
-// OBTENER USUARIO RESPONDIDO
-// ============================================================
-
-function obtenerPersonaRespondida(msg) {
-    const contexto =
-        msg?.message
-            ?.extendedTextMessage
-            ?.contextInfo;
-
-    if (!contexto?.quotedMessage) {
-        return null;
-    }
-
-    return (
-        contexto.participant ||
-        contexto.participantAlt ||
-        null
-    );
-}
-
-// ============================================================
-// NORMALIZAR JID
-// ============================================================
-
-function normalizarJid(jid) {
-    if (!jid) {
-        return null;
-    }
-
-    const texto =
-        String(jid).trim();
-
-    if (!texto) {
-        return null;
-    }
-
-    return texto;
-}
-
-// ============================================================
-// CREAR TEXTO DE MENCIÓN
-// ============================================================
-
-function crearMencion(jid) {
-    const normalizado =
-        normalizarJid(jid);
-
-    if (!normalizado) {
-        return null;
-    }
-
-    const numero =
-        normalizado
-            .split('@')[0]
-            .split(':')[0]
-            .replace(/[^0-9]/g, '');
-
-    if (!numero) {
-        return null;
-    }
-
-    return `@${numero}`;
-}
-
-// ============================================================
-// NOMBRE BONITO DE LA ACCIÓN
-// ============================================================
-
-function obtenerAccion(tipo) {
-    const acciones = {
-
-        hug:
-            'abraza a',
-
-        kiss:
-            'besa a',
-
-        pat:
-            'acaricia a',
-
-        slap:
-            'da una bofetada a',
-
-        poke:
-            'molesta a',
-
-        cuddle:
-            'se acurruca con',
-
-        wave:
-            'saluda a',
-
-        smile:
-            'sonríe a',
-
-        dance:
-            'baila con',
-
-        cry:
-            'llora con',
-
-        happy:
-            'se alegra con',
-
-        angry:
-            'se enoja con',
-
-        love:
-            'ama a',
-
-        bite:
-            'muerde a',
-
-        blush:
-            'se sonroja con',
-
-        highfive:
-            'choca la mano con',
-
-        handhold:
-            'toma de la mano a',
-
-        feed:
-            'alimenta a',
-
-        bonk:
-            'golpea suavemente a',
-
-        yeet:
-            'lanza a',
-
-        wink:
-            'le guiña el ojo a',
-
-        stare:
-            'mira a',
-
-        tickle:
-            'hace cosquillas a',
-
-        punch:
-            'golpea a',
-
-        kill:
-            'patea a'
-    };
-
-    return (
-        acciones[tipo] ||
-        'interactúa con'
-    );
-}
-
-// ============================================================
-// TEXTO SIN OBJETIVO
-// ============================================================
-
-function textoSinObjetivo(
-    tipo,
-    autorTexto
-) {
-    const mensajes = {
-
-        hug:
-            `${autorTexto} quiere dar muchos abrazos 🤗`,
-
-        kiss:
-            `${autorTexto} quiere dar muchos besos 😘`,
-
-        pat:
-            `${autorTexto} quiere dar muchas caricias 🥰`,
-
-        wave:
-            `${autorTexto} quiere saludar a todos 👋`,
-
-        dance:
-            `${autorTexto} quiere bailar 💃`,
-
-        smile:
-            `${autorTexto} está sonriendo 😄`,
-
-        love:
-            `${autorTexto} está repartiendo amor ❤️`
-    };
-
-    return (
-        mensajes[tipo] ||
-        `${autorTexto} quiere hacer una reacción 🎭`
-    );
-}
-
-// ============================================================
-// CARGAR ANIME.JSON
-// ============================================================
-
-function cargarAnime() {
-
-    if (!fs.existsSync(ANIME_FILE)) {
-        throw new Error(
-            'El archivo database/anime.json no existe.'
-        );
-    }
-
-    const contenido =
-        fs.readFileSync(
-            ANIME_FILE,
-            'utf8'
-        );
-
-    if (!contenido.trim()) {
-        throw new Error(
-            'database/anime.json está vacío.'
-        );
-    }
-
+async function datosMencion(sock, jid) {
+    const jids = [jid];
     try {
-
-        return JSON.parse(
-            contenido
-        );
-
-    } catch {
-        throw new Error(
-            'database/anime.json contiene JSON inválido.'
-        );
-    }
-}
-
-// ============================================================
-// OBTENER URL ALEATORIA
-// ============================================================
-
-function obtenerUrl(tipo) {
-
-    const datos =
-        cargarAnime();
-
-    const reaccion =
-        datos?.[tipo];
-
-    if (
-        !reaccion ||
-        !Array.isArray(
-            reaccion.videos
-        ) ||
-        reaccion.videos.length === 0
-    ) {
-        return null;
-    }
-
-    const videos =
-        reaccion.videos.filter(
-            url =>
-                typeof url === 'string' &&
-                url.startsWith('http')
-        );
-
-    if (!videos.length) {
-        return null;
-    }
-
-    return (
-        videos[
-            Math.floor(
-                Math.random() *
-                videos.length
-            )
-        ]
-    );
-}
-
-// ============================================================
-// DESCARGAR GIF / VIDEO
-// ============================================================
-
-async function descargarGif(url) {
-
-    const controller =
-        new AbortController();
-
-    const timeout =
-        setTimeout(
-            () => controller.abort(),
-            30000
-        );
-
-    try {
-
-        const respuesta =
-            await fetch(
-                url,
-                {
-                    signal:
-                        controller.signal,
-
-                    headers: {
-                        'User-Agent':
-                            'BOT-API/1.0'
-                    }
-                }
-            );
-
-        if (!respuesta.ok) {
-            throw new Error(
-                `HTTP ${respuesta.status}`
-            );
+        if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+            const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
+            if (pn) {
+                const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                jids.push(pj);
+                return { token: '@' + pj.split('@')[0], jids };
+            }
         }
-
-        const arrayBuffer =
-            await respuesta.arrayBuffer();
-
-        return Buffer.from(
-            arrayBuffer
-        );
-
-    } finally {
-
-        clearTimeout(
-            timeout
-        );
-    }
+    } catch (e) {}
+    if (jid.endsWith('@lid')) jids.push(jid.replace('@lid', '@s.whatsapp.net'));
+    return { token: '@' + jid.split('@')[0], jids };
 }
-
-// ============================================================
-// VALIDAR REACCIÓN
-// ============================================================
-
-function reaccionValida(tipo) {
-    return REACCIONES.includes(
-        tipo
-    );
-}
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
-
     nombre: 'reaccion',
-
     categoria: 'Interacción',
-
-    alias: REACCIONES,
-
-    descripcion:
-        'Reacciones GIF. Ejemplo: .hug, .kiss, .pat, etc.',
-
-    ejecutar: async ({
-        sock,
-        msg,
-        responder
-    }) => {
-
-        const tipo =
-            obtenerTipo(msg);
-
-        // ----------------------------------------------------
-        // VALIDAR COMANDO
-        // ----------------------------------------------------
-
-        if (!reaccionValida(tipo)) {
-
-            await responder.texto(
-                '❌ Reacción no disponible.\n\n' +
-                '🎭 Reacciones disponibles:\n' +
-                REACCIONES
-                    .map(
-                        reaccion =>
-                            `› .${reaccion}`
-                    )
-                    .join('\n')
-            );
-
-            return;
-        }
-
+    alias: [...TIPOS, 'reacciones', 'reaction'],
+    descripcion: 'Reacciones anime: angry, hug, kill, kiss, pat, slap... +30 más',
+    uso: '.<reaccion> [@usuario]',
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
         try {
+            const from = msg.key.remoteJid;
 
-            console.log(
-                `[REACCION] Ejecutando: .${tipo}`
-            );
-
-            // ------------------------------------------------
-            // OBTENER URL
-            // ------------------------------------------------
-
-            const url =
-                obtenerUrl(tipo);
-
-            if (!url) {
-
-                await responder.texto(
-                    `❌ No encontré un GIF para la reacción *${tipo}*.`
-                );
-
-                return;
-            }
-
-            console.log(
-                `[REACCION] URL: ${url}`
-            );
-
-            // ------------------------------------------------
-            // DESCARGAR GIF
-            // ------------------------------------------------
-
-            const buffer =
-                await descargarGif(
-                    url
-                );
-
-            if (
-                !buffer ||
-                !buffer.length
-            ) {
-                throw new Error(
-                    'El GIF descargado está vacío.'
+            const textoOriginal = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().trim();
+            if (/^\s*[.!/](reacciones|reaction|reactionlist)\s*$/i.test(textoOriginal) || argumento?.trim().toLowerCase() === 'help') {
+                const lista = TIPOS.map(t => REACCIONES[t].emoji + ' ' + t).join('  ·  ');
+                return await responder.texto(
+                    '╭━━〔 🎭 𝐑𝐄𝐀𝐂𝐈𝐎𝐍𝐄𝐒 𝐀𝐍𝐈𝐌𝐄 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ Usa: .<tipo> [@usuario]\n' +
+                    '┃ Ej: .kill @alguien · .hug · .slap\n' +
+                    '┃\n' +
+                    '┃ ' + lista + '\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
             }
 
-            console.log(
-                `[REACCION] Archivo descargado: ${buffer.length} bytes`
-            );
-
-            // ------------------------------------------------
-            // OBTENER USUARIOS
-            // ------------------------------------------------
-
-            const autor =
-                obtenerAutor(
-                    msg
-                );
-
-            const mencionado =
-                obtenerMencion(
-                    msg
-                );
-
-            const respondido =
-                obtenerPersonaRespondida(
-                    msg
-                );
-
-            const objetivo =
-                mencionado ||
-                respondido ||
-                null;
-
-            // ------------------------------------------------
-            // CREAR MENCIÓN DEL AUTOR
-            // ------------------------------------------------
-
-            const textoAutor =
-                crearMencion(
-                    autor
-                ) ||
-                '@usuario';
-
-            // ------------------------------------------------
-            // ARRAY DE MENCIONES
-            // ------------------------------------------------
-
-            const menciones = [];
-
-            if (autor) {
-                menciones.push(
-                    autor
-                );
+            const tipo = detectarTipo(msg);
+            if (!tipo) {
+                return await responder.texto('❌ Reacción no válida. Usa .reacciones para ver todas.');
             }
 
-            if (
-                objetivo &&
-                !menciones.includes(
-                    objetivo
-                )
-            ) {
-                menciones.push(
-                    objetivo
-                );
-            }
+            const data = REACCIONES[tipo];
+            const videoUrl = data.videos[Math.floor(Math.random() * data.videos.length)];
 
-            // ------------------------------------------------
-            // CREAR CAPTION
-            // ------------------------------------------------
+            const autorJid = msg.key.participant || msg.key.remoteJid;
+            const autorMen = await datosMencion(sock, autorJid);
 
-            let caption =
-                `🎭 *${tipo.toUpperCase()}*\n\n`;
+            const mencionados = extraerMenciones(msg).filter(j => j !== autorJid);
+            let caption, menciones = [...autorMen.jids];
 
-            if (objetivo) {
-
-                const textoObjetivo =
-                    crearMencion(
-                        objetivo
-                    );
-
-                const accion =
-                    obtenerAccion(
-                        tipo
-                    );
-
-                if (
-                    textoObjetivo
-                ) {
-
-                    caption +=
-                        `💫 ${textoAutor} ${accion} ${textoObjetivo}`;
-
-                } else {
-
-                    caption +=
-                        `💫 ${textoSinObjetivo(
-                            tipo,
-                            textoAutor
-                        )}`;
-                }
-
+            if (mencionados.length > 0) {
+                const targetMen = await datosMencion(sock, mencionados[0]);
+                targetMen.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
+                caption = `${data.emoji} ${autorMen.token} *${data.target}* ${targetMen.token}`;
             } else {
-
-                caption +=
-                    `💫 ${textoSinObjetivo(
-                        tipo,
-                        textoAutor
-                    )}`;
+                caption = `${data.emoji} ${autorMen.token} *${data.self}*`;
             }
 
-            // ------------------------------------------------
-            // ENVIAR GIF
-            // ------------------------------------------------
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+            const vidResp = await fetch(videoUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!vidResp.ok) throw new Error('Video respondió ' + vidResp.status);
+            const vidBuffer = Buffer.from(await vidResp.arrayBuffer());
 
-            await sock.sendMessage(
-                msg.key.remoteJid,
-                {
-                    video: buffer,
-
-                    gifPlayback:
-                        true,
-
-                    caption,
-
-                    mentions:
-                        menciones
-                },
-                {
-                    quoted:
-                        msg
-                }
-            );
-
-            // ------------------------------------------------
-            // LOG
-            // ------------------------------------------------
-
-            console.log(
-                `[REACCION] .${tipo} enviado correctamente.`
-            );
+            await sock.sendMessage(from, {
+                video: vidBuffer,
+                mimetype: 'video/mp4',
+                caption,
+                mentions: menciones,
+                gifPlayback: false
+            }, { quoted: msg });
 
         } catch (error) {
-
-            console.error(
-                '[REACCION] Error:',
-                error?.stack ||
-                error?.message ||
-                error
-            );
-
-            await responder.texto(
-                '╭━━〔 ❌ 𝐑𝐄𝐀𝐂𝐂𝐈Ó𝐍 〕━━⬣\n' +
-                '┃\n' +
-                `┃ No pude enviar *${tipo}*.\n` +
-                '┃\n' +
-                `┃ ⚠️ ${
-                    error?.message ||
-                    'Error desconocido.'
-                }\n` +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
+            console.error('[REACCION] Error:', error);
+            await responder.texto('❌ Error enviando la reacción: ' + (error.message || error));
         }
     }
 };
