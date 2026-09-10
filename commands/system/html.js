@@ -1,178 +1,100 @@
-// ============================================================
-// BOT-API
-// COMANDO: HTML
-// ============================================================
-// Genera y envía un ARCHIVO HTML REAL como documento.
-//
-// Ejemplos:
-// .html Hola bro 🔥
-// .html BOT-API | Hola bro 🔥
-// .html <h1>BOT-API</h1><button onclick="alert('Hola')">Tocar</button>
-//
-// El archivo es autocontenido: incluye HTML + CSS + JavaScript.
-// WhatsApp lo recibe como archivo .html y muestra la opción
-// "Descargar". Al abrirlo desde el dispositivo, se ejecuta como
-// una página HTML normal.
-// ============================================================
+// commands/system/html.js — 🌐 Renderiza HTML VIVO en el chat (+ modo archivo)
+import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
-function escaparHtml(valor = '') {
-    return String(valor)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function escaparAtributo(valor = '') {
-    return escaparHtml(valor).replace(/\n/g, ' ');
-}
-
-function separarContenido(argumento = '') {
-    const texto = String(argumento).trim();
-
-    if (!texto) {
-        return {
-            titulo: 'BOT-API',
-            cuerpo: 'Página HTML interactiva.',
-            htmlPersonalizado: false,
-        };
-    }
-
-    // Si el usuario envía un documento HTML completo, lo conserva.
-    if (/<(!doctype|html|head|body)[\s>]/i.test(texto)) {
-        return {
-            titulo: 'BOT-API',
-            cuerpo: texto,
-            htmlPersonalizado: true,
-        };
-    }
-
-    const partes = texto.split(/\s*\|\s*/, 2);
-
-    if (partes.length === 2) {
-        return {
-            titulo: partes[0].trim().slice(0, 100) || 'BOT-API',
-            cuerpo: partes[1].trim(),
-            htmlPersonalizado: /<\/?[a-z][\s\S]*>/i.test(partes[1]),
-        };
-    }
-
-    return {
-        titulo: 'BOT-API',
-        cuerpo: texto,
-        htmlPersonalizado: /<\/?[a-z][\s\S]*>/i.test(texto),
-    };
-}
-
-function sanitizarHtmlBasico(html) {
-    // El archivo se genera localmente. Aun así quitamos elementos
-    // que podrían intentar acceder a recursos innecesarios.
+// Limpieza básica: sin iframes/object/embed/meta ni javascript: (anti trucos raros)
+function sanitizar(html) {
     return String(html)
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+        .replace(/<iframe\b[^>]*>/gi, '')
         .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
         .replace(/<embed\b[^>]*>/gi, '')
+        .replace(/<meta\b[^>]*>/gi, '')
         .replace(/javascript\s*:/gi, '')
         .trim();
 }
 
-function construirContenido(titulo, cuerpo, htmlPersonalizado) {
-    if (htmlPersonalizado) {
-        return sanitizarHtmlBasico(cuerpo);
-    }
+export default {
+    nombre: 'html',
+    categoria: 'Utilidades',
+    alias: ['htmlview', 'preview', 'verhtml', 'htmlcard'],
+    descripcion: 'Renderiza tu código HTML vivo en el chat',
+    uso: '.html <código>',
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
+        try {
+            const from = msg.key.remoteJid;
+            let code = String(argumento || '').trim();
 
-    return `
-        <section class="card">
-            <div class="badge">🌐 HTML INTERACTIVO</div>
-            <h1>${escaparHtml(titulo)}</h1>
-            <p>${escaparHtml(cuerpo).replace(/\n/g, '<br>')}</p>
-            <button id="boton" type="button">✨ TOCAR</button>
-            <div id="resultado" class="resultado"></div>
-        </section>
-    `;
-}
+            if (!code) {
+                return await responder.texto(
+                    '╭━━〔 🌐 𝐈𝐓 𝐏𝐄𝐈 𝐇𝐌 〕━━\n' +
+                    '┃\n' +
+                    '┃ Mándame código HTML y lo renderizo\n' +
+                    '┃ VIVO aquí en el chat (CSS y JS funcionan).\n' +
+                    '┃\n' +
+                    '┃ Ejemplos:\n' +
+                    '┃ .html <h1>HOLA</h1>\n' +
+                    '┃ .html <button onclick="alert(\'xd\')">TÓCAME</button>\n' +
+                    '┃ .html <marquee style="color:lime">xd xd</marquee>\n' +
+                    '┃\n' +
+                    '┃ Modo archivo descargable (como antes):\n' +
+                    '┃ .html file <código>\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
+            }
 
-function crearDocumentoHtml({ titulo, cuerpo, htmlPersonalizado }) {
-    const contenido = construirContenido(titulo, cuerpo, htmlPersonalizado);
-    const tituloSeguro = escaparAtributo(titulo || 'BOT-API');
+            // Modo archivo: .html file <código>
+            const modoFile = /^file\s+/i.test(code);
+            if (modoFile) code = code.replace(/^file\s+/i, '').trim();
 
-    return `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#080b16">
-<title>${tituloSeguro}</title>
-<style>
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:#080b16;color:#fff}
-body{display:flex;justify-content:center;align-items:center;padding:24px;background:
-radial-gradient(circle at 15% 10%,rgba(0,153,255,.28),transparent 30%),
-radial-gradient(circle at 85% 90%,rgba(145,0,255,.25),transparent 32%),#080b16}
-.card{width:min(100%,460px);padding:28px;border:1px solid rgba(100,180,255,.25);border-radius:28px;background:rgba(18,24,38,.92);box-shadow:0 20px 70px rgba(0,0,0,.45);text-align:center}
-.badge{font-size:13px;font-weight:700;letter-spacing:1.5px;opacity:.75;margin-bottom:16px}
-h1{margin:0 0 14px;font-size:32px;line-height:1.1}
-p{margin:0 0 24px;color:#c7cfdd;font-size:17px;line-height:1.55;word-break:break-word}
-button{border:0;border-radius:15px;padding:15px 24px;font-size:16px;font-weight:800;color:#fff;background:linear-gradient(135deg,#168cff,#7b3cff);box-shadow:0 10px 30px rgba(45,120,255,.28);cursor:pointer}
-button:active{transform:scale(.97)}
-.resultado{min-height:24px;margin-top:18px;color:#8fc7ff;font-weight:700}
+            // Tope de tamaño para que el mensaje no reviente
+            let truncado = false;
+            if (code.length > 9000) { code = code.slice(0, 9000); truncado = true; }
+
+            const limpio = sanitizar(code);
+            const lineas = code.split('\n').length;
+            const bytes = Buffer.byteLength(code, 'utf8');
+
+            if (modoFile) {
+                const doc = '<!DOCTYPE html>\n<html lang="es">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>BOT-API</title>\n</head>\n<body>\n' + limpio + '\n</body>\n</html>';
+                await sock.sendMessage(from, {
+                    document: Buffer.from(doc, 'utf8'),
+                    mimetype: 'text/html',
+                    fileName: 'BOT-API-' + Date.now() + '.html',
+                    caption: '🌐 Tu HTML como archivo (' + lineas + ' líneas)'
+                }, { quoted: msg });
+                return;
+            }
+
+            // Vista previa VIVA en el chat
+            const htmlPayload = `<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: transparent; font-family: 'Segoe UI', Roboto, Arial, sans-serif; }
+.hv-bar { background: linear-gradient(90deg, #0ea5e9, #7c3aed); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; padding: 9px 12px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; gap: 8px; }
+.hv-frame { background: #0f172a; border: 1px solid rgba(148,163,184,.25); border-top: 0; padding: 14px; min-height: 90px; color: #e2e8f0; overflow: hidden; }
+.hv-foot { background: #020617; color: #64748b; font-size: 10px; letter-spacing: 1px; padding: 7px 12px; border-radius: 0 0 12px 12px; font-family: 'Courier New', monospace; }
 </style>
-</head>
-<body>
-${contenido}
+<div class="hv-bar"><span>🌐 VISTA PREVIA HTML</span><span id="hvInfo"></span></div>
+<div class="hv-frame">
+${limpio}
+</div>
+<div class="hv-foot" id="hvFoot">⚡ renderizado en vivo por BOT-API</div>
 <script>
 (function(){
-  const boton=document.getElementById('boton');
-  const resultado=document.getElementById('resultado');
-  if(boton){
-    boton.addEventListener('click',function(){
-      if(resultado) resultado.textContent='✨ BOT-API • Interactivo';
-    });
-  }
+  var info = document.getElementById('hvInfo');
+  if (info) info.textContent = '${lineas} líneas · ' + ${bytes} + ' B${truncado ? ' · TRUNCADO' : ''}';
+  window.onerror = function(m, src, ln){
+    var f = document.getElementById('hvFoot');
+    if (f) { f.textContent = '⚠️ ERROR JS línea ' + ln + ': ' + m; f.style.color = '#ff6b6b'; }
+    return false;
+  };
 })();
-</script>
-</body>
-</html>`;
-}
+</script>`;
 
-const comando = {
-    nombre: 'html',
-    alias: ['htmlcard'],
-    categoria: 'utilidades',
-    descripcion: 'Genera y envía una página HTML interactiva como archivo.',
-    uso: '.html <contenido>',
-
-    async ejecutar({ sock, msg, jid, argumento, responder }) {
-        try {
-            const { titulo, cuerpo, htmlPersonalizado } = separarContenido(argumento);
-            const html = crearDocumentoHtml({
-                titulo,
-                cuerpo,
-                htmlPersonalizado,
-            });
-
-            const archivo = Buffer.from(html, 'utf8');
-            const nombre = `BOT-API-${Date.now()}.html`;
-
-            await sock.sendMessage(
-                jid,
-                {
-                    document: archivo,
-                    mimetype: 'text/html',
-                    fileName: nombre,
-                    caption: `🌐 ${titulo}`,
-                },
-                { quoted: msg }
-            );
+            await enviarHtmlInteractivo(sock, from, htmlPayload, '@HTML', 'htmlprev');
         } catch (error) {
-            console.error('[HTML] Error enviando archivo HTML:', error?.stack || error);
-
-            await responder.text(
-                `❌ No se pudo enviar el archivo HTML.\n\n${error?.message || 'Error desconocido'}`
-            );
+            console.error('[HTML] Error:', error);
+            await responder.texto('❌ Error al renderizar el HTML.');
         }
-    },
+    }
 };
-
-export default comando;
