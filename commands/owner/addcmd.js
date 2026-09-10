@@ -1,51 +1,102 @@
 // ============================================================
 // BOT-API
-// COMANDO: ADDCMD (solo owner)
-// ============================================================
-// Crea comandos nuevos desde el chat sin tocar el servidor.
-//
-// Ejemplos:
-// .addcmd fun/hola/export default { nombre: 'hola', categoria: 'Fun', alias: [], descripcion: 'Saluda', ejecutar: async ({ responder }) => { await responder.texto('Hola xd') } }
-// .addcmd economy/dar/export default { nombre: 'dar', categoria: 'Economy', alias: [], descripcion: 'Da dinero', ejecutar: async ({ argumento, responder }) => { await responder.texto('Diste ' + argumento) } }
+// COMANDO: ADDCMD (solo owner) — check de owner multi-fuente
 // ============================================================
 import fs from 'fs';
 import path from 'path';
 
+const OWNER_PRINCIPAL = '50578391933'; // ← tu número, crack
 const RUTA_OWNER = path.join(process.cwd(), 'database', 'owner.json');
 const CARPETAS = ['NSFW', 'ai', 'downloads', 'economy', 'fun', 'gacha', 'group', 'interaction', 'owner', 'sticker', 'system', 'utils'];
+const PROHIBIDO = [/child_process/, /process\.exit/, /rmSync/, /rmdirSync/];
 
-// Código prohibido (anti autodestrucción del server)
-const PROHIBIDO = [/child_process/, /process\.exit/, /rmSync/, /rmdirSync/, /format\s*\(/i];
+// ---------- Utilidades de números ----------
+function digits(s) { return String(s || '').replace(/\D/g, ''); }
 
-function esOwner(sender) {
-    try {
-        const raw = fs.readFileSync(RUTA_OWNER, 'utf8');
-        const db = JSON.parse(raw);
-        const lista = Array.isArray(db) ? db : Object.values(db);
-        const numeros = lista.map(v => String(v).replace(/\D/g, '')).filter(v => v.length > 5);
-        const limpio = String(sender).replace(/\D/g, '');
-        return numeros.includes(limpio);
-    } catch (e) {
-        return false;
+function recolectar(v, out) {
+    if (typeof v === 'string' || typeof v === 'number') {
+        const d = digits(v);
+        if (d.length > 5) out.push(d);
+    } else if (Array.isArray(v)) {
+        v.forEach(x => recolectar(x, out));
+    } else if (v && typeof v === 'object') {
+        Object.values(v).forEach(x => recolectar(x, out));
     }
 }
 
+// ---------- Fuente 1: database/owner.json ----------
+function ownersDesdeJson() {
+    try {
+        if (!fs.existsSync(RUTA_OWNER)) return [];
+        const out = [];
+        recolectar(JSON.parse(fs.readFileSync(RUTA_OWNER, 'utf8')), out);
+        return out;
+    } catch (e) { return []; }
+}
+
+// ---------- Fuente 2: variables globales (como usan muchos .update) ----------
+function ownersGlobales() {
+    const out = [];
+    const g = globalThis;
+    recolectar(g.owner || [], out);
+    recolectar(g.owners || [], out);
+    recolectar(g.ownerNumber || [], out);
+    recolectar(g.numOwner || [], out);
+    recolectar(g.config?.owner || [], out);
+    recolectar(g.settings?.owner || [], out);
+    recolectar(g.db?.settings?.owners || [], out);
+    return out;
+}
+
+// ---------- Fuente 3: config.js / settings.js del repo ----------
+async function ownersDesdeConfig() {
+    const rutas = ['../../config.js', '../../settings.js', '../../lib/config.js', '../../src/config.js'];
+    for (const r of rutas) {
+        try {
+            const mod = await import(r);
+            const c = mod.default || mod;
+            const out = [];
+            recolectar(c.owner || c.owners || c.ownerNumber || c.numOwner || [], out);
+            if (out.length) return out;
+        } catch (e) { /* no existe, sigue */ }
+    }
+    return [];
+}
+
+// ---------- CHECK FINAL (igual de flexible que tu .update) ----------
+async function esOwner(sender) {
+    const d = digits(sender);
+    if (!d) return false;
+    // Owner principal hardcodeado
+    if (d === OWNER_PRINCIPAL) return true;
+    // Todas las demás fuentes
+    const todos = [...ownersDesdeJson(), ...ownersGlobales(), ...(await ownersDesdeConfig())];
+    return todos.some(n => {
+        if (n === d) return true;
+        if (n.length < 6 || d.length < 6) return false;
+        return d.endsWith(n) || n.endsWith(d);
+    });
+}
+
+// ============================================================
+// COMANDO PRINCIPAL
+// ============================================================
 export default {
     nombre: 'addcmd',
     categoria: 'Owner',
     alias: ['crearcomando', 'newcmd', 'addcomando'],
     descripcion: 'Crea un comando nuevo desde el chat (solo owner)',
     uso: '.addcmd carpeta/nombre/CÓDIGO',
-    ejecutar: async ({ msg, argumento, responder }) => {
-        const sender = msg.key.participant || msg.key.remoteJid;
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
+        const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
 
-        if (!esOwner(sender)) {
+        if (!(await esOwner(sender))) {
             return await responder.texto(
                 '╭━━〔 🚫 𝐀𝐂𝐂𝐄𝐒𝐎 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Solo el owner puede crear comandos\n' +
+                '┃  Solo el owner puede crear comandos\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐓-𝐏 ⚡ 〕━━'
             );
         }
 
@@ -54,14 +105,14 @@ export default {
 
         if (!raw || partes.length < 3) {
             return await responder.texto(
-                '╭━━〔 ️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
+                '╭━━〔 🛠️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Uso: .addcmd carpeta/nombre/CÓDIGO\n' +
+                '┃  Uso: .addcmd carpeta/nombre/CÓDIGO\n' +
                 '┃\n' +
-                '┃  Carpetas:\n' +
+                '┃ 📁 Carpetas:\n' +
                 '┃ ' + CARPETAS.join(', ') + '\n' +
                 '┃\n' +
-                '┃  Ejemplo:\n' +
+                '┃ 📝 Ejemplo:\n' +
                 '┃ .addcmd fun/hola/export default {\n' +
                 '┃   nombre: \'hola\',\n' +
                 '┃   categoria: \'Fun\',\n' +
@@ -72,7 +123,7 @@ export default {
                 '┃   }\n' +
                 '┃ }\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━'
             );
         }
 
@@ -82,7 +133,7 @@ export default {
 
         if (!CARPETAS.includes(carpeta)) {
             return await responder.texto(
-                '╭━━〔 ️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
+                '╭━━〔 🛠️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Carpeta no válida: *' + carpeta + '*\n' +
                 '┃\n' +
@@ -93,18 +144,12 @@ export default {
             );
         }
 
-        if (!nombre) {
-            return await responder.texto('❌ Nombre de comando no válido.');
-        }
+        if (!nombre) return await responder.texto('❌ Nombre de comando no válido.');
+        if (!codigo) return await responder.texto('❌ Falta el código del comando.');
 
-        if (!codigo) {
-            return await responder.texto('❌ Falta el código del comando.');
-        }
-
-        // Estructura mínima del bot
         if (!/export\s+default/.test(codigo)) {
             return await responder.texto(
-                '╭━━〔 ️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
+                '╭━━〔 🛠️ 𝐃𝐃 𝐌𝐃 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ El código debe incluir:\n' +
                 '┃ export default { nombre, ejecutar }\n' +
@@ -113,10 +158,9 @@ export default {
             );
         }
 
-        // Bloqueo de código peligroso
         for (const regla of PROHIBIDO) {
             if (regla.test(codigo)) {
-                return await responder.texto('🚫 Código bloqueado: contiene instrucción prohibida (' + regla + ').');
+                return await responder.texto('🚫 Código bloqueado: instrucción prohibida detectada.');
             }
         }
 
@@ -132,41 +176,41 @@ export default {
                     '┃ ⚠️ Ya existe:\n' +
                     '┃ commands/' + carpeta + '/' + nombre + '.js\n' +
                     '┃\n' +
-                    '┃ Bórralo manual si quieres reemplazarlo\n' +
+                    '┃ Bórralo manual para reemplazarlo\n' +
                     '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
             }
 
             fs.writeFileSync(archivo, codigo, 'utf8');
 
-            // Validación de sintaxis: importa el módulo en prueba
+            // Prueba de sintaxis: si truena, se borra solo
             try {
                 await import(archivo + '?t=' + Date.now());
             } catch (e) {
-                fs.unlinkSync(archivo);
+                try { fs.unlinkSync(archivo); } catch (e2) {}
                 return await responder.texto(
-                    '╭━━〔 🛠️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
+                    '╭━━〔 🛠️ 𝐀𝐃 𝐌 〕━━\n' +
                     '┃\n' +
                     '┃ ❌ Error de sintaxis detectado\n' +
                     '┃ Archivo eliminado automáticamente\n' +
                     '┃\n' +
                     '┃ ' + String(e.message).slice(0, 150) + '\n' +
                     '┃\n' +
-                    '╰━━〔 ⚡ 𝐎-𝐏 ⚡ 〕━━'
+                    '╰━━〔 ⚡ 𝐁𝐓-𝐏 ⚡ 〕━━'
                 );
             }
 
             await responder.texto(
-                '╭━━〔 🛠️ 𝐀𝐃𝐃 𝐂𝐌𝐃 〕━━⬣\n' +
+                '╭━━〔 🛠️ 𝐀𝐃 𝐌 〕━━\n' +
                 '┃\n' +
                 '┃ ✅ Comando creado:\n' +
                 '┃ 📁 commands/' + carpeta + '/' + nombre + '.js\n' +
                 '┃\n' +
-                '┃ 🔄 Reinicia el bot para activarlo:\n' +
+                '┃ 🔄 Reinicia para activarlo:\n' +
                 '┃ pm2 restart alex-bot\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━'
             );
 
         } catch (error) {
