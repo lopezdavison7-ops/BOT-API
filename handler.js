@@ -1,7 +1,7 @@
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
-import { verificarAFK } from './commands/utils/afk.js'; // ← NUEVO: AFK detector
+// ❌ QUITA ESTO: import { verificarAFK } from './commands/utils/afk.js';
 
 const PREFIJO = '.';
 
@@ -28,13 +28,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (msg.key.remoteJid === 'status@broadcast') return;
 
         // ============================================
-        // 🔥 AFK DETECTOR (corre en CADA mensaje)
+        // 🔥 AFK DETECTOR (import dinámico, no crashea)
         // ============================================
         try {
+            const { verificarAFK } = await import('./commands/utils/afk.js');
             await verificarAFK({ sock, msg });
-        } catch (e) {
-            console.error('[AFK] Error en detector:', e?.message || e);
-        }
+        } catch (e) { /* afk.js no existe o falló, sigue normal */ }
 
         const jid = msg.key.remoteJid;
         const fromMe = msg.key.fromMe;
@@ -128,7 +127,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         // FIX MEJORADO: .menu 1 O .menu economy
         // ============================================
         if (nombreComando === 'menu' && args[0]) {
-            // Si es número, convertir a categoría
             if (!isNaN(args[0])) {
                 const num = parseInt(args[0]);
                 const mapa = global.menuMap?.[jid];
@@ -136,8 +134,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                     args[0] = mapa[num];
                 }
             }
-            // Si es texto, dejarlo tal cual (ej: "economy", "nsfw", "fun")
-            // El comando menu ya lo maneja
         }
 
         // ============================================
