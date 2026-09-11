@@ -1,7 +1,7 @@
-// handler.js
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
+import { verificarAFK } from './commands/utils/afk.js'; // ← NUEVO: AFK detector
 
 const PREFIJO = '.';
 
@@ -26,6 +26,15 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!msg.message) return;
         if (msg.key.remoteJid === 'status@broadcast') return;
+
+        // ============================================
+        // 🔥 AFK DETECTOR (corre en CADA mensaje)
+        // ============================================
+        try {
+            await verificarAFK({ sock, msg });
+        } catch (e) {
+            console.error('[AFK] Error en detector:', e?.message || e);
+        }
 
         const jid = msg.key.remoteJid;
         const fromMe = msg.key.fromMe;
@@ -116,14 +125,19 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const args = argumento ? argumento.split(' ') : [];
 
         // ============================================
-        // FIX: ACEPTAR .menu 1
+        // FIX MEJORADO: .menu 1 O .menu economy
         // ============================================
-        if (nombreComando === 'menu' && args[0] && !isNaN(args[0])) {
-            const num = parseInt(args[0]);
-            const mapa = global.menuMap?.[jid];
-            if (mapa && mapa[num]) {
-                args[0] = mapa[num];
+        if (nombreComando === 'menu' && args[0]) {
+            // Si es número, convertir a categoría
+            if (!isNaN(args[0])) {
+                const num = parseInt(args[0]);
+                const mapa = global.menuMap?.[jid];
+                if (mapa && mapa[num]) {
+                    args[0] = mapa[num];
+                }
             }
+            // Si es texto, dejarlo tal cual (ej: "economy", "nsfw", "fun")
+            // El comando menu ya lo maneja
         }
 
         // ============================================
