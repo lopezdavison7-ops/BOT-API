@@ -1,6 +1,6 @@
 // commands/utils/afk.js
 // ============================================================
-// COMANDO: AFK (sistema autónomo)
+// COMANDO: AFK (sistema autónomo con mención fija)
 // ============================================================
 import fs from 'fs';
 import path from 'path';
@@ -25,6 +25,29 @@ function fmtTiempo(ms) {
     if (m) return m + 'm ' + sec + 's';
     return sec + 's';
 }
+function limpiarNombre(n) {
+    return String(n || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
+}
+
+async function quienEs(sock, jid, nombreGuardado) {
+    // 1) Intentar resolver lid → número real (mención con nombre)
+    try {
+        if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+            const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
+            if (pn) {
+                const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                return { texto: '@' + pj.split('@')[0], mentions: [pj] };
+            }
+        }
+    } catch (e) { /* sin mapeo */ }
+    
+    // 2) Usar nombre guardado en negrita
+    const nombre = limpiarNombre(nombreGuardado);
+    if (nombre) return { texto: '*' + nombre + '*', mentions: [jid] };
+    
+    // 3) Último recurso
+    return { texto: '@' + jid.split('@')[0], mentions: [jid] };
+}
 
 export default {
     nombre: 'afk',
@@ -32,7 +55,7 @@ export default {
     alias: ['ausente', 'away', 'afkoff'],
     descripcion: 'Marca tu estado AFK con razón y aviso automático',
     uso: '.afk [razón] · .afk off',
-    ejecutar: async ({ msg, argumento, responder }) => {
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
         const sender = jidDe(msg);
         const db = leer();
         const accion = String(argumento || '').trim();
@@ -75,16 +98,20 @@ export default {
         };
         guardar(db);
 
-        return await responder.texto(
-            '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
-            '┃\n' +
-            '┃ 💤 @' + sender.split('@')[0] + ' ahora está AFK\n' +
-            '┃ 📝 Razón: ' + db[sender].razon + '\n' +
-            '┃\n' +
-            '┃ Se avisará a quien te mencione,\n' +
-            '┃ te responda o escriba tu nombre\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
-        );
+        const yo = await quienEs(sock, sender, msg.pushName);
+
+        await sock.sendMessage(msg.key.remoteJid, {
+            text:
+                '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
+                '┃\n' +
+                '┃ 💤 ' + yo.texto + ' ahora está AFK\n' +
+                '┃ 📝 Razón: ' + db[sender].razon + '\n' +
+                '┃\n' +
+                '┃ Se avisará a quien te mencione,\n' +
+                '┃ te responda o escriba tu nombre\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
+            mentions: yo.mentions
+        }, { quoted: msg });
     }
 };
