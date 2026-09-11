@@ -1,182 +1,224 @@
-// commands/utils/afk.js
-// ============================================================
-// COMANDO: AFK + detector global (mención real o nombre, nunca lid)
-// ============================================================
-import fs from 'fs';
-import path from 'path';
+import { loadCommands } from './controllers/cmdManager.js';
+import { revisarAntilink } from './lib/antilink.js';
+import { verificarPermisosAdmin } from './lib/grupos.js';
+import { quitarAfk, obtenerAfk } from './lib/afk.js'; // ← Usa la librería existente
 
-const RUTA_AFK = path.join(process.cwd(), 'database', 'afk.json');
+const PREFIJO = '.';
 
-function leer() {
-    try { return JSON.parse(fs.readFileSync(RUTA_AFK, 'utf8')); } catch (e) { return {}; }
-}
-function guardar(db) {
-    fs.mkdirSync(path.dirname(RUTA_AFK), { recursive: true });
-    fs.writeFileSync(RUTA_AFK, JSON.stringify(db, null, 2), 'utf8');
-}
-function jidDe(msg) {
-    return msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
-}
-function textoDe(msg) {
-    return msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        msg.message?.videoMessage?.caption || '';
-}
-function fmtTiempo(ms) {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    if (d) return d + 'd ' + h + 'h';
-    if (h) return h + 'h ' + m + 'm';
-    if (m) return m + 'm ' + sec + 's';
-    return sec + 's';
-}
-function limpiarNombre(n) {
-    return String(n || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
-}
+let comandos = null;
+let botJid = null;
 
-async function quienEs(sock, jid, nombreGuardado) {
-    try {
-        if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-            const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
-            if (pn) {
-                const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                return { texto: '@' + pj.split('@')[0], mentions: [pj] };
-            }
-        }
-    } catch (e) { /* sin mapeo */ }
-    const nombre = limpiarNombre(nombreGuardado);
-    if (nombre) return { texto: '*' + nombre + '*', mentions: [jid] };
-    return { texto: '@' + jid.split('@')[0], mentions: [jid] };
-}
-
-// ============================================================
-// DETECTOR GLOBAL (handler.js lo llama en CADA mensaje)
-// ============================================================
-export async function verificarAFK({ sock, msg }) {
-    try {
-        const db = leer();
-        if (!Object.keys(db).length) return;
-        const sender = jidDe(msg);
-        const texto = textoDe(msg).toLowerCase();
-        const ahora = Date.now();
-
-        // 1) Si el usuario AFK escribe → se le quita y se le avisa
-        if (db[sender]) {
-            const data = db[sender];
-            const duracion = fmtTiempo(ahora - data.tiempo);
-            delete db[sender];
-            guardar(db);
-            const yo = await quienEs(sock, sender, data.nombre || msg.pushName);
-            
-            // Mensaje llamativo de "VOLVISTE"
-            await sock.sendMessage(msg.key.remoteJid, {
-                text:
-                    '╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ 🎉 ' + yo.texto + ' ya regresaste!\n' +
-                    '┃\n' +
-                    '┃ 💤 Estuviste AFK: *' + duracion + '*\n' +
-                    '┃ 📝 Razón: ' + data.razon + '\n' +
-                    '┃\n' +
-                    '┃ 🎈 Bienvenido de vuelta\n' +
-                    '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
-                mentions: yo.mentions
-            }, { quoted: msg });
-            // NO hacemos return aquí → permite que el comando se ejecute después
-        }
-
-        // 2) Si mencionan / responden / escriben el nombre de un AFK → aviso
-        const ctx = msg.message?.extendedTextMessage?.contextInfo || {};
-        const mencionados = ctx.mentionedJid || [];
-        const citado = ctx.participant || null;
-
-        for (const [jid, data] of Object.entries(db)) {
-            if (jid === sender) continue;
-            let hit = mencionados.includes(jid) || citado === jid;
-            if (!hit && data.nombre && data.nombre.length >= 3 && texto.includes(data.nombre.toLowerCase())) hit = true;
-            if (hit) {
-                const el = await quienEs(sock, jid, data.nombre);
-                await sock.sendMessage(msg.key.remoteJid, {
-                    text:
-                        '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
-                        '┃\n' +
-                        '┃ 💤 ' + el.texto + ' está AFK\n' +
-                        '┃ 📝 Razón: ' + data.razon + '\n' +
-                        '┃ ⏱️ Desde hace: *' + fmtTiempo(ahora - data.tiempo) + '*\n' +
-                        '┃\n' +
-                        '┃ Tranqui, le llegará tu mensaje 😼\n' +
-                        '┃\n' +
-                        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
-                    mentions: el.mentions
-                }, { quoted: msg });
-                return;
-            }
-        }
-    } catch (e) { /* silencioso */ }
-}
-
-// ============================================================
-// COMANDO .afk
-// ============================================================
-export default {
-    nombre: 'afk',
-    categoria: 'Utils',
-    alias: ['ausente', 'afkoff'],
-    descripcion: 'Marca tu estado AFK con razón y aviso automático',
-    uso: '.afk [razón] · .afk off',
-    ejecutar: async ({ sock, msg, argumento, responder }) => {
-        const sender = jidDe(msg);
-        const db = leer();
-        const accion = String(argumento || '').trim();
-
-        if (/^(off|salir|volver)$/i.test(accion)) {
-            if (!db[sender]) return await responder.texto('⚠️ No estabas AFK.');
-            const data = db[sender];
-            delete db[sender];
-            guardar(db);
-            return await responder.texto(
-                '╭━━〔 🔙 𝐀𝐅𝐊 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ✅ AFK desactivado\n' +
-                '┃ ⏱️ Duraste: *' + fmtTiempo(Date.now() - data.tiempo) + '*\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
-        }
-
-        if (db[sender]) {
-            return await responder.texto(
-                '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ⚠️ Ya estás AFK:\n' +
-                '┃ 📝 ' + db[sender].razon + '\n' +
-                '┃\n' +
-                '┃ Usa .afk off para volver\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
-        }
-
-        db[sender] = {
-            razon: accion || 'Sin razón',
-            tiempo: Date.now(),
-            nombre: msg.pushName || ''
-        };
-        guardar(db);
-        const yo = await quienEs(sock, sender, msg.pushName);
-
-        return await responder.texto(
-            '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
-            '┃\n' +
-            '┃ 💤 ' + yo.texto + ' ahora está AFK\n' +
-            '┃ 📝 Razón: ' + db[sender].razon + '\n' +
-            '┃\n' +
-            '┃ Se avisará a quien te mencione,\n' +
-            '┃ te responda o escriba tu nombre\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-        );
+export async function cargarComandosHandler() {
+    if (!comandos) {
+        comandos = await loadCommands();
+        console.log(`[HANDLER] ✅ Comandos cargados: ${comandos.size}`);
     }
-};
+    return comandos;
+}
+
+export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []) {
+    try {
+        if (!comandos) {
+            comandos = await loadCommands();
+        }
+
+        if (!botJid) botJid = sock.user.id;
+
+        if (!msg.message) return;
+        if (msg.key.remoteJid === 'status@broadcast') return;
+
+        const jid = msg.key.remoteJid;
+        const fromMe = msg.key.fromMe;
+        const isGroup = jid?.endsWith('@g.us');
+
+        // ============================================
+        // 🔥 DETECTOR AFK (usa lib/afk.js existente)
+        // ============================================
+        if (!fromMe) {
+            try {
+                const usuarioAFK = quitarAfk({ jid, msg });
+                if (usuarioAFK) {
+                    const numero = String(usuarioAFK.usuario)
+                        .split('@')[0]
+                        .split(':')[0]
+                        .replace(/\D/g, '');
+                    
+                    const tiempo = Date.now() - usuarioAFK.tiempo;
+                    const minutos = Math.floor(tiempo / 60000);
+                    const segundos = Math.floor((tiempo % 60000) / 1000);
+                    
+                    await sock.sendMessage(jid, {
+                        text:
+                            `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
+                            `┃\n` +
+                            `┃ 🎉 @${numero} ya regresaste!\n` +
+                            `┃\n` +
+                            `┃ 💤 Estuviste AFK: *${minutos}m ${segundos}s*\n` +
+                            (usuarioAFK.razon ? `┃ 📝 Razón: ${usuarioAFK.razon}\n` : '') +
+                            `┃\n` +
+                            `┃ 🎈 Bienvenido de vuelta\n` +
+                            `┃\n` +
+                            `╰━━━━━━━━━━━━━━━━⬣`,
+                        mentions: numero ? [`${numero}@s.whatsapp.net`] : []
+                    }, { quoted: msg });
+                }
+            } catch (e) {
+                console.error('[AFK] Error en detector:', e?.message || e);
+            }
+        }
+
+        // ============================================
+        // ANTILINK — SOLO ENLACES DE WHATSAPP
+        // ============================================
+        if (isGroup && !fromMe) {
+            let esAdmin = false;
+
+            try {
+                const permiso = await verificarPermisosAdmin(sock, msg, jid);
+                esAdmin = Boolean(permiso?.ok);
+            } catch (error) {
+                console.error('[ANTILINK] Error comprobando admin:', error?.message || error);
+            }
+
+            const bloqueado = await revisarAntilink(sock, msg, esAdmin);
+
+            if (bloqueado) return;
+        }
+
+        // ============================================
+        // SACAR TEXTO
+        // ============================================
+        let texto = '';
+
+        if (msg.message?.conversation) {
+            texto = msg.message.conversation;
+        }
+        else if (msg.message?.extendedTextMessage?.text) {
+            texto = msg.message.extendedTextMessage.text;
+        }
+        else if (msg.message?.imageMessage?.caption) {
+            texto = msg.message.imageMessage.caption;
+        }
+        else if (msg.message?.videoMessage?.caption) {
+            texto = msg.message.videoMessage.caption;
+        }
+        else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+            try {
+                const json = JSON.parse(
+                    msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson
+                );
+                texto = json.id || '';
+            } catch {}
+        }
+        else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
+            texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
+        }
+
+        if (!texto) return;
+
+        if (/^\d+$/.test(texto.trim())) {
+            const num = parseInt(texto.trim());
+            const mapa = global.menuMap?.[jid];
+            if (mapa && mapa[num]) {
+                const catSeleccionada = mapa[num];
+                texto = `${prefijo}menu ${catSeleccionada}`;
+            }
+        }
+
+        if (!texto.startsWith(prefijo)) return;
+
+        const sinPrefijo = texto.slice(prefijo.length).trim();
+        const indiceEspacio = sinPrefijo.search(/\s/);
+
+        const nombreComando = (
+            indiceEspacio === -1
+                ? sinPrefijo
+                : sinPrefijo.slice(0, indiceEspacio)
+        ).toLowerCase();
+
+        const argumento =
+            indiceEspacio === -1
+                ? ''
+                : sinPrefijo.slice(indiceEspacio + 1);
+
+        const args = argumento ? argumento.split(' ') : [];
+
+        if (nombreComando === 'menu' && args[0]) {
+            if (!isNaN(args[0])) {
+                const num = parseInt(args[0]);
+                const mapa = global.menuMap?.[jid];
+                if (mapa && mapa[num]) {
+                    args[0] = mapa[num];
+                }
+            }
+        }
+
+        let cmd = comandos.get(nombreComando);
+        if (!cmd) {
+            cmd = [...comandos.values()].find(
+                c => c.alias?.includes(nombreComando)
+            );
+        }
+        if (!cmd) return;
+
+        await cmd.ejecutar({
+            sock,
+            msg,
+            args,
+            argumento,
+            listaComandos,
+            prefijo,
+            fromMe,
+            isGroup,
+            jid,
+            botJid,
+            responder: {
+                texto: async (text) => {
+                    await sock.sendMessage(
+                        jid,
+                        { text },
+                        { quoted: msg }
+                    );
+                },
+                imagen: async (img, caption = '') => {
+                    await sock.sendMessage(
+                        jid,
+                        { image: img, caption },
+                        { quoted: msg }
+                    );
+                },
+                video: async (vid, caption = '') => {
+                    await sock.sendMessage(
+                        jid,
+                        { video: vid, caption },
+                        { quoted: msg }
+                    );
+                },
+                audio: async (aud, ptt = true) => {
+                    await sock.sendMessage(
+                        jid,
+                        {
+                            audio: aud,
+                            mimetype: 'audio/mpeg',
+                            ptt
+                        },
+                        { quoted: msg }
+                    );
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('[HANDLER] Error al manejar mensaje:', error);
+
+        if (!msg.key.fromMe) {
+            await sock.sendMessage(
+                msg.key.remoteJid,
+                {
+                    text: `❌ Error: ${error.message}`
+                },
+                { quoted: msg }
+            );
+        }
+    }
+}
