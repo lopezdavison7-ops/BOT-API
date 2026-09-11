@@ -35,35 +35,40 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         // ============================================
         if (!fromMe) {
             try {
-                const afkLib = await import('./lib/afk.js');
-                
-                // Intenta con quitarAfk si existe
-                if (typeof afkLib.quitarAfk === 'function') {
-                    const usuarioAFK = afkLib.quitarAfk({ jid, msg });
-                    if (usuarioAFK) {
-                        const numero = String(usuarioAFK.usuario)
-                            .split('@')[0]
-                            .split(':')[0]
-                            .replace(/\D/g, '');
-                        
-                        const tiempo = Date.now() - (usuarioAFK.tiempo || Date.now());
-                        const minutos = Math.floor(tiempo / 60000);
-                        const segundos = Math.floor((tiempo % 60000) / 1000);
-                        
-                        await sock.sendMessage(jid, {
-                            text:
-                                `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
-                                `┃\n` +
-                                `┃ 🎉 @${numero} ya regresaste!\n` +
-                                `┃\n` +
-                                `┃ 💤 Estuviste AFK: *${minutos}m ${segundos}s*\n` +
-                                (usuarioAFK.razon ? `┃ 📝 Razón: ${usuarioAFK.razon}\n` : '') +
-                                `┃\n` +
-                                `┃ 🎈 Bienvenido de vuelta\n` +
-                                `┃\n` +
-                                `╰━━━━━━━━━━━━━━━━⬣`,
-                            mentions: numero ? [`${numero}@s.whatsapp.net`] : []
-                        }, { quoted: msg });
+                // ✅ FIX: No detectar si es un comando AFK (evita loop)
+                const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
+
+                if (!esComandoAfk) {
+                    const afkLib = await import('./lib/afk.js');
+
+                    if (typeof afkLib.quitarAfk === 'function') {
+                        const usuarioAFK = afkLib.quitarAfk({ jid, msg });
+                        if (usuarioAFK) {
+                            const numero = String(usuarioAFK.usuario)
+                                .split('@')[0]
+                                .split(':')[0]
+                                .replace(/\D/g, '');
+
+                            const tiempo = Date.now() - (usuarioAFK.tiempo || Date.now());
+                            const minutos = Math.floor(tiempo / 60000);
+                            const segundos = Math.floor((tiempo % 60000) / 1000);
+
+                            await sock.sendMessage(jid, {
+                                text:
+                                    `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
+                                    `┃\n` +
+                                    `┃ 🎉 @${numero} ya regresaste!\n` +
+                                    `┃\n` +
+                                    `┃ 💤 Estuviste AFK: *${minutos}m ${segundos}s*\n` +
+                                    (usuarioAFK.razon ? `┃ 📝 Razón: ${usuarioAFK.razon}\n` : '') +
+                                    `┃\n` +
+                                    `┃  Bienvenido de vuelta\n` +
+                                    `┃\n` +
+                                    `╰━━━━━━━━━━━━━━━━⬣`,
+                                mentions: numero ? [`${numero}@s.whatsapp.net`] : []
+                            }, { quoted: msg });
+                        }
                     }
                 }
             } catch (e) {
@@ -90,7 +95,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // SACAR TEXTO
+        // SACAR TEXTO - AHORA LEE BOTONES INTERACTIVOS
         // ============================================
         let texto = '';
 
@@ -106,6 +111,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         else if (msg.message?.videoMessage?.caption) {
             texto = msg.message.videoMessage.caption;
         }
+        // BOTONES INTERACTIVOS NUEVOS - TU MENU SENKU
         else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             try {
                 const json = JSON.parse(
@@ -114,12 +120,16 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 texto = json.id || '';
             } catch {}
         }
+        // LISTAS VIEJAS
         else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
         if (!texto) return;
 
+        // ============================================
+        // FIX: ACEPTAR SOLO NUMERO "1" "2" "3"
+        // ============================================
         if (/^\d+$/.test(texto.trim())) {
             const num = parseInt(texto.trim());
             const mapa = global.menuMap?.[jid];
@@ -131,6 +141,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!texto.startsWith(prefijo)) return;
 
+        // ============================================
+        // SEPARAR COMANDO Y ARGUMENTO
+        // ============================================
         const sinPrefijo = texto.slice(prefijo.length).trim();
         const indiceEspacio = sinPrefijo.search(/\s/);
 
@@ -147,6 +160,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const args = argumento ? argumento.split(' ') : [];
 
+        // ============================================
+        // FIX MEJORADO: .menu 1 O .menu economy
+        // ============================================
         if (nombreComando === 'menu' && args[0]) {
             if (!isNaN(args[0])) {
                 const num = parseInt(args[0]);
@@ -157,6 +173,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
+        // ============================================
+        // BUSCAR COMANDO O ALIAS
+        // ============================================
         let cmd = comandos.get(nombreComando);
         if (!cmd) {
             cmd = [...comandos.values()].find(
