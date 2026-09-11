@@ -35,11 +35,7 @@ function limpiarNombre(n) {
     return String(n || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
 }
 
-// ============================================================
-// ¿CÓMO MOSTRAR AL USUARIO? (mención real → nombre → número)
-// ============================================================
 async function quienEs(sock, jid, nombreGuardado) {
-    // 1) Resolver @lid → número real: la mención renderiza el nombre + ping
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
@@ -49,10 +45,8 @@ async function quienEs(sock, jid, nombreGuardado) {
             }
         }
     } catch (e) { /* sin mapeo */ }
-    // 2) Respaldo: el NOMBRE guardado en negrita (nada de lids feos)
     const nombre = limpiarNombre(nombreGuardado);
     if (nombre) return { texto: '*' + nombre + '*', mentions: [jid] };
-    // 3) Último recurso
     return { texto: '@' + jid.split('@')[0], mentions: [jid] };
 }
 
@@ -70,21 +64,27 @@ export async function verificarAFK({ sock, msg }) {
         // 1) Si el usuario AFK escribe → se le quita y se le avisa
         if (db[sender]) {
             const data = db[sender];
+            const duracion = fmtTiempo(ahora - data.tiempo);
             delete db[sender];
             guardar(db);
             const yo = await quienEs(sock, sender, data.nombre || msg.pushName);
+            
+            // Mensaje llamativo de "VOLVISTE"
             await sock.sendMessage(msg.key.remoteJid, {
                 text:
-                    '╭━━〔 🔙 𝐀𝐅𝐊 〕━━⬣\n' +
+                    '╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ ✅ ' + yo.texto + ' ya volviste\n' +
-                    '┃ ⏱️ Estuviste AFK: ' + fmtTiempo(ahora - data.tiempo) + '\n' +
+                    '┃ 🎉 ' + yo.texto + ' ya regresaste!\n' +
+                    '┃\n' +
+                    '┃ 💤 Estuviste AFK: *' + duracion + '*\n' +
                     '┃ 📝 Razón: ' + data.razon + '\n' +
                     '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐈 ⚡ 〕━━⬣',
+                    '┃ 🎈 Bienvenido de vuelta\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
                 mentions: yo.mentions
             }, { quoted: msg });
-            return;
+            // NO hacemos return aquí → permite que el comando se ejecute después
         }
 
         // 2) Si mencionan / responden / escriben el nombre de un AFK → aviso
@@ -104,11 +104,11 @@ export async function verificarAFK({ sock, msg }) {
                         '┃\n' +
                         '┃ 💤 ' + el.texto + ' está AFK\n' +
                         '┃ 📝 Razón: ' + data.razon + '\n' +
-                        '┃ ⏱️ Desde hace: ' + fmtTiempo(ahora - data.tiempo) + '\n' +
+                        '┃ ⏱️ Desde hace: *' + fmtTiempo(ahora - data.tiempo) + '*\n' +
                         '┃\n' +
                         '┃ Tranqui, le llegará tu mensaje 😼\n' +
                         '┃\n' +
-                        '╰━━〔 ⚡ 𝐎-𝐏 ⚡ 〕━━⬣',
+                        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
                     mentions: el.mentions
                 }, { quoted: msg });
                 return;
@@ -131,7 +131,6 @@ export default {
         const db = leer();
         const accion = String(argumento || '').trim();
 
-        // Quitar AFK manual
         if (/^(off|salir|volver)$/i.test(accion)) {
             if (!db[sender]) return await responder.texto('⚠️ No estabas AFK.');
             const data = db[sender];
@@ -141,27 +140,25 @@ export default {
                 '╭━━〔 🔙 𝐀𝐅𝐊 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ✅ AFK desactivado\n' +
-                '┃ ⏱️ Duraste: ' + fmtTiempo(Date.now() - data.tiempo) + '\n' +
+                '┃ ⏱️ Duraste: *' + fmtTiempo(Date.now() - data.tiempo) + '*\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
-        // Ya estaba AFK
         if (db[sender]) {
             return await responder.texto(
                 '╭━━〔 💤 𝐀𝐅𝐊 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ️ Ya estás AFK:\n' +
-                '┃  ' + db[sender].razon + '\n' +
+                '┃ ⚠️ Ya estás AFK:\n' +
+                '┃ 📝 ' + db[sender].razon + '\n' +
                 '┃\n' +
                 '┃ Usa .afk off para volver\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
-        // Marcar AFK (guarda el nombre para mostrarlo bonito)
         db[sender] = {
             razon: accion || 'Sin razón',
             tiempo: Date.now(),
@@ -179,7 +176,7 @@ export default {
             '┃ Se avisará a quien te mencione,\n' +
             '┃ te responda o escriba tu nombre\n' +
             '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐓-𝐏 ⚡ 〕━━⬣'
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
     }
 };
