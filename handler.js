@@ -1,11 +1,30 @@
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
+import fs from 'fs';
+import path from 'path';
 
 const PREFIJO = '.';
+const RUTA_AFK = path.join(process.cwd(), 'database', 'afk.json');
 
 let comandos = null;
 let botJid = null;
+
+function leerAfk() {
+    try { return JSON.parse(fs.readFileSync(RUTA_AFK, 'utf8')); } catch (e) { return {}; }
+}
+function guardarAfk(db) {
+    fs.mkdirSync(path.dirname(RUTA_AFK), { recursive: true });
+    fs.writeFileSync(RUTA_AFK, JSON.stringify(db, null, 2), 'utf8');
+}
+function fmtTiempo(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d) return d + 'd ' + h + 'h';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm ' + sec + 's';
+    return sec + 's';
+}
 
 export async function cargarComandosHandler() {
     if (!comandos) {
@@ -31,48 +50,42 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const isGroup = jid?.endsWith('@g.us');
 
         // ============================================
-        // 🔥 DETECTOR AFK (import dinámico seguro)
+        // 🔥 DETECTOR AFK AUTÓNOMO
         // ============================================
         if (!fromMe) {
             try {
-                // ✅ FIX: No detectar si es un comando AFK (evita loop)
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
 
                 if (!esComandoAfk) {
-                    const afkLib = await import('./lib/afk.js');
+                    const db = leerAfk();
+                    const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
 
-                    if (typeof afkLib.quitarAfk === 'function') {
-                        const usuarioAFK = afkLib.quitarAfk({ jid, msg });
-                        if (usuarioAFK) {
-                            const numero = String(usuarioAFK.usuario)
-                                .split('@')[0]
-                                .split(':')[0]
-                                .replace(/\D/g, '');
+                    if (db[sender]) {
+                        const data = db[sender];
+                        delete db[sender];
+                        guardarAfk(db);
 
-                            const tiempo = Date.now() - (usuarioAFK.tiempo || Date.now());
-                            const minutos = Math.floor(tiempo / 60000);
-                            const segundos = Math.floor((tiempo % 60000) / 1000);
+                        const numero = String(sender).split('@')[0].split(':')[0].replace(/\D/g, '');
 
-                            await sock.sendMessage(jid, {
-                                text:
-                                    `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
-                                    `┃\n` +
-                                    `┃ 🎉 @${numero} ya regresaste!\n` +
-                                    `┃\n` +
-                                    `┃ 💤 Estuviste AFK: *${minutos}m ${segundos}s*\n` +
-                                    (usuarioAFK.razon ? `┃ 📝 Razón: ${usuarioAFK.razon}\n` : '') +
-                                    `┃\n` +
-                                    `┃  Bienvenido de vuelta\n` +
-                                    `┃\n` +
-                                    `╰━━━━━━━━━━━━━━━━⬣`,
-                                mentions: numero ? [`${numero}@s.whatsapp.net`] : []
-                            }, { quoted: msg });
-                        }
+                        await sock.sendMessage(jid, {
+                            text:
+                                `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
+                                `┃\n` +
+                                `┃ 🎉 @${numero} ya regresaste!\n` +
+                                `┃\n` +
+                                `┃ 💤 Estuviste AFK: *${fmtTiempo(Date.now() - data.tiempo)}*\n` +
+                                (data.razon ? `┃ 📝 Razón: ${data.razon}\n` : '') +
+                                `┃\n` +
+                                `┃ 🎈 Bienvenido de vuelta\n` +
+                                `┃\n` +
+                                `╰━━━━━━━━━━━━━━━━⬣`,
+                            mentions: numero ? [`${numero}@s.whatsapp.net`] : []
+                        }, { quoted: msg });
                     }
                 }
             } catch (e) {
-                // Silencioso - si lib/afk.js no existe o falla, el bot sigue
+                console.error('[AFK] Error en detector:', e?.message || e);
             }
         }
 
@@ -95,7 +108,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // SACAR TEXTO - AHORA LEE BOTONES INTERACTIVOS
+        // SACAR TEXTO
         // ============================================
         let texto = '';
 
@@ -111,7 +124,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         else if (msg.message?.videoMessage?.caption) {
             texto = msg.message.videoMessage.caption;
         }
-        // BOTONES INTERACTIVOS NUEVOS - TU MENU SENKU
         else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             try {
                 const json = JSON.parse(
@@ -120,16 +132,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 texto = json.id || '';
             } catch {}
         }
-        // LISTAS VIEJAS
         else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
         if (!texto) return;
 
-        // ============================================
-        // FIX: ACEPTAR SOLO NUMERO "1" "2" "3"
-        // ============================================
         if (/^\d+$/.test(texto.trim())) {
             const num = parseInt(texto.trim());
             const mapa = global.menuMap?.[jid];
@@ -141,9 +149,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!texto.startsWith(prefijo)) return;
 
-        // ============================================
-        // SEPARAR COMANDO Y ARGUMENTO
-        // ============================================
         const sinPrefijo = texto.slice(prefijo.length).trim();
         const indiceEspacio = sinPrefijo.search(/\s/);
 
@@ -160,9 +165,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const args = argumento ? argumento.split(' ') : [];
 
-        // ============================================
-        // FIX MEJORADO: .menu 1 O .menu economy
-        // ============================================
         if (nombreComando === 'menu' && args[0]) {
             if (!isNaN(args[0])) {
                 const num = parseInt(args[0]);
@@ -173,9 +175,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
-        // ============================================
-        // BUSCAR COMANDO O ALIAS
-        // ============================================
         let cmd = comandos.get(nombreComando);
         if (!cmd) {
             cmd = [...comandos.values()].find(
