@@ -1,12 +1,59 @@
 // commands/fun/xnxxcard.js
 // ============================================================
-// BOT-API — XNXX CARD GENERATOR (versión simple)
-// ============================================================
-// Genera una tarjeta estilo XNXX con imagen y título
+// BOT-API — XNXX CARD GENERATOR (con subida automática)
 // ============================================================
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+
+async function subirImagen(buffer) {
+    try {
+        // Intentar con catbox.moe (API pública sin autenticación)
+        const fetch = (await import('node-fetch')).default;
+        
+        const boundary = '----FormBoundary' + Date.now();
+        const body = [
+            `--${boundary}\r\n`,
+            `Content-Disposition: form-data; name="reqtype"\r\n\r\n`,
+            `fileupload\r\n`,
+            `--${boundary}\r\n`,
+            `Content-Disposition: form-data; name="fileToUpload"; filename="image.jpg"\r\n`,
+            `Content-Type: image/jpeg\r\n\r\n`,
+            buffer,
+            `\r\n--${boundary}--\r\n`
+        ];
+
+        const res = await fetch('https://catbox.moe/user/api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': `multipart/form-data; boundary=${boundary}`
+            },
+            body: Buffer.concat(body.map(part => 
+                typeof part === 'string' ? Buffer.from(part) : part
+            ))
+        });
+
+        const url = await res.text();
+        if (url.startsWith('https://')) {
+            return url;
+        }
+        
+        // Fallback: intentar con 0x0.st
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('file', buffer, 'image.jpg');
+        
+        const res2 = await fetch('https://0x0.st', {
+            method: 'POST',
+            body: form
+        });
+        
+        return await res2.text();
+    } catch (e) {
+        console.error('[UPLOAD] Error:', e?.message);
+        return null;
+    }
+}
 
 export default {
     nombre: 'porno',
@@ -43,49 +90,29 @@ export default {
         
         if (quotedMsg?.imageMessage) {
             titulo = args;
+            
+            await responder.texto('⏳ Subiendo imagen...');
+            
             try {
-                // Método 1: Usar URL directa del mensaje (la más simple)
-                if (quotedMsg.imageMessage.url) {
-                    imageUrl = quotedMsg.imageMessage.url;
-                }
+                const buffer = await sock.downloadMediaMessage({
+                    key: {
+                        remoteJid: msg.key.remoteJid,
+                        id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+                        fromMe: false,
+                        participant: msg.message.extendedTextMessage.contextInfo.participant
+                    },
+                    message: quotedMsg
+                });
                 
-                // Método 2: Si no hay URL, descargar y guardar temporal
-                if (!imageUrl) {
-                    const buffer = await sock.downloadMediaMessage({
-                        key: {
-                            remoteJid: msg.key.remoteJid,
-                            id: msg.message.extendedTextMessage.contextInfo.stanzaId,
-                            fromMe: false,
-                            participant: msg.message.extendedTextMessage.contextInfo.participant
-                        },
-                        message: quotedMsg
-                    });
-                    
-                    // Guardar en archivo temporal
-                    const tmpPath = path.join(os.tmpdir(), `xnxx_${Date.now()}.jpg`);
-                    fs.writeFileSync(tmpPath, buffer);
-                    
-                    // Usar file:// URL (puede no funcionar con API externa)
-                    // Por eso intentamos con la URL del mensaje primero
-                    fs.unlinkSync(tmpPath); // Limpiar
-                }
+                imageUrl = await subirImagen(buffer);
                 
                 if (!imageUrl) {
-                    return await responder.texto(
-                        '❌ No se pudo obtener la URL de la imagen.\n' +
-                        'Intenta con el método 2:\n' +
-                        '`.xnxxcard https://url-imagen.jpg | Mi título`'
-                    );
+                    return await responder.texto('❌ Error subiendo imagen. Intenta de nuevo.');
                 }
                 
             } catch (e) {
                 console.error('[XNXXCARD] Error:', e?.message || e);
-                return await responder.texto(
-                    '❌ Error procesando imagen.\n' +
-                    'Usa URL directa:\n' +
-                    '`.xnxxcard https://url-imagen.jpg | Mi título`\n\n' +
-                    'Tip: sube tu foto a https://imgur.com y copia el link directo'
-                );
+                return await responder.texto('❌ Error procesando imagen: ' + (e?.message || 'Intenta de nuevo'));
             }
         }
         // Formato URL | titulo
@@ -116,9 +143,6 @@ export default {
                 '┃ 2️⃣ Con URL de imagen:\n' +
                 '┃    .xnxxcard https://... | <titulo>\n' +
                 '┃\n' +
-                '┃ 💡 Tip: sube fotos a imgur.com\n' +
-                '┃    y usa el link directo\n' +
-                '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
@@ -137,14 +161,7 @@ export default {
 
         } catch (error) {
             console.error('[XNXXCARD] Error generando:', error?.message || error);
-            await responder.texto(
-                '❌ Error generando tarjeta.\n' +
-                'La URL de WhatsApp es temporal.\n' +
-                'Usa una URL pública:\n\n' +
-                '1. Sube tu foto a https://imgur.com\n' +
-                '2. Copia el link directo\n' +
-                '3. Usa: `.xnxxcard https://i.imgur.com/XXX.jpg | Mi título`'
-            );
+            await responder.texto('❌ Error generando tarjeta: ' + (error?.message || 'Intenta de nuevo'));
         }
     }
 };
