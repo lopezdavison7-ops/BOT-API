@@ -1,20 +1,19 @@
 // commands/fun/xnxxcard.js
 // ============================================================
-// BOT-API — XNXX CARD GENERATOR (FIXED)
+// BOT-API — XNXX CARD GENERATOR (versión simple)
 // ============================================================
-// Genera una tarjeta estilo XNXX con imagen y título personalizado
-//
-// Formas de usar:
-// 1. Responde a una imagen + .xnxxcard <título>
-// 2. .xnxxcard <url_imagen> | <título>
+// Genera una tarjeta estilo XNXX con imagen y título
 // ============================================================
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export default {
-    nombre: 'xnxxcard',
+    nombre: 'porno',
     categoria: 'Fun',
-    alias: ['porno', 'tarjetaxnxx', 'cardxnxx', 'pornocarta'],
+    alias: ['xnxx', 'tarjetaxnxx', 'cardxnxx', 'pornocarta'],
     descripcion: 'Genera una tarjeta estilo XNXX con tu imagen y título',
-    uso: '.xnxxcard <titulo> (respondiendo a una imagen) · .xnxxcard <url> | <titulo>',
+    uso: '.xnxxcard <titulo> (respondiendo a imagen) · .xnxxcard <url> | <titulo>',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
         const args = String(argumento || '').trim();
 
@@ -42,59 +41,65 @@ export default {
         // Buscar imagen en mensaje citado
         const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         
-        if (quotedMsg) {
-            // Imagen citada
-            if (quotedMsg.imageMessage) {
-                try {
-                    const buffer = await sock.downloadMediaMessage({
-                        message: quotedMsg,
-                        type: 'image'
-                    });
-                    
-                    // Subir a tmpfiles.org
-                    const FormData = (await import('form-data')).default;
-                    const fetch = (await import('node-fetch')).default;
-                    
-                    const form = new FormData();
-                    form.append('file', buffer, { filename: 'img.jpg', contentType: 'image/jpeg' });
-                    
-                    const uploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-                        method: 'POST',
-                        body: form
-                    });
-                    const uploadJson = await uploadRes.json();
-                    
-                    if (uploadJson?.data?.url) {
-                        imageUrl = uploadJson.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-                        console.log('[XNXXCARD] Imagen subida:', imageUrl);
-                    }
-                } catch (e) {
-                    console.error('[XNXXCARD] Error procesando imagen citada:', e?.message);
-                    return await responder.texto('❌ Error al procesar la imagen. Intenta de nuevo.');
-                }
-            }
-            
-            // Sticker citado (convertir a imagen)
-            else if (quotedMsg.stickerMessage) {
-                return await responder.texto('❌ Los stickers no funcionan, usa una imagen normal.');
-            }
-            
+        if (quotedMsg?.imageMessage) {
             titulo = args;
-        }
-
-        // Si no hay imagen citada, buscar formato "url | titulo"
-        if (!imageUrl) {
-            if (args.includes('|')) {
-                const partes = args.split('|').map(s => s.trim());
-                const posibleUrl = partes[0];
-                titulo = partes.slice(1).join('|').trim();
-                
-                if (posibleUrl.startsWith('http')) {
-                    imageUrl = posibleUrl;
+            try {
+                // Método 1: Usar URL directa del mensaje (la más simple)
+                if (quotedMsg.imageMessage.url) {
+                    imageUrl = quotedMsg.imageMessage.url;
                 }
-            } else if (args.startsWith('http')) {
-                return await responder.texto('❌ Si usas URL, separa con | :\n`.xnxxcard https://... | Mi título`');
+                
+                // Método 2: Si no hay URL, descargar y guardar temporal
+                if (!imageUrl) {
+                    const buffer = await sock.downloadMediaMessage({
+                        key: {
+                            remoteJid: msg.key.remoteJid,
+                            id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+                            fromMe: false,
+                            participant: msg.message.extendedTextMessage.contextInfo.participant
+                        },
+                        message: quotedMsg
+                    });
+                    
+                    // Guardar en archivo temporal
+                    const tmpPath = path.join(os.tmpdir(), `xnxx_${Date.now()}.jpg`);
+                    fs.writeFileSync(tmpPath, buffer);
+                    
+                    // Usar file:// URL (puede no funcionar con API externa)
+                    // Por eso intentamos con la URL del mensaje primero
+                    fs.unlinkSync(tmpPath); // Limpiar
+                }
+                
+                if (!imageUrl) {
+                    return await responder.texto(
+                        '❌ No se pudo obtener la URL de la imagen.\n' +
+                        'Intenta con el método 2:\n' +
+                        '`.xnxxcard https://url-imagen.jpg | Mi título`'
+                    );
+                }
+                
+            } catch (e) {
+                console.error('[XNXXCARD] Error:', e?.message || e);
+                return await responder.texto(
+                    '❌ Error procesando imagen.\n' +
+                    'Usa URL directa:\n' +
+                    '`.xnxxcard https://url-imagen.jpg | Mi título`\n\n' +
+                    'Tip: sube tu foto a https://imgur.com y copia el link directo'
+                );
             }
+        }
+        // Formato URL | titulo
+        else if (args.includes('|')) {
+            const partes = args.split('|').map(s => s.trim());
+            const posibleUrl = partes[0];
+            titulo = partes.slice(1).join('|').trim();
+            
+            if (posibleUrl.startsWith('http')) {
+                imageUrl = posibleUrl;
+            }
+        }
+        else if (args.startsWith('http')) {
+            return await responder.texto('❌ Si usas URL, separa con | :\n`.xnxxcard https://... | Mi título`');
         }
 
         if (!imageUrl) {
@@ -103,11 +108,16 @@ export default {
                 '┃\n' +
                 '┃ ❌ No se detectó imagen\n' +
                 '┃\n' +
-                '┃ Responde a una foto y escribe:\n' +
-                '┃ .xnxxcard <título>\n' +
+                '┃ 📋 Formas de usar:\n' +
                 '┃\n' +
-                '┃ O usa URL:\n' +
-                '┃ .xnxxcard <url> | <titulo>\n' +
+                '┃ 1️⃣ Responde a una foto:\n' +
+                '┃    .xnxxcard <título>\n' +
+                '┃\n' +
+                '┃ 2️⃣ Con URL de imagen:\n' +
+                '┃    .xnxxcard https://... | <titulo>\n' +
+                '┃\n' +
+                '┃ 💡 Tip: sube fotos a imgur.com\n' +
+                '┃    y usa el link directo\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
@@ -119,8 +129,6 @@ export default {
 
         try {
             const apiUrl = `https://api.delirius.online/canvas/xnxxcard?image=${encodeURIComponent(imageUrl)}&title=${encodeURIComponent(titulo)}`;
-            
-            console.log('[XNXXCARD] Generando:', apiUrl);
 
             await responder.imagen(
                 { url: apiUrl },
@@ -128,8 +136,15 @@ export default {
             );
 
         } catch (error) {
-            console.error('[XNXXCARD] Error generando tarjeta:', error?.message || error);
-            await responder.texto('❌ Error generando la tarjeta: ' + (error?.message || 'Intenta de nuevo.'));
+            console.error('[XNXXCARD] Error generando:', error?.message || error);
+            await responder.texto(
+                '❌ Error generando tarjeta.\n' +
+                'La URL de WhatsApp es temporal.\n' +
+                'Usa una URL pública:\n\n' +
+                '1. Sube tu foto a https://imgur.com\n' +
+                '2. Copia el link directo\n' +
+                '3. Usa: `.xnxxcard https://i.imgur.com/XXX.jpg | Mi título`'
+            );
         }
     }
 };
