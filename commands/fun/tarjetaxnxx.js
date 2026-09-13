@@ -1,6 +1,6 @@
 // commands/fun/xnxxcard.js
 // ============================================================
-// BOT-API — XNXX CARD GENERATOR
+// BOT-API — XNXX CARD GENERATOR (FIXED)
 // ============================================================
 // Genera una tarjeta estilo XNXX con imagen y título personalizado
 //
@@ -10,9 +10,9 @@
 // ============================================================
 
 export default {
-    nombre: 'pornocarta',
+    nombre: 'xnxxcard',
     categoria: 'Fun',
-    alias: ['xnxx', 'tarjetaxnxx', 'cardxnxx', 'pornocarta'],
+    alias: ['porno', 'tarjetaxnxx', 'cardxnxx', 'pornocarta'],
     descripcion: 'Genera una tarjeta estilo XNXX con tu imagen y título',
     uso: '.xnxxcard <titulo> (respondiendo a una imagen) · .xnxxcard <url> | <titulo>',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
@@ -39,15 +39,19 @@ export default {
         let imageUrl = null;
         let titulo = '';
 
-        // Intentar extraer imagen de un mensaje citado
-        const ctx = msg.message?.extendedTextMessage?.contextInfo;
-        const quoted = ctx?.quotedMessage;
-
-        if (quoted) {
-            if (quoted.imageMessage) {
+        // Buscar imagen en mensaje citado
+        const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        if (quotedMsg) {
+            // Imagen citada
+            if (quotedMsg.imageMessage) {
                 try {
-                    // Descargar la imagen citada y obtener su URL temporal
-                    const buffer = await sock.downloadMediaMessage({ message: quoted });
+                    const buffer = await sock.downloadMediaMessage({
+                        message: quotedMsg,
+                        type: 'image'
+                    });
+                    
+                    // Subir a tmpfiles.org
                     const FormData = (await import('form-data')).default;
                     const fetch = (await import('node-fetch')).default;
                     
@@ -62,11 +66,19 @@ export default {
                     
                     if (uploadJson?.data?.url) {
                         imageUrl = uploadJson.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+                        console.log('[XNXXCARD] Imagen subida:', imageUrl);
                     }
                 } catch (e) {
-                    console.error('[XNXXCARD] Error subiendo imagen:', e?.message);
+                    console.error('[XNXXCARD] Error procesando imagen citada:', e?.message);
+                    return await responder.texto('❌ Error al procesar la imagen. Intenta de nuevo.');
                 }
             }
+            
+            // Sticker citado (convertir a imagen)
+            else if (quotedMsg.stickerMessage) {
+                return await responder.texto('❌ Los stickers no funcionan, usa una imagen normal.');
+            }
+            
             titulo = args;
         }
 
@@ -77,9 +89,7 @@ export default {
                 const posibleUrl = partes[0];
                 titulo = partes.slice(1).join('|').trim();
                 
-                if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(posibleUrl)) {
-                    imageUrl = posibleUrl;
-                } else if (posibleUrl.startsWith('http')) {
+                if (posibleUrl.startsWith('http')) {
                     imageUrl = posibleUrl;
                 }
             } else if (args.startsWith('http')) {
@@ -93,7 +103,10 @@ export default {
                 '┃\n' +
                 '┃ ❌ No se detectó imagen\n' +
                 '┃\n' +
-                '┃ Responde a una foto o usa:\n' +
+                '┃ Responde a una foto y escribe:\n' +
+                '┃ .xnxxcard <título>\n' +
+                '┃\n' +
+                '┃ O usa URL:\n' +
                 '┃ .xnxxcard <url> | <titulo>\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
@@ -106,6 +119,8 @@ export default {
 
         try {
             const apiUrl = `https://api.delirius.online/canvas/xnxxcard?image=${encodeURIComponent(imageUrl)}&title=${encodeURIComponent(titulo)}`;
+            
+            console.log('[XNXXCARD] Generando:', apiUrl);
 
             await responder.imagen(
                 { url: apiUrl },
@@ -113,7 +128,7 @@ export default {
             );
 
         } catch (error) {
-            console.error('[XNXXCARD] Error:', error?.message || error);
+            console.error('[XNXXCARD] Error generando tarjeta:', error?.message || error);
             await responder.texto('❌ Error generando la tarjeta: ' + (error?.message || 'Intenta de nuevo.'));
         }
     }
