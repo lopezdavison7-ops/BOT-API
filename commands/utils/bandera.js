@@ -76,7 +76,7 @@ function traducirDatos(d) {
 
 export default {
     nombre: 'bandera',
-    categoria: 'Info',
+    categoria: 'utils',
     alias: ['country', 'paisinfo', 'bandera', 'flag'],
     descripcion: 'Muestra información detallada de cualquier país',
     uso: '.pais <nombre del país>',
