@@ -1,6 +1,6 @@
 // commands/descargas/xvideos.js
 // ============================================================
-// BOT-API — XVIDEOS (búsqueda + descarga en 2 pasos)
+// BOT-API — XVIDEOS (debug directo en el mensaje)
 // ============================================================
 
 const API_BUSCAR = 'https://api.delirius.online/tools/xvideos?query=';
@@ -17,13 +17,10 @@ async function descargarVideo(video, responder) {
     for (const base of endpoints) {
         try {
             const res = await fetch(base + encodeURIComponent(video.url));
+            const texto = await res.text();
             
             let json;
-            try {
-                json = await res.json();
-            } catch (e) {
-                continue; // No es JSON, probar siguiente endpoint
-            }
+            try { json = JSON.parse(texto); } catch (e) { continue; }
 
             const d = json.data || json.datos;
             if (!d) continue;
@@ -34,20 +31,13 @@ async function descargarVideo(video, responder) {
 
             if (!link) continue;
 
-            const info =
-                '╭━━〔 🔞 𝐕𝐈𝐃𝐄𝐎 〕━━\n' +
-                '┃\n' +
-                '┃ 🎬 *' + titulo + '*\n' +
-                (d.duración || d.duration ? '┃ ⏱️ ' + (d.duración || d.duration) + '\n' : '') +
-                (d.vistas || d.views ? '┃ 👁️ ' + (d.vistas || d.views) + '\n' : '') +
-                (d.quality ? '┃ 🎥 ' + d.quality + '\n' : '') +
-                '┃\n' +
-                '┃ 📥 Enviando...\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━';
-
             if (thumb) {
-                try { await responder.imagen({ url: thumb }, info); } catch (e) {}
+                try {
+                    await responder.imagen(
+                        { url: thumb },
+                        '🎬 *' + titulo + '*\n📥 Enviando video...'
+                    );
+                } catch (e) {}
             }
 
             try {
@@ -61,24 +51,16 @@ async function descargarVideo(video, responder) {
         }
     }
 
-    // Fallback: mostrar thumb + link de la página
+    // Fallback
     if (video.image) {
         await responder.imagen(
             { url: video.image },
-            '╭━━〔 🔞 𝐗𝐕𝐈𝐃𝐄𝐎𝐒 〕━━⬣\n' +
-            '┃\n' +
-            '┃ 🎬 *' + (video.title || 'Video') + '*\n' +
-            (video.duration ? '┃ ⏱️ ' + video.duration + '\n' : '') +
-            (video.quality ? '┃ 🎥 ' + video.quality + '\n' : '') +
-            (video.author ? '┃ 👤 ' + video.author + '\n' : '') +
-            '┃\n' +
-            '┃ ❌ No se pudo descargar directo\n' +
-            '┃ 🔗 Ver aquí:\n┃ ' + video.url + '\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            '🎬 *' + (video.title || 'Video') + '*\n\n' +
+            '❌ No se pudo descargar directo\n' +
+            '🔗 Ver aquí: ' + video.url
         );
     } else {
-        await responder.texto('❌ No se pudo descargar. Link:\n' + video.url);
+        await responder.texto('❌ No se pudo descargar.\n🔗 ' + video.url);
     }
     return false;
 }
@@ -88,85 +70,78 @@ export default {
     categoria: 'Descargas',
     alias: ['xv', 'xvsearch', 'xvdl'],
     descripcion: 'Busca y descarga videos de Xvideos',
-    uso: '.xvideos <búsqueda> · .xvideos <número> · .xvideos <url>',
+    uso: '.xvideos <búsqueda>',
     ejecutar: async ({ msg, argumento, responder, jid }) => {
         const q = String(argumento || '').trim();
 
         if (!q) {
-            return await responder.texto(
-                '╭━━〔 🔞 𝐗𝐕𝐈𝐃𝐄𝐎𝐒 〕━━⬣\n' +
-                '┃\n' +
-                '┃ 📋 Cómo usar:\n' +
-                '┃\n' +
-                '┃ 1️⃣ Busca: .xvideos mia khalifa\n' +
-                '┃ 2️⃣ Elige: .xvideos 3\n' +
-                '┃\n' +
-                '┃ 💡 También por URL:\n' +
-                '┃ .xvideos https://xvideos.com/...\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+            return await responder.texto('❌ Escribe qué buscar: `.xvideos mia khalifa`');
         }
 
-        // ============================================
-        // CASO 1: NÚMERO → descargar elegido
-        // ============================================
+        // Número → descargar elegido
         if (/^\d+$/.test(q)) {
             const mapa = global.xvMap?.[jid];
             const video = mapa?.[Number(q)];
             if (!video) {
-                return await responder.texto('❌ Ese número no existe.\nPrimero busca: .xvideos <texto>');
+                return await responder.texto('❌ Ese número no existe. Busca primero: `.xvideos <texto>`');
             }
             return await descargarVideo(video, responder);
         }
 
-        // ============================================
-        // CASO 2: URL → descarga directa
-        // ============================================
+        // URL directa
         if (/^https?:\/\//i.test(q)) {
             return await descargarVideo({ url: q, title: 'Video' }, responder);
         }
 
-        // ============================================
-        // CASO 3: BÚSQUEDA
-        // ============================================
+        // Búsqueda
         try {
-            const res = await fetch(API_BUSCAR + encodeURIComponent(q));
-            
+            const url = API_BUSCAR + encodeURIComponent(q);
+
+            const res = await fetch(url);
+            const texto = await res.text();
+
+            // Intentar parsear
             let json;
             try {
-                json = await res.json();
+                json = JSON.parse(texto);
             } catch (e) {
-                return await responder.texto('❌ Error parseando respuesta de la API.');
+                return await responder.texto(
+                    '╭━━〔 🔴 𝐄𝐑𝐑𝐎𝐑 𝐃𝐄 𝐀𝐏𝐈 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ❌ No devolvió JSON válido\n' +
+                    '┃\n' +
+                    '┃ 📡 Status: ' + res.status + '\n' +
+                    '┃ 📄 Content-Type: ' + (res.headers.get('content-type') || 'N/A') + '\n' +
+                    '┃\n' +
+                    '┃ 📝 Respuesta:\n' +
+                    '┃ ' + texto.substring(0, 300) + '\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
             }
 
             if (!json.status || !Array.isArray(json.data) || json.data.length === 0) {
-                return await responder.texto('❌ Sin resultados para: *' + q + '*');
+                return await responder.texto(
+                    '❌ Sin resultados para: *' + q + '*\n\n' +
+                    '📡 Status: ' + res.status + '\n' +
+                    '📦 JSON: ' + JSON.stringify(json).substring(0, 200)
+                );
             }
 
             const lista = json.data.slice(0, 10);
 
-            // Guardar mapa para elegir por número
             global.xvMap = global.xvMap || {};
             global.xvMap[jid] = {};
 
-            let txt =
-                '╭━━〔 🔞 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒: ' + q.toUpperCase() + ' 〕━━⬣\n' +
-                '┃\n';
+            let txt = '╭━━〔 🔞 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒: ' + q.toUpperCase() + ' 〕━━⬣\n┃\n';
 
             lista.forEach((v, i) => {
                 global.xvMap[jid][i + 1] = v;
-                txt +=
-                    '┃ *' + (i + 1) + '.* ' + String(v.title).slice(0, 60) + '\n' +
-                    '┃      ' + (v.duration || '?') + ' · 🎥 ' + (v.quality || '?') + '\n' +
-                    '┃\n';
+                txt += '┃ *' + (i + 1) + '.* ' + String(v.title).slice(0, 50) + '\n';
+                txt += '┃    ⏱ ' + (v.duration || '?') + ' · 🎥 ' + (v.quality || '?') + '\n┃\n';
             });
 
-            txt +=
-                '┃ 📥 Descarga: .xvideos <número>\n' +
-                '┃    Ej: .xvideos 1\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+            txt += '┃ 📥 Elige: `.xvideos <número>`\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
             if (lista[0]?.image) {
                 await responder.imagen({ url: lista[0].image }, txt);
@@ -175,8 +150,15 @@ export default {
             }
 
         } catch (error) {
-            console.error('[XVIDEOS] Error:', error?.message || error);
-            await responder.texto('❌ Error buscando: ' + (error?.message || 'Intenta de nuevo'));
+            await responder.texto(
+                '╭━━〔 🔴 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ❌ ' + (error?.message || String(error)) + '\n' +
+                '┃\n' +
+                '┃ 📡 Tipo: ' + (error?.name || 'Desconocido') + '\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
         }
     }
 };
