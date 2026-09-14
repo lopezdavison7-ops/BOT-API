@@ -2,14 +2,10 @@
 // ============================================================
 // BOT-API — MEDIAFIRE DOWNLOADER (carpetas + archivos)
 // ============================================================
-// .mf <url>          → lista archivos si es carpeta / descarga si es archivo
-// .mf <número>       → descarga el archivo elegido de la lista
-// ============================================================
 
 const API = 'https://api.delirius.online/download/mediafire?url=';
 const MAX_BYTES = 100 * 1024 * 1024; // 100 MB límite
 
-// ---------- Formatear tamaño ----------
 function fmtSize(bytes) {
     const b = Number(bytes) || 0;
     if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
@@ -17,11 +13,10 @@ function fmtSize(bytes) {
     return b + ' B';
 }
 
-// ---------- Obtener link directo de la página de MediaFire ----------
 async function obtenerLinkDirecto(pageUrl) {
     const res = await fetch(pageUrl, {
         headers: {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
     });
     const html = await res.text();
@@ -34,7 +29,6 @@ async function obtenerLinkDirecto(pageUrl) {
     return m ? m[1].replace(/&amp;/g, '&') : null;
 }
 
-// ---------- Descargar y enviar ----------
 async function descargarYEnviar(sock, msg, jid, item, responder) {
     const nombre = item['nombre de archivo'] || item.filename || 'archivo';
     const mime = item.mime || 'application/octet-stream';
@@ -47,13 +41,11 @@ async function descargarYEnviar(sock, msg, jid, item, responder) {
         );
     }
 
-    // Obtener link directo
     const directo = await obtenerLinkDirecto(item.link);
     if (!directo) {
         return await responder.texto('❌ No se pudo obtener el link directo.\n🔗 Página: ' + item.link);
     }
 
-    // Descargar buffer con timeout de 60s
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 60000);
 
@@ -67,12 +59,11 @@ async function descargarYEnviar(sock, msg, jid, item, responder) {
     }
 
     if (!buffer || buffer.length === 0) {
-        return await responder.texto('❌ El archivo vino vacío. Intenta de nuevo.');
+        return await responder.texto('❌ El archivo vino vacío.');
     }
 
     const caption = '📦 *' + nombre + '*\n📊 ' + fmtSize(buffer.length);
 
-    // Enviar según tipo
     if (mime.startsWith('image/')) {
         await sock.sendMessage(jid, { image: buffer, caption }, { quoted: msg });
     } else if (mime.startsWith('video/')) {
@@ -89,15 +80,12 @@ async function descargarYEnviar(sock, msg, jid, item, responder) {
     }
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'mediafire',
     categoria: 'Descargas',
     alias: ['mf', 'mfdl', 'mediafiredl'],
     descripcion: 'Descarga archivos o carpetas de MediaFire',
-    uso: '.mf <url> · .mf <número de la lista>',
+    uso: '.mf <url> · .mf <número>',
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const q = String(argumento || '').trim();
 
@@ -116,9 +104,7 @@ export default {
             );
         }
 
-        // ============================================
-        // CASO 1: NÚMERO → descargar de la lista
-        // ============================================
+        // NÚMERO → descargar de la lista
         if (/^\d+$/.test(q)) {
             const mapa = global.mfMap?.[jid];
             const item = mapa?.[Number(q)];
@@ -129,14 +115,12 @@ export default {
             try {
                 await descargarYEnviar(sock, msg, jid, item, responder);
             } catch (e) {
-                await responder.texto('❌ Error descargando: ' + (e?.message || 'Intenta de nuevo'));
+                await responder.texto('❌ Error: ' + (e?.message || 'Intenta de nuevo'));
             }
             return;
         }
 
-        // ============================================
-        // CASO 2: URL → consultar API
-        // ============================================
+        // URL → consultar API
         if (!/mediafire\.com/i.test(q)) {
             return await responder.texto('❌ La URL debe ser de MediaFire');
         }
@@ -145,41 +129,57 @@ export default {
             const res = await fetch(API + encodeURIComponent(q));
             const json = await res.json();
 
-            if (!json.estado || !Array.isArray(json.datos) || json.datos.length === 0) {
-                return await responder.texto('❌ No se encontraron archivos en ese enlace.');
+            // ---------- CASO 1: CARPETA (array en datos) ----------
+            if (Array.isArray(json.datos) && json.datos.length > 0) {
+                const datos = json.datos;
+
+                if (datos.length > 1) {
+                    global.mfMap = global.mfMap || {};
+                    global.mfMap[jid] = {};
+
+                    let txt = '╭━━〔 📦 𝐂𝐀𝐑𝐏𝐄𝐓𝐀 〕━━⬣\n┃\n┃ 🗂️ ' + datos.length + ' archivos\n┃\n';
+
+                    datos.forEach((item, i) => {
+                        global.mfMap[jid][i + 1] = item;
+                        const nombre = item['nombre de archivo'] || item.filename || 'archivo';
+                        const icono = (item.mime || '').startsWith('image/') ? '🖼️' :
+                                      (item.mime || '').startsWith('video/') ? '🎬' :
+                                      (item.mime || '').startsWith('audio/') ? '🎵' : '📄';
+                        txt += '┃ *' + (i + 1) + '.* ' + icono + ' ' + String(nombre).slice(0, 40) + '\n';
+                        txt += '┃     ' + fmtSize(item.tamaño) + '\n┃\n';
+                    });
+
+                    txt += '┃ 📥 Descarga: .mf <número>\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+                    return await responder.texto(txt);
+                } else {
+                    // Un solo archivo en el array
+                    await responder.texto('⏳ Descargando *' + (datos[0]['nombre de archivo'] || datos[0].filename || 'archivo') + '*...');
+                    await descargarYEnviar(sock, msg, jid, datos[0], responder);
+                    return;
+                }
             }
 
-            const datos = json.datos;
-
-            // ---------- CARPETA: mostrar lista ----------
-            if (datos.length > 1) {
-                global.mfMap = global.mfMap || {};
-                global.mfMap[jid] = {};
-
-                let txt =
-                    '╭━━〔 📦 𝐂𝐀𝐑𝐏𝐄𝐓𝐀 𝐌𝐄𝐃𝐈𝐀𝐅𝐈𝐑𝐄 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ 🗂️ ' + datos.length + ' archivo(s) encontrados\n' +
-                    '┃\n';
-
-                datos.forEach((item, i) => {
-                    global.mfMap[jid][i + 1] = item;
-                    const nombre = item['nombre de archivo'] || item.filename || 'archivo';
-                    const icono = (item.mime || '').startsWith('image/') ? '🖼️' :
-                                  (item.mime || '').startsWith('video/') ? '🎬' :
-                                  (item.mime || '').startsWith('audio/') ? '🎵' : '📄';
-                    txt += '┃ *' + (i + 1) + '.* ' + icono + ' ' + String(nombre).slice(0, 40) + '\n';
-                    txt += '┃     ' + fmtSize(item.tamaño) + '\n┃\n';
-                });
-
-                txt += '┃ 📥 Descarga: .mf <número>\n┃    Ej: .mf 1\n┃\n━━〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
-                return await responder.texto(txt);
+            // ---------- CASO 2: ARCHIVO INDIVIDUAL (objeto en datos) ----------
+            if (json.datos && typeof json.datos === 'object' && !Array.isArray(json.datos)) {
+                if (json.datos.link) {
+                    await responder.texto('⏳ Descargando *' + (json.datos['nombre de archivo'] || json.datos.filename || 'archivo') + '*...');
+                    await descargarYEnviar(sock, msg, jid, json.datos, responder);
+                    return;
+                }
             }
 
-            // ---------- ARCHIVO ÚNICO: descargar directo ----------
-            await responder.texto('⏳ Descargando *' + (datos[0]['nombre de archivo'] || datos[0].filename || 'archivo') + '*...');
-            await descargarYEnviar(sock, msg, jid, datos[0], responder);
+            // ---------- CASO 3: Datos en la raíz ----------
+            if (json.link || json['nombre de archivo'] || json.filename) {
+                await responder.texto('⏳ Descargando *' + (json['nombre de archivo'] || json.filename || 'archivo') + '*...');
+                await descargarYEnviar(sock, msg, jid, json, responder);
+                return;
+            }
+
+            // ---------- Fallback: mostrar JSON para debug ----------
+            return await responder.texto(
+                '❌ No se encontraron archivos.\n\n' +
+                '📡 Respuesta de la API:\n```\n' + JSON.stringify(json, null, 2).substring(0, 500) + '\n```'
+            );
 
         } catch (error) {
             console.error('[MF] Error:', error?.message || error);
