@@ -1,6 +1,6 @@
 // commands/fun/ship.js
 // ============================================================
-// BOT-API — SHIP (Delirius Canvas API - ULTRA RÁPIDO)
+// BOT-API — SHIP (Delirius API - SIN ESPERAS)
 // ============================================================
 
 const NIVELES = [
@@ -22,114 +22,83 @@ const FRASES = [
     'El destino ha hablado',
     'Los astros no mienten',
     'Cupido opinó fuerte',
-    'Resultado científicamente random',
-    'El amor es ciego... y el bot también',
     'Datos 100% reales no fake',
     'Cupido está orgulloso',
     'El universo conspira',
     'Ni la NASA lo calcula mejor'
 ];
 
-function obtenerNivel(porcentaje) {
-    for (const n of NIVELES) {
-        if (porcentaje >= n.min) return n;
-    }
+function obtenerNivel(p) {
+    for (const n of NIVELES) if (p >= n.min) return n;
     return NIVELES[NIVELES.length - 1];
+}
+
+async function getPP(sock, jid, fallback) {
+    try {
+        return await Promise.race([
+            sock.profilePictureUrl(jid, 'image'),
+            new Promise((_, rej) => setTimeout(() => rej('timeout'), 1500))
+        ]);
+    } catch {
+        return fallback;
+    }
 }
 
 export default {
     nombre: 'ship',
     categoria: 'Fun',
     alias: ['pareja', 'amor', 'compatibilidad'],
-    descripcion: 'Calcula compatibilidad con imagen canvas',
-    uso: '.ship @persona o responde a un mensaje',
-    ejecutar: async ({ msg, argumento, responder, sock }) => {
+    descripcion: 'Calcula compatibilidad',
+    uso: '.ship @persona',
+    ejecutar: async ({ msg, sock }) => {
         const chatJid = msg.key.remoteJid;
-        const s = sock || global.conns?.[0] || Object.values(global.conns)[0];
+        const s = sock || global.conns?.[0];
         const sender = msg.key.participant || msg.key.remoteJid;
         const ctx = msg.message?.extendedTextMessage?.contextInfo;
 
-        // Detectar target
-        let target = null;
-        if (ctx?.quotedMessage) {
-            target = ctx.participant;
-        } else if (ctx?.mentionedJid?.length > 0) {
-            target = ctx.mentionedJid[0];
-        }
+        const target = ctx?.quotedMessage ? ctx.participant : ctx?.mentionedJid?.[0];
+        if (!target) return;
 
-        if (!target) {
-            return responder.texto(
-                '╭━━〔 💘 𝐒𝐇𝐈𝐏 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Falta la otra persona\n' +
-                '┃\n' +
-                '┃ 📋 Uso:\n' +
-                '┃ • .ship @persona\n' +
-                '┃ • Responde a un mensaje\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
-        }
+        const porcentaje = Math.floor(Math.random() * 101);
+        const nivel = obtenerNivel(porcentaje);
+        const frase = FRASES[Math.floor(Math.random() * FRASES.length)];
+
+        const fallback = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+
+        // Cargar fotos en PARALELO con timeout
+        const [pp1, pp2] = await Promise.all([
+            getPP(s, sender, fallback),
+            getPP(s, target, fallback)
+        ]);
+
+        const nombre1 = msg.pushName || sender.split('@')[0];
+        const nombre2 = target.split('@')[0];
+        const n1 = sender.split('@')[0];
+        const n2 = target.split('@')[0];
+
+        // Construir URL inmediatamente
+        const apiUrl = `https://api.delirius.online/canvas/ship?image1=${encodeURIComponent(pp1)}&image2=${encodeURIComponent(pp2)}&name1=${encodeURIComponent(nombre1)}&name2=${encodeURIComponent(nombre2)}&percentage=${porcentaje}&text=${encodeURIComponent(nivel.msg)}`;
+
+        const caption =
+            `╭━━〔 💘 𝐒𝐇𝐈𝐏𝐏𝐄𝐑 〕━━⬣\n` +
+            `┃\n` +
+            `┃ 💑 @${n1} + @${n2}\n` +
+            `┃\n` +
+            `┃ 📊 *${porcentaje}%* ${nivel.emoji} ${nivel.msg}\n` +
+            `┃ 💬 "${frase}"\n` +
+            `┃\n` +
+            `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
 
         try {
-            // Obtener fotos de perfil
-            let pp1 = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
-            let pp2 = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
-
-            try { pp1 = await s.profilePictureUrl(sender, 'image'); } catch {}
-            try { pp2 = await s.profilePictureUrl(target, 'image'); } catch {}
-
-            // Obtener nombres
-            const nombre1 = msg.pushName || sender.split('@')[0];
-            let nombre2 = target.split('@')[0];
-            try {
-                const contact = await s.getContact?.(target);
-                if (contact?.name) nombre2 = contact.name;
-            } catch {}
-
-            // Generar porcentaje
-            const porcentaje = Math.floor(Math.random() * 101);
-            const nivel = obtenerNivel(porcentaje);
-            const frase = FRASES[Math.floor(Math.random() * FRASES.length)];
-
-            // Construir URL de la API
-            const apiUrl = `https://api.delirius.online/canvas/ship?` +
-                `image1=${encodeURIComponent(pp1)}` +
-                `&image2=${encodeURIComponent(pp2)}` +
-                `&name1=${encodeURIComponent(nombre1)}` +
-                `&name2=${encodeURIComponent(nombre2)}` +
-                `&percentage=${porcentaje}` +
-                `&text=${encodeURIComponent(nivel.msg)}`;
-
-            const n1 = sender.split('@')[0];
-            const n2 = target.split('@')[0];
-
-            const caption =
-                `╭━━〔 💘 𝐒𝐇𝐈𝐏𝐏𝐄𝐑 〕━━⬣\n` +
-                `┃\n` +
-                `┃ 💑 @${n1} + @${n2}\n` +
-                `┃\n` +
-                `┃ 📊 *${porcentaje}%* ${nivel.emoji} ${nivel.msg}\n` +
-                `┃ 💬 "${frase}"\n` +
-                `┃\n` +
-                `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
-
+            // Enviar directamente SIN mensajes previos
             await s.sendMessage(
                 chatJid,
                 { image: { url: apiUrl }, caption, mentions: [sender, target] },
                 { quoted: msg }
             );
-
         } catch (error) {
-            console.error('[SHIP] Error:', error?.message || error);
-            
-            // Fallback: texto simple
-            const porcentaje = Math.floor(Math.random() * 101);
-            const nivel = obtenerNivel(porcentaje);
-            const n1 = sender.split('@')[0];
-            const n2 = target.split('@')[0];
+            // Fallback texto si falla la imagen
             const barra = '█'.repeat(Math.floor(porcentaje / 10)) + '░'.repeat(10 - Math.floor(porcentaje / 10));
-
             await s.sendMessage(
                 chatJid,
                 {
