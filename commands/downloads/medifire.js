@@ -4,13 +4,26 @@
 // ============================================================
 
 const API = 'https://api.delirius.online/download/mediafire?url=';
-const MAX_BYTES = 100 * 1024 * 1024; // 100 MB límite
+const MAX_BYTES = 150 * 1024 * 1024; // 150 MB límite (aumentado)
 
 function fmtSize(bytes) {
     const b = Number(bytes) || 0;
     if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
     if (b >= 1024) return (b / 1024).toFixed(2) + ' KB';
     return b + ' B';
+}
+
+function parseSize(sizeStr) {
+    if (typeof sizeStr === 'number') return sizeStr;
+    const str = String(sizeStr).toLowerCase().trim();
+    const match = str.match(/([\d.]+)\s*(gb|mb|kb|b)?/);
+    if (!match) return 0;
+    const num = parseFloat(match[1]);
+    const unit = match[2] || 'b';
+    if (unit === 'gb') return num * 1024 * 1024 * 1024;
+    if (unit === 'mb') return num * 1024 * 1024;
+    if (unit === 'kb') return num * 1024;
+    return num;
 }
 
 async function obtenerLinkDirecto(pageUrl) {
@@ -30,28 +43,35 @@ async function obtenerLinkDirecto(pageUrl) {
 }
 
 async function descargarYEnviar(sock, msg, jid, item, responder) {
-    const nombre = item['nombre de archivo'] || item.filename || 'archivo';
+    const nombre = item.filename || item['nombre de archivo'] || 'archivo';
     const mime = item.mime || 'application/octet-stream';
-    const tamaño = Number(item.tamaño) || 0;
+    const tamaño = parseSize(item.size || item.tamaño || 0);
 
     if (tamaño > MAX_BYTES) {
         return await responder.texto(
-            '⚠️ El archivo pesa *' + fmtSize(tamaño) + '* (más de 100 MB).\n' +
+            '⚠️ El archivo pesa *' + fmtSize(tamaño) + '* (más de 150 MB).\n' +
             '🔗 Descárgalo manual:\n' + item.link
         );
     }
 
-    const directo = await obtenerLinkDirecto(item.link);
-    if (!directo) {
-        return await responder.texto('❌ No se pudo obtener el link directo.\n🔗 Página: ' + item.link);
+    // Si el link ya es directo (de la API), úsalo directamente
+    let linkDirecto = item.link;
+    if (linkDirecto && linkDirecto.includes('download') && linkDirecto.includes('mediafire.com')) {
+        // Ya es directo, no hacer scraping
+    } else {
+        // Intentar obtener link directo
+        linkDirecto = await obtenerLinkDirecto(item.link);
+        if (!linkDirecto) {
+            return await responder.texto('❌ No se pudo obtener el link directo.\n🔗 Página: ' + item.link);
+        }
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
+    const timer = setTimeout(() => controller.abort(), 90000);
 
     let buffer;
     try {
-        const res = await fetch(directo, { signal: controller.signal });
+        const res = await fetch(linkDirecto, { signal: controller.signal });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         buffer = Buffer.from(await res.arrayBuffer());
     } finally {
@@ -73,7 +93,7 @@ async function descargarYEnviar(sock, msg, jid, item, responder) {
     } else {
         await sock.sendMessage(jid, {
             document: buffer,
-            mimetype: mime,
+            mimetype: mime || 'application/octet-stream',
             fileName: nombre,
             caption
         }, { quoted: msg });
@@ -111,7 +131,7 @@ export default {
             if (!item) {
                 return await responder.texto('❌ Ese número no existe.\nPrimero usa: .mf <url de carpeta>');
             }
-            await responder.texto('⏳ Descargando *' + (item['nombre de archivo'] || item.filename || 'archivo') + '*...');
+            await responder.texto('⏳ Descargando *' + (item.filename || item['nombre de archivo'] || 'archivo') + '*...');
             try {
                 await descargarYEnviar(sock, msg, jid, item, responder);
             } catch (e) {
@@ -129,9 +149,9 @@ export default {
             const res = await fetch(API + encodeURIComponent(q));
             const json = await res.json();
 
-            // ---------- CASO 1: CARPETA (array en datos) ----------
-            if (Array.isArray(json.datos) && json.datos.length > 0) {
-                const datos = json.datos;
+            // ---------- CASO 1: CARPETA (array en data) ----------
+            if (Array.isArray(json.data) && json.data.length > 0) {
+                const datos = json.data;
 
                 if (datos.length > 1) {
                     global.mfMap = global.mfMap || {};
@@ -141,38 +161,30 @@ export default {
 
                     datos.forEach((item, i) => {
                         global.mfMap[jid][i + 1] = item;
-                        const nombre = item['nombre de archivo'] || item.filename || 'archivo';
+                        const nombre = item.filename || item['nombre de archivo'] || 'archivo';
                         const icono = (item.mime || '').startsWith('image/') ? '🖼️' :
                                       (item.mime || '').startsWith('video/') ? '🎬' :
                                       (item.mime || '').startsWith('audio/') ? '🎵' : '📄';
                         txt += '┃ *' + (i + 1) + '.* ' + icono + ' ' + String(nombre).slice(0, 40) + '\n';
-                        txt += '┃     ' + fmtSize(item.tamaño) + '\n┃\n';
+                        txt += '┃     ' + (item.size || item.tamaño || '?') + '\n┃\n';
                     });
 
                     txt += '┃ 📥 Descarga: .mf <número>\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
                     return await responder.texto(txt);
                 } else {
-                    // Un solo archivo en el array
-                    await responder.texto('⏳ Descargando *' + (datos[0]['nombre de archivo'] || datos[0].filename || 'archivo') + '*...');
+                    await responder.texto('⏳ Descargando *' + (datos[0].filename || datos[0]['nombre de archivo'] || 'archivo') + '*...');
                     await descargarYEnviar(sock, msg, jid, datos[0], responder);
                     return;
                 }
             }
 
-            // ---------- CASO 2: ARCHIVO INDIVIDUAL (objeto en datos) ----------
-            if (json.datos && typeof json.datos === 'object' && !Array.isArray(json.datos)) {
-                if (json.datos.link) {
-                    await responder.texto('⏳ Descargando *' + (json.datos['nombre de archivo'] || json.datos.filename || 'archivo') + '*...');
-                    await descargarYEnviar(sock, msg, jid, json.datos, responder);
+            // ---------- CASO 2: ARCHIVO INDIVIDUAL (objeto en data) ----------
+            if (json.data && typeof json.data === 'object' && !Array.isArray(json.data)) {
+                if (json.data.link) {
+                    await responder.texto('⏳ Descargando *' + (json.data.filename || json.data['nombre de archivo'] || 'archivo') + '*...');
+                    await descargarYEnviar(sock, msg, jid, json.data, responder);
                     return;
                 }
-            }
-
-            // ---------- CASO 3: Datos en la raíz ----------
-            if (json.link || json['nombre de archivo'] || json.filename) {
-                await responder.texto('⏳ Descargando *' + (json['nombre de archivo'] || json.filename || 'archivo') + '*...');
-                await descargarYEnviar(sock, msg, jid, json, responder);
-                return;
             }
 
             // ---------- Fallback: mostrar JSON para debug ----------
