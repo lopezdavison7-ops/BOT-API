@@ -4,7 +4,7 @@
 // ============================================================
 
 const API = 'https://api.delirius.online/download/mediafire?url=';
-const MAX_BYTES = 150 * 1024 * 1024; // 150 MB límite (aumentado)
+const MAX_BYTES = 390 * 1024 * 1024; // 150 MB límite (aumentado)
 
 function fmtSize(bytes) {
     const b = Number(bytes) || 0;
