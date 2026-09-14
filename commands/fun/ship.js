@@ -17,48 +17,54 @@ export default {
             }, { quoted: msg });
         }
 
-        // Función para obtener foto con timeout
+        // ---------- OBTENER NOMBREALES ----------
+        const n1 = sender.split('@')[0].split(':')[0];
+        const n2 = target.split('@')[0].split(':')[0];
+        
+        // Nombre del sender (quien ejecutó el comando)
+        let nombre1 = msg.pushName || n1;
+        
+        // Nombre del target (intentar obtener de contactos)
+        let nombre2 = n2;
+        try {
+            const contact = await s.getContact?.(target);
+            if (contact?.name) nombre2 = contact.name;
+            else if (contact?.notify) nombre2 = contact.notify;
+        } catch {}
+
+        // ---------- OBTENER FOTOS ----------
+        const FALLBACK_IMG = 'https://i.ibb.co/3Fh9wXp/default.png';
+        
         async function getFoto(jid) {
             try {
-                // Si es @lid, no tiene foto pública
-                if (jid.includes('@lid')) {
-                    return 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
-                }
-                
+                // Intentar obtener foto con timeout corto
                 const url = await Promise.race([
                     s.profilePictureUrl(jid, 'image'),
-                    new Promise((_, reject) => setTimeout(() => reject('timeout'), 1500))
+                    new Promise((_, reject) => setTimeout(() => reject('timeout'), 2000))
                 ]);
-                return url;
+                return url || FALLBACK_IMG;
             } catch (e) {
-                // Fallback si no tiene foto o timeout
-                return 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+                console.error('[SHIP] Error obteniendo foto de', jid, ':', e.message);
+                return FALLBACK_IMG;
             }
         }
 
-        // Obtener ambas fotos en paralelo
         const [pp1, pp2] = await Promise.all([
             getFoto(sender),
             getFoto(target)
         ]);
 
         const porcentaje = Math.floor(Math.random() * 101);
-        
-        // Nombres legibles (sin el @lid ni el @s.whatsapp.net)
-        const n1 = sender.split('@')[0].split(':')[0];
-        const n2 = target.split('@')[0].split(':')[0];
-        
-        const nombre1 = msg.pushName || n1;
-        const nombre2 = n2;
 
-        const mensaje = porcentaje >= 90 ? '✨ ALMA GEMELA' :
-                       porcentaje >= 75 ? '💕 PERFECTOS' :
-                       porcentaje >= 60 ? '💖 HAY QUÍMICA' :
-                       porcentaje >= 40 ? '💗 PODRÍA SER' :
-                       porcentaje >= 25 ? '🤔 TAL VEZ' :
-                       porcentaje >= 10 ? '💀 F EN EL CHAT' : '⚰️ ENTERRADO VIVO';
+        // Mensajes CORTOS para que no tapen las fotos
+        const mensaje = porcentaje >= 90 ? '💍 BODA' :
+                       porcentaje >= 75 ? '💕 AMOR' :
+                       porcentaje >= 60 ? '💖 QUÍMICA' :
+                       porcentaje >= 40 ? '💗 TAL VEZ' :
+                       porcentaje >= 25 ? '🤔 AMIGOS' :
+                       porcentaje >= 10 ? '💀 NO' : '⚰️ RIP';
 
-        // URL de la API con las fotos reales
+        // URL de la API
         const apiUrl = `https://api.delirius.online/canvas/ship?` +
             `image1=${encodeURIComponent(pp1)}` +
             `&image2=${encodeURIComponent(pp2)}` +
@@ -67,11 +73,20 @@ export default {
             `&percentage=${porcentaje}` +
             `&text=${encodeURIComponent(mensaje)}`;
 
+        const caption = 
+            `╭━━〔 💘 𝐒𝐇𝐈𝐏 〕━━⬣\n` +
+            `┃\n` +
+            `┃ 💑 *${nombre1}* + *${nombre2}*\n` +
+            `┃\n` +
+            `┃ 📊 *${porcentaje}%* ${mensaje}\n` +
+            `┃\n` +
+            `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+
         await s.sendMessage(
             chatJid,
             { 
                 image: { url: apiUrl },
-                caption: `╭━━〔 💘 𝐒𝐇𝐈𝐏 〕━━⬣\n┃\n┃ 💑 @${n1} + @${n2}\n┃\n┃ 📊 *${porcentaje}%* ${mensaje}\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`,
+                caption,
                 mentions: [sender, target]
             },
             { quoted: msg }
