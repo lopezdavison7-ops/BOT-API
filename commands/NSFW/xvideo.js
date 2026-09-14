@@ -1,32 +1,81 @@
 // commands/descargas/xvideos.js
 // ============================================================
-// BOT-API — XVIDEOS (debug directo en el mensaje)
+// BOT-API — XVIDEOS (prueba múltiples endpoints)
 // ============================================================
 
-const API_BUSCAR = 'https://api.delirius.online/tools/xvideos?query=';
+const ENDPOINTS = [
+    'https://api.delirius.online/tools/xvideos?query=',
+    'https://api.delirius.online/api/xvideos/search?q=',
+    'https://api.delirius.online/search/xvideos?q=',
+    'https://api.delirius.online/xvideos/search?q=',
+    'https://api.delirius.online/nsfw/xvideos?query=',
+    'https://api.delirius.online/tools/xvideos-search?query=',
+    'https://api.delirius.online/search?query=xvideos&text='
+];
+
+const ENDPOINTS_DL = [
+    'https://api.delirius.online/tools/xvideosdl?url=',
+    'https://api.delirius.online/api/xvideos/download?url=',
+    'https://api.delirius.online/download/xvideos?url=',
+    'https://api.delirius.online/xvideos/download?url='
+];
+
+async function buscarVideos(query, responder) {
+    let ultimoError = '';
+    
+    for (const endpoint of ENDPOINTS) {
+        try {
+            const url = endpoint + encodeURIComponent(query);
+            const res = await fetch(url);
+            
+            if (res.status === 404) continue; // Endpoint no existe, probar siguiente
+            
+            const texto = await res.text();
+            
+            let json;
+            try {
+                json = JSON.parse(texto);
+            } catch (e) {
+                ultimoError = `Status ${res.status}: No es JSON`;
+                continue;
+            }
+
+            // Buscar datos en diferentes formatos
+            const datos = json.data || json.results || json.videos || json.datos;
+            
+            if (!datos || !Array.isArray(datos) || datos.length === 0) {
+                ultimoError = 'Sin resultados';
+                continue;
+            }
+
+            return { endpoint, datos, json };
+            
+        } catch (error) {
+            ultimoError = error?.message || 'Error desconocido';
+        }
+    }
+    
+    return { error: ultimoError || 'Ningún endpoint funcionó' };
+}
 
 async function descargarVideo(video, responder) {
     await responder.texto('⏳ Procesando video...');
 
-    const endpoints = [
-        'https://api.delirius.online/tools/xvideosdl?url=',
-        'https://api.delirius.online/download/xvideos?url=',
-        'https://api.delirius.online/tools/xvideosdl?link='
-    ];
-
-    for (const base of endpoints) {
+    for (const endpoint of ENDPOINTS_DL) {
         try {
-            const res = await fetch(base + encodeURIComponent(video.url));
-            const texto = await res.text();
+            const res = await fetch(endpoint + encodeURIComponent(video.url));
             
+            if (res.status === 404) continue;
+            
+            const texto = await res.text();
             let json;
             try { json = JSON.parse(texto); } catch (e) { continue; }
 
             const d = json.data || json.datos;
             if (!d) continue;
 
-            const link = d.descargar || d.descarga || d.download || d.url_mp4 || null;
-            const thumb = d.imagen || d.image || video.image || null;
+            const link = d.descargar || d.descarga || d.download || d.url_mp4 || d.video || null;
+            const thumb = d.imagen || d.image || d.thumbnail || video.image || null;
             const titulo = d.title || d.titulo || video.title || 'Video';
 
             if (!link) continue;
@@ -95,70 +144,49 @@ export default {
 
         // Búsqueda
         try {
-            const url = API_BUSCAR + encodeURIComponent(q);
+            const resultado = await buscarVideos(q, responder);
 
-            const res = await fetch(url);
-            const texto = await res.text();
-
-            // Intentar parsear
-            let json;
-            try {
-                json = JSON.parse(texto);
-            } catch (e) {
+            if (resultado.error) {
                 return await responder.texto(
-                    '╭━━〔 🔴 𝐄𝐑𝐑𝐎𝐑 𝐃𝐄 𝐀𝐏𝐈 〕━━⬣\n' +
+                    '╭━━〔 🔴 𝐀𝐏𝐈 𝐍𝐎 𝐃𝐈𝐒𝐏𝐎𝐍𝐈𝐁𝐋𝐄 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ ❌ No devolvió JSON válido\n' +
+                    '┃ ❌ ' + resultado.error + '\n' +
                     '┃\n' +
-                    '┃ 📡 Status: ' + res.status + '\n' +
-                    '┃ 📄 Content-Type: ' + (res.headers.get('content-type') || 'N/A') + '\n' +
+                    '┃ 📡 Se probaron ' + ENDPOINTS.length + ' endpoints\n' +
                     '┃\n' +
-                    '┃ 📝 Respuesta:\n' +
-                    '┃ ' + texto.substring(0, 300) + '\n' +
+                    '┃ 💡 La API de Delirius no tiene\n' +
+                    '┃    endpoint de xvideos disponible\n' +
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
             }
 
-            if (!json.status || !Array.isArray(json.data) || json.data.length === 0) {
-                return await responder.texto(
-                    '❌ Sin resultados para: *' + q + '*\n\n' +
-                    '📡 Status: ' + res.status + '\n' +
-                    '📦 JSON: ' + JSON.stringify(json).substring(0, 200)
-                );
-            }
-
-            const lista = json.data.slice(0, 10);
+            const lista = resultado.datos.slice(0, 10);
 
             global.xvMap = global.xvMap || {};
             global.xvMap[jid] = {};
 
-            let txt = '╭━━〔 🔞 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒: ' + q.toUpperCase() + ' 〕━━⬣\n┃\n';
+            let txt = '╭━━〔 🔞 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n┃\n';
 
             lista.forEach((v, i) => {
                 global.xvMap[jid][i + 1] = v;
-                txt += '┃ *' + (i + 1) + '.* ' + String(v.title).slice(0, 50) + '\n';
-                txt += '┃    ⏱ ' + (v.duration || '?') + ' · 🎥 ' + (v.quality || '?') + '\n┃\n';
+                txt += '┃ *' + (i + 1) + '.* ' + String(v.title || v.titulo || 'Video').slice(0, 50) + '\n';
+                txt += '┃    ⏱ ' + (v.duration || v.duración || '?') + ' · 🎥 ' + (v.quality || v.calidad || '?') + '\n┃\n';
             });
 
             txt += '┃ 📥 Elige: `.xvideos <número>`\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            if (lista[0]?.image) {
-                await responder.imagen({ url: lista[0].image }, txt);
+            const primerVideo = lista[0];
+            const thumb = primerVideo?.image || primerVideo?.imagen || primerVideo?.thumbnail;
+            
+            if (thumb) {
+                await responder.imagen({ url: thumb }, txt);
             } else {
                 await responder.texto(txt);
             }
 
         } catch (error) {
-            await responder.texto(
-                '╭━━〔 🔴 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ ' + (error?.message || String(error)) + '\n' +
-                '┃\n' +
-                '┃ 📡 Tipo: ' + (error?.name || 'Desconocido') + '\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+            await responder.texto('❌ Error: ' + (error?.message || String(error)));
         }
     }
 };
