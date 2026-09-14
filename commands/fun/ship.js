@@ -1,5 +1,57 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
+// ---------- NIVELES DE RESPUESTA (12 niveles) ----------
+const NIVELES = [
+    { min: 100, emoji: '👑', msg: '¡BODA INMEDIATA!', color: '#ffd700' },
+    { min: 95,  emoji: '💍', msg: 'ALMAS GEMELAS', color: '#ff69b4' },
+    { min: 90,  emoji: '✨', msg: 'DESTINO ESCRITO', color: '#ff69b4' },
+    { min: 80,  emoji: '💕', msg: 'PAREJA PERFECTA', color: '#ff6b9d' },
+    { min: 70,  emoji: '😍', msg: 'MUCHA QUÍMICA', color: '#ff6b9d' },
+    { min: 60,  emoji: '💖', msg: 'HAY ALGO AHÍ', color: '#ff85a2' },
+    { min: 50,  emoji: '💗', msg: 'PODRÍA SER...', color: '#ff85a2' },
+    { min: 40,  emoji: '🤔', msg: 'TAL VEZ...', color: '#ffa502' },
+    { min: 30,  emoji: '😬', msg: 'ZONA DE AMIGOS', color: '#ffa502' },
+    { min: 20,  emoji: '💭', msg: 'MEJOR AMIGOS', color: '#95a5a6' },
+    { min: 10,  emoji: '💀', msg: 'F EN EL CHAT', color: '#95a5a6' },
+    { min: 0,   emoji: '⚰️', msg: 'ENTERRADO VIVO', color: '#636e72' }
+];
+
+// ---------- FRASES EXTRA RANDOM ----------
+const FRASES = [
+    'El destino ha hablado',
+    'Los astros no mienten',
+    'Cupido opinó fuerte',
+    'Resultado científicamente random',
+    'El amor es ciego... y el bot también',
+    'Datos 100% reales no fake',
+    'Cupido está orgulloso',
+    'El universo conspira',
+    'Ni la NASA lo calcula mejor'
+];
+
+function obtenerNivel(porcentaje) {
+    for (const n of NIVELES) {
+        if (porcentaje >= n.min) return n;
+    }
+    return NIVELES[NIVELES.length - 1];
+}
+
+// ---------- Cargar foto con timeout (rápido) ----------
+async function cargarFoto(s, jid) {
+    try {
+        const url = await Promise.race([
+            s.profilePictureUrl(jid, 'image'),
+            new Promise((_, rej) => setTimeout(() => rej('timeout'), 1500))
+        ]);
+        return await Promise.race([
+            loadImage(url),
+            new Promise((_, rej) => setTimeout(() => rej('timeout'), 2000))
+        ]);
+    } catch {
+        return null;
+    }
+}
+
 export default {
     nombre: 'ship',
     categoria: 'Fun',
@@ -12,130 +64,141 @@ export default {
         const sender = msg.key.participant || msg.key.remoteJid;
         const ctx = msg.message?.extendedTextMessage?.contextInfo;
 
-        // Detectar target rápido
-        let target = ctx?.quotedMessage ? ctx.participant : ctx?.mentionedJid?.[0];
+        const target = ctx?.quotedMessage ? ctx.participant : ctx?.mentionedJid?.[0];
 
         if (!target) {
             return responder.texto('❌ Usa: `.ship @persona` o responde a un mensaje');
         }
 
-        // Porcentaje y mensaje
         const porcentaje = Math.floor(Math.random() * 101);
-        const mensaje = porcentaje >= 90 ? '✨ ALMA GEMELA' :
-                       porcentaje >= 75 ? '💕 PERFECTOS' :
-                       porcentaje >= 50 ? '💖 HAY QUÍMICA' :
-                       porcentaje >= 25 ? '💭 TAL VEZ' : '💀 F EN EL CHAT';
+        const nivel = obtenerNivel(porcentaje);
+        const frase = FRASES[Math.floor(Math.random() * FRASES.length)];
 
         try {
-            // Canvas rápido 800x400
+            // ⚡ DESCARGA EN PARALELO (2x más rápido)
+            const [img1, img2] = await Promise.all([
+                cargarFoto(s, sender),
+                cargarFoto(s, target)
+            ]);
+
+            // Canvas optimizado
             const canvas = createCanvas(800, 400);
-            const ctx2d = canvas.getContext('2d');
+            const c = canvas.getContext('2d');
 
-            // Fondo gradiente rápido
-            const grad = ctx2d.createLinearGradient(0, 0, 800, 400);
+            // Fondo gradiente
+            const grad = c.createLinearGradient(0, 0, 800, 400);
             grad.addColorStop(0, '#ff6b9d');
-            grad.addColorStop(1, '#c44569');
-            ctx2d.fillStyle = grad;
-            ctx2d.fillRect(0, 0, 800, 400);
+            grad.addColorStop(0.5, '#c44569');
+            grad.addColorStop(1, '#8e2657');
+            c.fillStyle = grad;
+            c.fillRect(0, 0, 800, 400);
 
-            // Fotos de perfil con timeout
-            let img1, img2;
-            try {
-                const pp1 = await Promise.race([
-                    s.profilePictureUrl(sender, 'image'),
-                    new Promise((_, rej) => setTimeout(() => rej('timeout'), 2000))
-                ]);
-                img1 = await loadImage(pp1);
-            } catch {
-                // Fallback: rectángulo de color
-                ctx2d.fillStyle = '#ffffff';
-                ctx2d.beginPath();
-                ctx2d.arc(200, 200, 100, 0, Math.PI * 2);
-                ctx2d.fill();
-                ctx2d.fillStyle = '#000000';
-                ctx2d.font = 'bold 80px Arial';
-                ctx2d.textAlign = 'center';
-                ctx2d.textBaseline = 'middle';
-                ctx2d.fillText('👤', 200, 200);
+            // Corazones decorativos de fondo (rápido)
+            c.globalAlpha = 0.15;
+            c.font = '30px Arial';
+            for (let i = 0; i < 10; i++) {
+                c.fillText('💕', Math.random() * 750, Math.random() * 380);
             }
+            c.globalAlpha = 1;
 
-            try {
-                const pp2 = await Promise.race([
-                    s.profilePictureUrl(target, 'image'),
-                    new Promise((_, rej) => setTimeout(() => rej('timeout'), 2000))
-                ]);
-                img2 = await loadImage(pp2);
-            } catch {
-                ctx2d.fillStyle = '#ffffff';
-                ctx2d.beginPath();
-                ctx2d.arc(600, 200, 100, 0, Math.PI * 2);
-                ctx2d.fill();
-                ctx2d.fillStyle = '#000000';
-                ctx2d.font = 'bold 80px Arial';
-                ctx2d.textAlign = 'center';
-                ctx2d.textBaseline = 'middle';
-                ctx2d.fillText('👤', 600, 200);
-            }
-
-            // Dibujar fotos si se cargaron
+            // ---------- FOTO 1 ----------
             if (img1) {
-                ctx2d.save();
-                ctx2d.beginPath();
-                ctx2d.arc(200, 200, 100, 0, Math.PI * 2);
-                ctx2d.clip();
-                ctx2d.drawImage(img1, 100, 100, 200, 200);
-                ctx2d.restore();
+                c.save();
+                c.beginPath();
+                c.arc(200, 200, 100, 0, Math.PI * 2);
+                c.clip();
+                c.drawImage(img1, 100, 100, 200, 200);
+                c.restore();
+            } else {
+                c.fillStyle = '#ffffff';
+                c.beginPath();
+                c.arc(200, 200, 100, 0, Math.PI * 2);
+                c.fill();
+                c.font = '80px Arial';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText('👤', 200, 200);
             }
 
+            // ---------- FOTO 2 ----------
             if (img2) {
-                ctx2d.save();
-                ctx2d.beginPath();
-                ctx2d.arc(600, 200, 100, 0, Math.PI * 2);
-                ctx2d.clip();
-                ctx2d.drawImage(img2, 500, 100, 200, 200);
-                ctx2d.restore();
+                c.save();
+                c.beginPath();
+                c.arc(600, 200, 100, 0, Math.PI * 2);
+                c.clip();
+                c.drawImage(img2, 500, 100, 200, 200);
+                c.restore();
+            } else {
+                c.fillStyle = '#ffffff';
+                c.beginPath();
+                c.arc(600, 200, 100, 0, Math.PI * 2);
+                c.fill();
+                c.font = '80px Arial';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText('👤', 600, 200);
             }
 
             // Bordes blancos
-            ctx2d.strokeStyle = '#ffffff';
-            ctx2d.lineWidth = 6;
-            ctx2d.beginPath();
-            ctx2d.arc(200, 200, 100, 0, Math.PI * 2);
-            ctx2d.stroke();
-            ctx2d.beginPath();
-            ctx2d.arc(600, 200, 100, 0, Math.PI * 2);
-            ctx2d.stroke();
+            c.strokeStyle = '#ffffff';
+            c.lineWidth = 6;
+            c.beginPath(); c.arc(200, 200, 100, 0, Math.PI * 2); c.stroke();
+            c.beginPath(); c.arc(600, 200, 100, 0, Math.PI * 2); c.stroke();
 
             // Corazón central
-            ctx2d.font = 'bold 100px Arial';
-            ctx2d.textAlign = 'center';
-            ctx2d.textBaseline = 'middle';
-            ctx2d.fillStyle = '#ffffff';
-            ctx2d.fillText('💖', 400, 180);
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.font = '90px Arial';
+            c.fillText('💖', 400, 170);
 
-            // Porcentaje
-            ctx2d.font = 'bold 50px Arial';
-            ctx2d.fillText(`${porcentaje}%`, 400, 300);
+            // Porcentaje con color según nivel
+            c.font = 'bold 55px Arial';
+            c.fillStyle = nivel.color;
+            c.fillText(`${porcentaje}%`, 400, 290);
 
-            // Mensaje
-            ctx2d.font = 'bold 28px Arial';
-            ctx2d.fillText(mensaje, 400, 360);
+            // Mensaje del nivel
+            c.font = 'bold 30px Arial';
+            c.fillStyle = '#ffffff';
+            c.fillText(`${nivel.emoji} ${nivel.msg}`, 400, 350);
 
-            // Convertir a buffer y enviar
-            const buffer = canvas.toBuffer('image/jpeg', 80);
+            // Barra de progreso debajo del corazón
+            const barraAncho = 160;
+            const barraX = 400 - barraAncho / 2;
+            c.fillStyle = 'rgba(255,255,255,0.3)';
+            c.fillRect(barraX, 235, barraAncho, 12);
+            c.fillStyle = nivel.color;
+            c.fillRect(barraX, 235, (barraAncho * porcentaje) / 100, 12);
+
+            // JPEG calidad 70 (más rápido que 80)
+            const buffer = canvas.toBuffer('image/jpeg', 70);
 
             const n1 = sender.split('@')[0];
             const n2 = target.split('@')[0];
 
             await s.sendMessage(chatJid, {
                 image: buffer,
-                caption: `💑 @${n1} + @${n2}\n📊 *${porcentaje}%* ${mensaje}`,
+                caption:
+                    `╭━━〔 💘 𝐒𝐇𝐈𝐏𝐏𝐄𝐑 〕━━⬣\n` +
+                    `┃\n` +
+                    `┃ 💑 @${n1} + @${n2}\n` +
+                    `┃\n` +
+                    `┃ 📊 *${porcentaje}%* ${nivel.emoji} ${nivel.msg}\n` +
+                    `┃ 💬 "${frase}"\n` +
+                    `┃\n` +
+                    `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`,
                 mentions: [sender, target]
             }, { quoted: msg });
 
         } catch (error) {
             console.error('[SHIP]', error?.message);
-            await responder.texto('❌ Error generando imagen');
+            // Fallback texto rápido
+            const n1 = sender.split('@')[0];
+            const n2 = target.split('@')[0];
+            const barra = '█'.repeat(Math.floor(porcentaje / 10)) + '░'.repeat(10 - Math.floor(porcentaje / 10));
+            await s.sendMessage(chatJid, {
+                text: `💑 @${n1} + @${n2}\n📊 *${porcentaje}%* ${barra}\n${nivel.emoji} ${nivel.msg}`,
+                mentions: [sender, target]
+            }, { quoted: msg });
         }
     }
 };
