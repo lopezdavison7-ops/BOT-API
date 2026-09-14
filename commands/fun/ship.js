@@ -1,33 +1,30 @@
 // commands/fun/ship.js
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// ---------- OBTENER NOMBRE (múltiples métodos) ----------
-async function getContactName(sock, jid, pushName) {
-    // Si ya tenemos pushName, usarlo
+// ---------- OBTENER NOMBRE MEJORADO ----------
+async function getContactName(sock, jid, pushName, remoteJid) {
+    // 1. Si ya tenemos pushName, usarlo
     if (pushName) return pushName;
     
+    // 2. Intentar obtener del grupo
     try {
-        // Método 1: sock.getName (Baileys)
+        if (remoteJid?.endsWith('@g.us')) {
+            const metadata = await sock.groupMetadata(remoteJid);
+            const participant = metadata.participants.find(p => p.id === jid);
+            if (participant?.pushName) return participant.pushName;
+        }
+    } catch {}
+    
+    // 3. Intentar sock.getName
+    try {
         if (typeof sock.getName === 'function') {
             const name = await sock.getName(jid);
-            if (name) return name;
+            if (name && name !== jid) return name;
         }
     } catch {}
     
-    try {
-        // Método 2: onWhatsApp
-        if (typeof sock.onWhatsApp === 'function') {
-            const result = await sock.onWhatsApp(jid.split('@')[0]);
-            if (result?.[0]?.jid) {
-                const name = result[0].pushName || result[0].name;
-                if (name) return name;
-            }
-        }
-    } catch {}
-    
-    // Fallback: extraer número limpio
-    const num = jid.split('@')[0].split(':')[0];
-    return num.length > 8 ? num.substring(num.length - 4) : num;
+    // 4. Fallback: número completo (sin truncar)
+    return jid.split('@')[0].split(':')[0];
 }
 
 // ---------- AVATAR CON INICIALES ----------
@@ -163,7 +160,6 @@ export default {
         const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
         const mentioned = ctxInfo?.mentionedJid || [];
         const quotedParticipant = ctxInfo?.participant;
-        const quotedMsg = ctxInfo?.quotedMessage;
 
         let userA = msg.key.participant || msg.key.remoteJid;
         let userB = quotedParticipant || mentioned[0];
@@ -194,10 +190,10 @@ export default {
         c.fillStyle = gradient;
         c.fillRect(0, 0, 800, 400);
 
-        // ---------- OBTENER NOMBRES (paralelo) ----------
+        // ---------- OBTENER NOMBRES (paralelo con metadata) ----------
         const [nombreA, nombreB] = await Promise.all([
-            getContactName(s, userA, msg.pushName),
-            getContactName(s, userB, quotedMsg?.conversation ? null : null)
+            getContactName(s, userA, msg.pushName, remoteJid),
+            getContactName(s, userB, null, remoteJid)
         ]);
 
         const numA = userA.split('@')[0].split(':')[0];
@@ -222,10 +218,13 @@ export default {
         c.fillStyle = '#ffffff';
         c.fillText(`${percent}%`, 400, 150);
 
-        // Nombres
+        // Nombres (sin truncar si son números)
+        const displayNameA = nombreA.length > 15 ? nombreA.substring(0, 12) + '...' : nombreA;
+        const displayNameB = nombreB.length > 15 ? nombreB.substring(0, 12) + '...' : nombreB;
+        
         c.font = 'bold 24px Arial';
-        c.fillText(nombreA.substring(0, 12), 150, 280);
-        c.fillText(nombreB.substring(0, 12), 650, 280);
+        c.fillText(displayNameA, 150, 280);
+        c.fillText(displayNameB, 650, 280);
 
         // Barra de progreso
         drawProgressBar(c, 100, 320, 600, 40, percent);
