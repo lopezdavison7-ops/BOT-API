@@ -2,30 +2,29 @@
 // ============================================================
 // BOT-API — XVIDEOS (búsqueda + descarga en 2 pasos)
 // ============================================================
-// .xvideos <búsqueda>   → lista resultados numerados
-// .xvideos <número>     → descarga el elegido
-// .xvideos <url>        → descarga directa por link
-// ============================================================
 
 const API_BUSCAR = 'https://api.delirius.online/tools/xvideos?query=';
 
-const API_DESCARGA = [
-    'https://api.delirius.online/tools/xvideosdl?url=',
-    'https://api.delirius.online/download/xvideos?url=',
-    'https://api.delirius.online/tools/xvideosdl?link='
-];
-
-// ---------- Descargar video (prueba varios endpoints) ----------
 async function descargarVideo(video, responder) {
     await responder.texto('⏳ Procesando video...');
 
-    for (const base of API_DESCARGA) {
+    const endpoints = [
+        'https://api.delirius.online/tools/xvideosdl?url=',
+        'https://api.delirius.online/download/xvideos?url=',
+        'https://api.delirius.online/tools/xvideosdl?link='
+    ];
+
+    for (const base of endpoints) {
         try {
             const res = await fetch(base + encodeURIComponent(video.url));
-            const tipo = res.headers.get('content-type') || '';
-            if (!tipo.includes('json')) continue;
+            
+            let json;
+            try {
+                json = await res.json();
+            } catch (e) {
+                continue; // No es JSON, probar siguiente endpoint
+            }
 
-            const json = await res.json();
             const d = json.data || json.datos;
             if (!d) continue;
 
@@ -36,33 +35,29 @@ async function descargarVideo(video, responder) {
             if (!link) continue;
 
             const info =
-                '╭━━〔 🔞 𝐕𝐃𝐎 〕━━\n' +
+                '╭━━〔 🔞 𝐕𝐈𝐃𝐄𝐎 〕━━\n' +
                 '┃\n' +
                 '┃ 🎬 *' + titulo + '*\n' +
-                (d.duración || d.duration ? '┃ ⏱️ Duración: ' + (d.duración || d.duration) + '\n' : '') +
-                (d.vistas || d.views ? '┃ 👁️ Vistas: ' + (d.vistas || d.views) + '\n' : '') +
-                (d['Me gusta'] || d.likes ? '┃ 👍 Me gusta: ' + (d['Me gusta'] || d.likes) + '\n' : '') +
-                (d.quality ? '┃  Calidad: ' + d.quality + '\n' : '') +
+                (d.duración || d.duration ? '┃ ⏱️ ' + (d.duración || d.duration) + '\n' : '') +
+                (d.vistas || d.views ? '┃ 👁️ ' + (d.vistas || d.views) + '\n' : '') +
+                (d.quality ? '┃ 🎥 ' + d.quality + '\n' : '') +
                 '┃\n' +
-                '┃ 📥 Enviando video...\n' +
+                '┃ 📥 Enviando...\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐎-𝐏 ⚡ 〕━━';
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━';
 
-            // Mandar thumbnail con info primero
             if (thumb) {
                 try { await responder.imagen({ url: thumb }, info); } catch (e) {}
             }
 
-            // Mandar el video
             try {
                 await responder.video({ url: link }, '🔞 *' + titulo + '*');
             } catch (e) {
-                // Si el video pesa mucho, mandar solo el link
                 await responder.texto('🔗 *Link de descarga:*\n' + link);
             }
             return true;
         } catch (e) {
-            // Sigue probando el siguiente endpoint
+            continue;
         }
     }
 
@@ -80,7 +75,7 @@ async function descargarVideo(video, responder) {
             '┃ ❌ No se pudo descargar directo\n' +
             '┃ 🔗 Ver aquí:\n┃ ' + video.url + '\n' +
             '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━⬣'
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
     } else {
         await responder.texto('❌ No se pudo descargar. Link:\n' + video.url);
@@ -88,9 +83,6 @@ async function descargarVideo(video, responder) {
     return false;
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'xvideos',
     categoria: 'Descargas',
@@ -112,7 +104,7 @@ export default {
                 '┃ 💡 También por URL:\n' +
                 '┃ .xvideos https://xvideos.com/...\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -140,11 +132,13 @@ export default {
         // ============================================
         try {
             const res = await fetch(API_BUSCAR + encodeURIComponent(q));
-            const tipo = res.headers.get('content-type') || '';
-            if (!tipo.includes('json')) {
-                return await responder.texto('❌ La API no respondió bien. Intenta de nuevo.');
+            
+            let json;
+            try {
+                json = await res.json();
+            } catch (e) {
+                return await responder.texto('❌ Error parseando respuesta de la API.');
             }
-            const json = await res.json();
 
             if (!json.status || !Array.isArray(json.data) || json.data.length === 0) {
                 return await responder.texto('❌ Sin resultados para: *' + q + '*');
@@ -157,7 +151,7 @@ export default {
             global.xvMap[jid] = {};
 
             let txt =
-                '╭━━〔  𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒: ' + q.toUpperCase() + ' 〕━━⬣\n' +
+                '╭━━〔 🔞 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒: ' + q.toUpperCase() + ' 〕━━⬣\n' +
                 '┃\n';
 
             lista.forEach((v, i) => {
