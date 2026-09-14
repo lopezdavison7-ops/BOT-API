@@ -1,30 +1,53 @@
 // commands/fun/ship.js
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// ---------- OBTENER NOMBRE MEJORADO ----------
-async function getContactName(sock, jid, pushName, remoteJid) {
-    // 1. Si ya tenemos pushName, usarlo
-    if (pushName) return pushName;
+// ---------- LIMPIAR JID: LID → número legible ----------
+function limpiarJid(jid) {
+    const raw = jid.split('@')[0].split(':')[0];
     
-    // 2. Intentar obtener del grupo
+    // Si es LID (número muy largo, 13+ dígitos), mostrar solo últimos 4
+    if (jid.includes('@lid') || raw.length > 12) {
+        return raw.slice(-4);
+    }
+    // Si es número normal, mostrarlo completo
+    return raw;
+}
+
+// ---------- OBTENER NOMBRE REAL (todos los métodos) ----------
+async function obtenerNombre(sock, jid, pushName, remoteJid) {
+    // 1. pushName del mensaje (el más confiable)
+    if (pushName && pushName.length > 0 && !/^\d+$/.test(pushName)) {
+        return pushName;
+    }
+    
+    // 2. Buscar en metadata del grupo
     try {
         if (remoteJid?.endsWith('@g.us')) {
             const metadata = await sock.groupMetadata(remoteJid);
-            const participant = metadata.participants.find(p => p.id === jid);
-            if (participant?.pushName) return participant.pushName;
+            const p = metadata.participants.find(x => x.id === jid);
+            if (p?.pushName) return p.pushName;
+            if (p?.notify) return p.notify;
         }
     } catch {}
     
-    // 3. Intentar sock.getName
+    // 3. onWhatsApp (devuelve el nombre real registrado)
+    try {
+        const numero = jid.split('@')[0].split(':')[0];
+        const result = await sock.onWhatsApp(numero);
+        if (result?.[0]?.pushName) return result[0].pushName;
+        if (result?.[0]?.name) return result[0].name;
+    } catch {}
+    
+    // 4. sock.getName
     try {
         if (typeof sock.getName === 'function') {
-            const name = await sock.getName(jid);
-            if (name && name !== jid) return name;
+            const n = await sock.getName(jid);
+            if (n && n !== jid && !/^\d+$/.test(n)) return n;
         }
     } catch {}
     
-    // 4. Fallback: número completo (sin truncar)
-    return jid.split('@')[0].split(':')[0];
+    // 5. Fallback: número limpio (últimos 4 dígitos si es LID)
+    return limpiarJid(jid);
 }
 
 // ---------- AVATAR CON INICIALES ----------
@@ -35,7 +58,7 @@ function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
     ctx.fillStyle = color;
     ctx.fill();
     
-    const initials = nombre.substring(0, 2).toUpperCase();
+    const initials = String(nombre).substring(0, 2).toUpperCase();
     ctx.font = `bold ${size * 0.4}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -190,14 +213,11 @@ export default {
         c.fillStyle = gradient;
         c.fillRect(0, 0, 800, 400);
 
-        // ---------- OBTENER NOMBRES (paralelo con metadata) ----------
+        // ---------- OBTENER NOMBRES (5 métodos en cascada) ----------
         const [nombreA, nombreB] = await Promise.all([
-            getContactName(s, userA, msg.pushName, remoteJid),
-            getContactName(s, userB, null, remoteJid)
+            obtenerNombre(s, userA, msg.pushName, remoteJid),
+            obtenerNombre(s, userB, null, remoteJid)
         ]);
-
-        const numA = userA.split('@')[0].split(':')[0];
-        const numB = userB.split('@')[0].split(':')[0];
 
         const colorA = '#ff6b9d';
         const colorB = '#4ecdc4';
@@ -218,13 +238,18 @@ export default {
         c.fillStyle = '#ffffff';
         c.fillText(`${percent}%`, 400, 150);
 
-        // Nombres (sin truncar si son números)
-        const displayNameA = nombreA.length > 15 ? nombreA.substring(0, 12) + '...' : nombreA;
-        const displayNameB = nombreB.length > 15 ? nombreB.substring(0, 12) + '...' : nombreB;
+        // Nombres (truncar solo si son muy largos)
+        const maxLen = 14;
+        const dispA = String(nombreA).length > maxLen 
+            ? String(nombreA).substring(0, maxLen) + '...' 
+            : String(nombreA);
+        const dispB = String(nombreB).length > maxLen 
+            ? String(nombreB).substring(0, maxLen) + '...' 
+            : String(nombreB);
         
         c.font = 'bold 24px Arial';
-        c.fillText(displayNameA, 150, 280);
-        c.fillText(displayNameB, 650, 280);
+        c.fillText(dispA, 150, 280);
+        c.fillText(dispB, 650, 280);
 
         // Barra de progreso
         drawProgressBar(c, 100, 320, 600, 40, percent);
@@ -235,12 +260,14 @@ export default {
         c.fillText(mensaje, 400, 380);
 
         const buffer = canvas.toBuffer('image/png');
+        const n1 = limpiarJid(userA);
+        const n2 = limpiarJid(userB);
 
         await s.sendMessage(
             remoteJid,
             {
                 image: buffer,
-                caption: `💑 @${numA} + @${numB}\n📊 *${percent}%* ${mensaje}`,
+                caption: `💑 @${n1} + @${n2}\n📊 *${percent}%* ${mensaje}`,
                 mentions: [userA, userB]
             },
             { quoted: msg }
