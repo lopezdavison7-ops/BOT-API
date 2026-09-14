@@ -4,7 +4,22 @@
 // ============================================================
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// ---------- AVATAR CON INICIALES (cuando falla la foto) ----------
+// ---------- OBTENER NOMBRE DEL CONTACTO ----------
+async function getContactName(sock, jid) {
+    try {
+        // Intentar obtener nombre del contacto
+        const contact = await sock.getContact?.(jid);
+        if (contact?.name) return contact.name;
+        if (contact?.notify) return contact.notify;
+        
+        // Fallback: usar el número sin el dominio
+        return jid.split('@')[0].split(':')[0];
+    } catch {
+        return jid.split('@')[0].split(':')[0];
+    }
+}
+
+// ---------- AVATAR CON INICIALES ----------
 function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
     ctx.save();
     ctx.beginPath();
@@ -12,7 +27,6 @@ function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
     ctx.fillStyle = color;
     ctx.fill();
     
-    // Iniciales
     const initials = nombre.substring(0, 2).toUpperCase();
     ctx.font = `bold ${size * 0.4}px Arial`;
     ctx.textAlign = 'center';
@@ -30,10 +44,10 @@ function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
     ctx.stroke();
 }
 
-// ---------- DIBUJAR AVATAR CON FOTO ----------
+// ---------- AVATAR CON FOTO ----------
 async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
     try {
-        // Timeout de 500ms (ultra rápido)
+        // Timeout de 500ms
         const url = await Promise.race([
             sock.profilePictureUrl(jid, 'image'),
             new Promise((_, reject) => setTimeout(() => reject('timeout'), 500))
@@ -177,17 +191,18 @@ export default {
         c.fillStyle = gradient;
         c.fillRect(0, 0, 800, 400);
 
-        // Nombres
+        // ---------- OBTENER NOMBRES REALES ----------
+        const nombreA = msg.pushName || await getContactName(s, userA);
+        const nombreB = await getContactName(s, userB);
+        
         const numA = userA.split('@')[0].split(':')[0];
         const numB = userB.split('@')[0].split(':')[0];
-        const nombreA = msg.pushName || numA;
-        const nombreB = numB;
 
         // Colores para avatares
         const colorA = '#ff6b9d';
         const colorB = '#4ecdc4';
 
-        // Dibujar avatares en PARALELO (ultra rápido)
+        // Dibujar avatares en PARALELO
         await Promise.all([
             drawAvatarWithPhoto(c, s, userA, 50, 50, 200, nombreA, colorA),
             drawAvatarWithPhoto(c, s, userB, 550, 50, 200, nombreB, colorB)
