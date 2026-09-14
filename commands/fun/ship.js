@@ -17,14 +17,11 @@ export default {
             }, { quoted: msg });
         }
 
-        // ---------- OBTENER NOMBREALES ----------
+        // ---------- OBTENER NOMBRES ----------
         const n1 = sender.split('@')[0].split(':')[0];
         const n2 = target.split('@')[0].split(':')[0];
         
-        // Nombre del sender (quien ejecutó el comando)
         let nombre1 = msg.pushName || n1;
-        
-        // Nombre del target (intentar obtener de contactos)
         let nombre2 = n2;
         try {
             const contact = await s.getContact?.(target);
@@ -32,31 +29,59 @@ export default {
             else if (contact?.notify) nombre2 = contact.notify;
         } catch {}
 
-        // ---------- OBTENER FOTOS ----------
-        const FALLBACK_IMG = 'https://i.ibb.co/3Fh9wXp/default.png';
-        
-        async function getFoto(jid) {
+        // ---------- SUBIR FOTO A TELEGRAPH ----------
+        async function subirFoto(jid) {
+            const FALLBACK = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+            
             try {
-                // Intentar obtener foto con timeout corto
+                // Obtener foto de perfil
                 const url = await Promise.race([
                     s.profilePictureUrl(jid, 'image'),
                     new Promise((_, reject) => setTimeout(() => reject('timeout'), 2000))
                 ]);
-                return url || FALLBACK_IMG;
+                
+                if (!url) return FALLBACK;
+                
+                // Descargar la imagen
+                const response = await fetch(url);
+                if (!response.ok) return FALLBACK;
+                
+                const buffer = Buffer.from(await response.arrayBuffer());
+                
+                // Subir a telegra.ph
+                const FormData = (await import('form-data')).default;
+                const form = new FormData();
+                form.append('file', buffer, { filename: 'image.jpg', contentType: 'image/jpeg' });
+                
+                const uploadResponse = await fetch('https://telegra.ph/upload', {
+                    method: 'POST',
+                    body: form
+                });
+                
+                if (!uploadResponse.ok) return FALLBACK;
+                
+                const uploadResult = await uploadResponse.json();
+                
+                if (uploadResult && uploadResult[0] && uploadResult[0].src) {
+                    return 'https://telegra.ph' + uploadResult[0].src;
+                }
+                
+                return FALLBACK;
+                
             } catch (e) {
-                console.error('[SHIP] Error obteniendo foto de', jid, ':', e.message);
-                return FALLBACK_IMG;
+                console.error('[SHIP] Error subiendo foto:', e.message);
+                return FALLBACK;
             }
         }
 
+        // Subir ambas fotos en paralelo
         const [pp1, pp2] = await Promise.all([
-            getFoto(sender),
-            getFoto(target)
+            subirFoto(sender),
+            subirFoto(target)
         ]);
 
         const porcentaje = Math.floor(Math.random() * 101);
 
-        // Mensajes CORTOS para que no tapen las fotos
         const mensaje = porcentaje >= 90 ? '💍 BODA' :
                        porcentaje >= 75 ? '💕 AMOR' :
                        porcentaje >= 60 ? '💖 QUÍMICA' :
@@ -64,7 +89,7 @@ export default {
                        porcentaje >= 25 ? '🤔 AMIGOS' :
                        porcentaje >= 10 ? '💀 NO' : '⚰️ RIP';
 
-        // URL de la API
+        // URL de la API con fotos públicas
         const apiUrl = `https://api.delirius.online/canvas/ship?` +
             `image1=${encodeURIComponent(pp1)}` +
             `&image2=${encodeURIComponent(pp2)}` +
