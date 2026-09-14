@@ -1,22 +1,33 @@
 // commands/fun/ship.js
-// ============================================================
-// BOT-API — SHIP (Canvas local ULTRA RÁPIDO)
-// ============================================================
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// ---------- OBTENER NOMBRE DEL CONTACTO ----------
-async function getContactName(sock, jid) {
+// ---------- OBTENER NOMBRE (múltiples métodos) ----------
+async function getContactName(sock, jid, pushName) {
+    // Si ya tenemos pushName, usarlo
+    if (pushName) return pushName;
+    
     try {
-        // Intentar obtener nombre del contacto
-        const contact = await sock.getContact?.(jid);
-        if (contact?.name) return contact.name;
-        if (contact?.notify) return contact.notify;
-        
-        // Fallback: usar el número sin el dominio
-        return jid.split('@')[0].split(':')[0];
-    } catch {
-        return jid.split('@')[0].split(':')[0];
-    }
+        // Método 1: sock.getName (Baileys)
+        if (typeof sock.getName === 'function') {
+            const name = await sock.getName(jid);
+            if (name) return name;
+        }
+    } catch {}
+    
+    try {
+        // Método 2: onWhatsApp
+        if (typeof sock.onWhatsApp === 'function') {
+            const result = await sock.onWhatsApp(jid.split('@')[0]);
+            if (result?.[0]?.jid) {
+                const name = result[0].pushName || result[0].name;
+                if (name) return name;
+            }
+        }
+    } catch {}
+    
+    // Fallback: extraer número limpio
+    const num = jid.split('@')[0].split(':')[0];
+    return num.length > 8 ? num.substring(num.length - 4) : num;
 }
 
 // ---------- AVATAR CON INICIALES ----------
@@ -33,10 +44,8 @@ function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
     ctx.fillText(initials, x + size / 2, y + size / 2);
-    
     ctx.restore();
     
-    // Borde blanco
     ctx.beginPath();
     ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
     ctx.lineWidth = 10;
@@ -47,7 +56,6 @@ function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
 // ---------- AVATAR CON FOTO ----------
 async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
     try {
-        // Timeout de 500ms
         const url = await Promise.race([
             sock.profilePictureUrl(jid, 'image'),
             new Promise((_, reject) => setTimeout(() => reject('timeout'), 500))
@@ -65,7 +73,6 @@ async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
         const buffer = Buffer.from(await res.arrayBuffer());
         const img = await loadImage(buffer);
         
-        // Dibujar foto en círculo
         ctx.save();
         ctx.beginPath();
         ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
@@ -73,7 +80,6 @@ async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
         ctx.drawImage(img, x, y, size, size);
         ctx.restore();
         
-        // Borde blanco
         ctx.beginPath();
         ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
         ctx.lineWidth = 10;
@@ -81,12 +87,11 @@ async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
         ctx.stroke();
         
     } catch {
-        // Si falla, dibujar avatar con iniciales
         drawAvatarWithInitials(ctx, x, y, size, nombre, color);
     }
 }
 
-// ---------- DIBUJAR CORAZÓN ----------
+// ---------- CORAZÓN ----------
 function drawHeart(ctx, centerX, centerY, size) {
     ctx.save();
     ctx.beginPath();
@@ -124,7 +129,6 @@ function drawHeart(ctx, centerX, centerY, size) {
 function drawProgressBar(ctx, x, y, width, height, percent) {
     const radius = height / 2;
     
-    // Fondo blanco
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, radius);
@@ -132,7 +136,6 @@ function drawProgressBar(ctx, x, y, width, height, percent) {
     ctx.fill();
     ctx.restore();
     
-    // Relleno rojo
     const fillWidth = Math.max(0, ((width - 20) * percent) / 100);
     if (fillWidth > 0) {
         ctx.save();
@@ -143,7 +146,6 @@ function drawProgressBar(ctx, x, y, width, height, percent) {
         ctx.restore();
     }
     
-    // Corazón en la punta
     const heartX = x + 10 + fillWidth;
     drawHeart(ctx, heartX, y + height / 2, 80);
 }
@@ -158,9 +160,10 @@ export default {
         const remoteJid = msg.key.remoteJid;
         const s = sock || global.conns?.[0];
 
-        const ctx = msg.message?.extendedTextMessage?.contextInfo;
-        const mentioned = ctx?.mentionedJid || [];
-        const quotedParticipant = ctx?.participant;
+        const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
+        const mentioned = ctxInfo?.mentionedJid || [];
+        const quotedParticipant = ctxInfo?.participant;
+        const quotedMsg = ctxInfo?.quotedMessage;
 
         let userA = msg.key.participant || msg.key.remoteJid;
         let userB = quotedParticipant || mentioned[0];
@@ -184,25 +187,26 @@ export default {
         const canvas = createCanvas(800, 400);
         const c = canvas.getContext('2d');
 
-        // Fondo gradiente
+        // Fondo
         const gradient = c.createLinearGradient(0, 0, 800, 400);
         gradient.addColorStop(0, '#b542e8');
         gradient.addColorStop(1, '#8e24aa');
         c.fillStyle = gradient;
         c.fillRect(0, 0, 800, 400);
 
-        // ---------- OBTENER NOMBRES REALES ----------
-        const nombreA = msg.pushName || await getContactName(s, userA);
-        const nombreB = await getContactName(s, userB);
-        
+        // ---------- OBTENER NOMBRES (paralelo) ----------
+        const [nombreA, nombreB] = await Promise.all([
+            getContactName(s, userA, msg.pushName),
+            getContactName(s, userB, quotedMsg?.conversation ? null : null)
+        ]);
+
         const numA = userA.split('@')[0].split(':')[0];
         const numB = userB.split('@')[0].split(':')[0];
 
-        // Colores para avatares
         const colorA = '#ff6b9d';
         const colorB = '#4ecdc4';
 
-        // Dibujar avatares en PARALELO
+        // Dibujar avatares en paralelo
         await Promise.all([
             drawAvatarWithPhoto(c, s, userA, 50, 50, 200, nombreA, colorA),
             drawAvatarWithPhoto(c, s, userB, 550, 50, 200, nombreB, colorB)
@@ -218,10 +222,10 @@ export default {
         c.fillStyle = '#ffffff';
         c.fillText(`${percent}%`, 400, 150);
 
-        // Nombres debajo
+        // Nombres
         c.font = 'bold 24px Arial';
-        c.fillText(nombreA, 150, 280);
-        c.fillText(nombreB, 650, 280);
+        c.fillText(nombreA.substring(0, 12), 150, 280);
+        c.fillText(nombreB.substring(0, 12), 650, 280);
 
         // Barra de progreso
         drawProgressBar(c, 100, 320, 600, 40, percent);
