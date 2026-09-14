@@ -1,21 +1,9 @@
 // commands/fun/ship.js
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 
-// ---------- LIMPIAR JID: LID → número legible ----------
-function limpiarJid(jid) {
-    const raw = jid.split('@')[0].split(':')[0];
-    
-    // Si es LID (número muy largo, 13+ dígitos), mostrar solo últimos 4
-    if (jid.includes('@lid') || raw.length > 12) {
-        return raw.slice(-4);
-    }
-    // Si es número normal, mostrarlo completo
-    return raw;
-}
-
 // ---------- OBTENER NOMBRE REAL (todos los métodos) ----------
 async function obtenerNombre(sock, jid, pushName, remoteJid) {
-    // 1. pushName del mensaje (el más confiable)
+    // 1. pushName del mensaje
     if (pushName && pushName.length > 0 && !/^\d+$/.test(pushName)) {
         return pushName;
     }
@@ -30,7 +18,7 @@ async function obtenerNombre(sock, jid, pushName, remoteJid) {
         }
     } catch {}
     
-    // 3. onWhatsApp (devuelve el nombre real registrado)
+    // 3. onWhatsApp
     try {
         const numero = jid.split('@')[0].split(':')[0];
         const result = await sock.onWhatsApp(numero);
@@ -46,8 +34,9 @@ async function obtenerNombre(sock, jid, pushName, remoteJid) {
         }
     } catch {}
     
-    // 5. Fallback: número limpio (últimos 4 dígitos si es LID)
-    return limpiarJid(jid);
+    // 5. Fallback: últimos 4 dígitos si es LID, o número completo
+    const raw = jid.split('@')[0].split(':')[0];
+    return (jid.includes('@lid') || raw.length > 12) ? raw.slice(-4) : raw;
 }
 
 // ---------- AVATAR CON INICIALES ----------
@@ -213,8 +202,8 @@ export default {
         c.fillStyle = gradient;
         c.fillRect(0, 0, 800, 400);
 
-        // ---------- OBTENER NOMBRES (5 métodos en cascada) ----------
-        const [nombreA, nombreB] = await Promise.all([
+        // ---------- OBTENER NOMBRES REALES PARA LA IMAGEN ----------
+        const [nombreRealA, nombreRealB] = await Promise.all([
             obtenerNombre(s, userA, msg.pushName, remoteJid),
             obtenerNombre(s, userB, null, remoteJid)
         ]);
@@ -222,10 +211,10 @@ export default {
         const colorA = '#ff6b9d';
         const colorB = '#4ecdc4';
 
-        // Dibujar avatares en paralelo
+        // Dibujar avatares en paralelo (usando nombres reales)
         await Promise.all([
-            drawAvatarWithPhoto(c, s, userA, 50, 50, 200, nombreA, colorA),
-            drawAvatarWithPhoto(c, s, userB, 550, 50, 200, nombreB, colorB)
+            drawAvatarWithPhoto(c, s, userA, 50, 50, 200, nombreRealA, colorA),
+            drawAvatarWithPhoto(c, s, userB, 550, 50, 200, nombreRealB, colorB)
         ]);
 
         // Corazón central
@@ -238,14 +227,14 @@ export default {
         c.fillStyle = '#ffffff';
         c.fillText(`${percent}%`, 400, 150);
 
-        // Nombres (truncar solo si son muy largos)
+        // ---------- NOMBRES DENTRO DE LA IMAGEN (usando nombres reales) ----------
         const maxLen = 14;
-        const dispA = String(nombreA).length > maxLen 
-            ? String(nombreA).substring(0, maxLen) + '...' 
-            : String(nombreA);
-        const dispB = String(nombreB).length > maxLen 
-            ? String(nombreB).substring(0, maxLen) + '...' 
-            : String(nombreB);
+        const dispA = String(nombreRealA).length > maxLen 
+            ? String(nombreRealA).substring(0, maxLen) + '...' 
+            : String(nombreRealA);
+        const dispB = String(nombreRealB).length > maxLen 
+            ? String(nombreRealB).substring(0, maxLen) + '...' 
+            : String(nombreRealB);
         
         c.font = 'bold 24px Arial';
         c.fillText(dispA, 150, 280);
@@ -260,8 +249,12 @@ export default {
         c.fillText(mensaje, 400, 380);
 
         const buffer = canvas.toBuffer('image/png');
-        const n1 = limpiarJid(userA);
-        const n2 = limpiarJid(userB);
+        
+        // Para el caption, usar números limpios
+        const rawA = userA.split('@')[0].split(':')[0];
+        const rawB = userB.split('@')[0].split(':')[0];
+        const n1 = (userA.includes('@lid') || rawA.length > 12) ? rawA.slice(-4) : rawA;
+        const n2 = (userB.includes('@lid') || rawB.length > 12) ? rawB.slice(-4) : rawB;
 
         await s.sendMessage(
             remoteJid,
