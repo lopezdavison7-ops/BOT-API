@@ -3,13 +3,16 @@
 // COMANDO: SPACK (Sticker Pack)
 // BOT-API
 //
-// Busca packs de stickers y los envía como ÁLBUM
-// (igual que pinterest.js). Si el álbum falla, los manda
-// todos en bloque sin esperas.
-// Usa Lempi API para búsqueda y descarga.
+// .spack <tema>
 //
-// Uso:
-//   .spack <tema> — Busca y envía el primer pack encontrado
+// Intenta enviar TODOS los stickers como PACK NATIVO de
+// WhatsApp (stickerPackMessage: un solo mensaje con el pack).
+// Si tu Baileys no lo soporta, cae a envío en bloque.
+//
+// ⚠️ Para packs nativos reales necesitas un Baileys con
+// soporte de stickerPackMessage:
+//   npm i @nexustechpro/baileys
+// y cambiar el import de Baileys en index.js.
 // ============================================================
 
 import axios from 'axios';
@@ -75,11 +78,10 @@ async function descargarImagen(url) {
 
 async function convertirASticker(buffer) {
     try {
-        const webpBuffer = await sharp(buffer)
+        return await sharp(buffer)
             .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .webp({ quality: 90, lossless: false })
             .toBuffer();
-        return webpBuffer;
     } catch (e) {
         console.error('[CONVERT STICKER] Error:', e.message);
         return null;
@@ -87,7 +89,7 @@ async function convertirASticker(buffer) {
 }
 
 // ============================================================
-// NUEVO: descargar + convertir TODOS en paralelo (rápido)
+// PREPARAR TODOS EN PARALELO
 // ============================================================
 
 async function prepararStickers(urls) {
@@ -106,13 +108,9 @@ async function prepararStickers(urls) {
     );
 
     const validos = [];
-
     resultados.forEach((r, i) => {
-        if (r.status === 'fulfilled') {
-            validos.push(r.value);
-        } else {
-            console.error(`[SPACK] Falló sticker ${i + 1}:`, r.reason?.message || r.reason);
-        }
+        if (r.status === 'fulfilled') validos.push(r.value);
+        else console.error(`[SPACK] Falló sticker ${i + 1}:`, r.reason?.message || r.reason);
     });
 
     console.log(`[SPACK] Preparados: ${validos.length}/${urls.length}`);
@@ -120,37 +118,68 @@ async function prepararStickers(urls) {
 }
 
 // ============================================================
-// NUEVO: enviar como ÁLBUM (el truco de pinterest.js)
+// ENVIAR COMO PACK NATIVO (prueba los 3 formatos conocidos)
 // ============================================================
 
-async function enviarComoAlbum(sock, jid, msg, buffers) {
-    if (!buffers.length) throw new Error('No hay stickers.');
+async function enviarComoPack(sock, jid, msg, buffers, nombre) {
+    const nombrePack = truncarTexto(nombre, 25);
+    const publisher = 'BOT-API ⚡';
 
-    console.log(`[SPACK] Creando álbum de ${buffers.length} stickers...`);
+    // ---- Formato 1: @nexustechpro/baileys (método dedicado) ----
+    if (typeof sock.stickerPackMessage === 'function') {
+        await sock.stickerPackMessage(jid, {
+            name: nombrePack,
+            publisher,
+            stickers: buffers.map(b => ({ data: b, emojis: ['😀'] })),
+            cover: buffers[0]
+        }, { quoted: msg });
+        return 'pack nativo';
+    }
 
-    const album = buffers.map((buffer) => ({
-        sticker: buffer
-    }));
+    // ---- Formato 2: @nexustechpro/baileys (vía sendMessage) ----
+    try {
+        await sock.sendMessage(jid, {
+            stickerPack: {
+                name: nombrePack,
+                publisher,
+                stickers: buffers.map(b => ({ data: b, emojis: ['😀'] })),
+                cover: buffers[0]
+            }
+        }, { quoted: msg });
+        return 'pack nativo';
+    } catch (e) {
+        console.log('[SPACK] Formato stickerPack no soportado:', e.message);
+    }
 
-    await sock.sendMessage(jid, { album }, { quoted: msg });
+    // ---- Formato 3: @c4bal/baileys ----
+    await sock.sendMessage(jid, {
+        cover: buffers[0],
+        stickers: buffers.map(b => ({ data: b })),
+        name: `📦 ${nombrePack}`,
+        publisher: `🌟 ${publisher}`,
+        description: 'Pack enviado por BOT-API'
+    }, { quoted: msg });
 
-    console.log(`[SPACK] Álbum enviado correctamente: ${buffers.length}`);
-    return buffers.length;
+    return 'pack nativo';
 }
 
 // ============================================================
-// NUEVO: respaldo — enviar en bloque, SIN esperas de 500ms
+// RESPALDO: ENVIAR EN BLOQUE (seguidos, sin esperas)
 // ============================================================
 
 async function enviarEnBloque(sock, jid, msg, buffers) {
     let enviados = 0;
 
-    for (const buffer of buffers) {
+    for (let i = 0; i < buffers.length; i++) {
         try {
-            await sock.sendMessage(jid, { sticker: buffer }, { quoted: msg });
+            await sock.sendMessage(
+                jid,
+                { sticker: buffers[i] },
+                i === 0 ? { quoted: msg } : {}
+            );
             enviados++;
         } catch (e) {
-            console.error('[SPACK] Error enviando sticker:', e.message);
+            console.error(`[SPACK] Error enviando sticker ${i + 1}:`, e.message);
         }
     }
 
@@ -166,21 +195,12 @@ export default {
 
     categoria: 'stickers',
 
-    alias: [
-        'stickerpack',
-        'stickers',
-        'sp'
-    ],
+    alias: ['stickerpack', 'stickers', 'sp'],
 
     descripcion:
-        'Busca y envía un pack de stickers en álbum. Uso: .spack <tema>',
+        'Busca y envía un pack de stickers completo. Uso: .spack <tema>',
 
-    ejecutar: async ({
-        sock,
-        msg,
-        responder,
-        argumento
-    }) => {
+    ejecutar: async ({ sock, msg, responder, argumento }) => {
 
         const chatJid = msg.key.remoteJid;
         const apikey = config.LEMPI_API_KEY || '';
@@ -194,7 +214,7 @@ export default {
                 '┃ Agrega tu key en config.js:\n' +
                 '┃ LEMPI_API_KEY: "tu_key_aqui"\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━'
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
             return;
         }
@@ -210,18 +230,18 @@ export default {
                 '┃ 📌 *Uso:* .spack gatos\n' +
                 '┃ 📌 *Uso:* .spack anime\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━'
+                '╰━━━━━━━━━━━━━━━━⬣'
             );
             return;
         }
 
         await responder.texto(
-            `╭〔 🔍 𝐒𝐏𝐀𝐂𝐊 〕⬣\n` +
-            `┃\n` +
+            '╭〔 🔍 𝐒𝐏𝐀𝐂𝐊 〕⬣\n' +
+            '┃\n' +
             `┃ Buscando packs: *${consulta}*\n` +
-            `┃ 🔎 En Lempi API...\n` +
-            `┃\n` +
-            `╰━━━━━━━━━━━━━━━━⬣`
+            '┃ 🔎 En Lempi API...\n' +
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
         );
 
         const packs = await buscarStickerPacks(consulta, apikey);
@@ -240,26 +260,24 @@ export default {
 
         const pack = packs[0];
         const urls = pack.stickers.slice(0, MAX_STICKERS);
+        const totalPack = pack.total || pack.stickers.length || urls.length;
 
         await responder.texto(
-            `╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n` +
-            `┃\n` +
+            '╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n' +
+            '┃\n' +
             `┃ 🎨 *${truncarTexto(pack.titulo)}*\n` +
             `┃ 👤 @${pack.autor}\n` +
-            `┃ 🖼️ ${pack.total} stickers en total\n` +
+            `┃ 🖼️ ${totalPack} stickers en total\n` +
             `┃ ⏳ Preparando ${urls.length} stickers...\n` +
-            `┃\n` +
-            `╰━━━━━━━━━━━━━━━━⬣`
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━'
         );
 
-        // ------------------------------------------------
-        // NUEVO: preparar TODOS en paralelo (antes era 1 por 1)
-        // ------------------------------------------------
         const buffers = await prepararStickers(urls);
 
         if (!buffers.length) {
             await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂𝐊 〕⬣\n' +
+                '╭〔 ❌ 𝐒𝐏𝐀𝐂 〕⬣\n' +
                 '┃\n' +
                 '┃ No pude descargar ningún sticker.\n' +
                 '┃ Intenta con otro pack.\n' +
@@ -270,14 +288,18 @@ export default {
         }
 
         // ------------------------------------------------
-        // NUEVO: ÁLBUM primero, bloque como respaldo
+        // 1) Intentar PACK NATIVO
+        // 2) Si tu Baileys no puede → bloque
         // ------------------------------------------------
         let enviados = 0;
+        let modo = '';
 
         try {
-            enviados = await enviarComoAlbum(sock, chatJid, msg, buffers);
-        } catch (errorAlbum) {
-            console.error('[SPACK] El álbum falló:', errorAlbum?.message || errorAlbum);
+            modo = await enviarComoPack(sock, chatJid, msg, buffers, pack.titulo || consulta);
+            enviados = buffers.length;
+        } catch (errorPack) {
+            console.error('[SPACK] Pack nativo no soportado por tu Baileys:', errorPack?.message || errorPack);
+            modo = 'bloque';
             enviados = await enviarEnBloque(sock, chatJid, msg, buffers);
         }
 
@@ -293,16 +315,16 @@ export default {
         }
 
         await responder.texto(
-            `╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n` +
-            `┃\n` +
-            `┃ ✅ *Pack enviado*\n` +
+            '╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n' +
+            '┃\n' +
+            '┃ ✅ *Pack enviado*\n' +
             `┃ 🎨 ${truncarTexto(pack.titulo)}\n` +
             `┃ 📤 Enviados: *${enviados}*\n` +
-            `┃ ❌ Fallidos: *${urls.length - buffers.length}*\n` +
-            `┃\n` +
+            `┃ 📦 Modo: *${modo}*\n` +
+            '┃\n' +
             `┃ 🔗 Ver más: ${pack.url}\n` +
-            `┃\n` +
-            `╰━━━━━━━━━━━━━━━━⬣`
+            '┃\n' +
+            '╰━━━━━━━━━━━━━━━━⬣'
         );
     }
 };
