@@ -1,6 +1,9 @@
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
+import { manejarMensajeTrivia } from './lib/trivia.js';
+import { manejarMensajeTetris } from './lib/tetris.js';
+import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -50,63 +53,62 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const isGroup = jid?.endsWith('@g.us');
 
         // ============================================
-// 🔥 DETECTOR AFK AUTÓNOMO (con mención fija)
-// ============================================
-if (!fromMe) {
-    try {
-        const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-        const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
+        // 🔥 DETECTOR AFK AUTÓNOMO (con mención fija)
+        // ============================================
+        if (!fromMe) {
+            try {
+                const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
 
-        if (!esComandoAfk) {
-            const db = leerAfk();
-            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
+                if (!esComandoAfk) {
+                    const db = leerAfk();
+                    const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
 
-            if (db[sender]) {
-                const data = db[sender];
-                delete db[sender];
-                guardarAfk(db);
+                    if (db[sender]) {
+                        const data = db[sender];
+                        delete db[sender];
+                        guardarAfk(db);
 
-                // Mención fija: intenta resolver lid → si no, usa nombre guardado
-                let textoUser = '@' + String(sender).split('@')[0].replace(/\D/g, '');
-                let mentions = [sender];
-                
-                try {
-                    if (sender.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-                        const pn = await sock.signalRepository.lidMapper.getPNForLid(sender);
-                        if (pn) {
-                            const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                            textoUser = '@' + pj.split('@')[0];
-                            mentions = [pj];
+                        let textoUser = '@' + String(sender).split('@')[0].replace(/\D/g, '');
+                        let mentions = [sender];
+
+                        try {
+                            if (sender.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+                                const pn = await sock.signalRepository.lidMapper.getPNForLid(sender);
+                                if (pn) {
+                                    const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                                    textoUser = '@' + pj.split('@')[0];
+                                    mentions = [pj];
+                                }
+                            }
+                        } catch (e) { /* sin mapeo */ }
+
+                        if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
+                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
+                            if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
                         }
-                    }
-                } catch (e) { /* sin mapeo */ }
-                
-                // Si no se resolvió, usa el nombre guardado
-                if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
-                    const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
-                    if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
-                }
 
-                await sock.sendMessage(jid, {
-                    text:
-                        `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
-                        `┃\n` +
-                        `┃ 🎉 ${textoUser} ya regresaste!\n` +
-                        `┃\n` +
-                        `┃ 💤 Estuviste AFK: *${fmtTiempo(Date.now() - data.tiempo)}*\n` +
-                        (data.razon ? `┃ 📝 Razón: ${data.razon}\n` : '') +
-                        `┃\n` +
-                        `┃ 🎈 Bienvenido de vuelta\n` +
-                        `┃\n` +
-                        `╰━━━━━━━━━━━━━━━━⬣`,
-                    mentions
-                }, { quoted: msg });
+                        await sock.sendMessage(jid, {
+                            text:
+                                `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
+                                `┃\n` +
+                                `┃ 🎉 ${textoUser} ya regresaste!\n` +
+                                `┃\n` +
+                                `┃ 💤 Estuviste AFK: *${fmtTiempo(Date.now() - data.tiempo)}*\n` +
+                                (data.razon ? `┃ 📝 Razón: ${data.razon}\n` : '') +
+                                `┃\n` +
+                                `┃ 🎈 Bienvenido de vuelta\n` +
+                                `┃\n` +
+                                `╰━━━━━━━━━━━━━━━━⬣`,
+                            mentions
+                        }, { quoted: msg });
+                    }
+                }
+            } catch (e) {
+                console.error('[AFK] Error en detector:', e?.message || e);
             }
         }
-    } catch (e) {
-        console.error('[AFK] Error en detector:', e?.message || e);
-    }
-}
+
         // ============================================
         // ANTILINK — SOLO ENLACES DE WHATSAPP
         // ============================================
@@ -123,6 +125,21 @@ if (!fromMe) {
             const bloqueado = await revisarAntilink(sock, msg, esAdmin);
 
             if (bloqueado) return;
+        }
+
+        // ============================================
+        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza)
+        // Procesar mensajes SIN prefijo para juegos activos
+        // ============================================
+        if (!fromMe) {
+            const fueTrivia = await manejarMensajeTrivia(sock, msg);
+            if (fueTrivia) return;
+
+            const fueTetris = await manejarMensajeTetris(sock, msg);
+            if (fueTetris) return;
+
+            const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
+            if (fueAdivinanza) return;
         }
 
         // ============================================
