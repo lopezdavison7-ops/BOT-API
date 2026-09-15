@@ -1,11 +1,12 @@
 // commands/canvas/xnxx.js
 // ============================================================
 // BOT-API — XNXX CARD (Delirius API)
-// Compatible con baileys-beta (fork personalizado)
+// Compatible con baileys-beta + múltiples servicios de subida
 // ============================================================
 
 import FormData from 'form-data';
 
+// ---------- SUBIR A TELEGRAPH ----------
 async function uploadToTelegraph(buffer, extension = 'jpg') {
     const form = new FormData();
     form.append('file', buffer, {
@@ -18,17 +19,98 @@ async function uploadToTelegraph(buffer, extension = 'jpg') {
         body: form
     });
 
+    if (!response.ok) {
+        throw new Error(`Telegraph respondió HTTP ${response.status}`);
+    }
+
     const result = await response.json();
-    if (result && result[0]) {
+    if (result && result[0] && result[0].src) {
         return 'https://telegra.ph' + result[0].src;
     }
 
-    throw new Error('No se pudo subir la imagen a Telegraph');
+    throw new Error('Telegraph no devolvió URL válida');
+}
+
+// ---------- SUBIR A IMGBB (alternativa) ----------
+async function uploadToImgbb(buffer, apiKey = '64a2723a04b67c579c8977c14b498535') {
+    const form = new FormData();
+    form.append('image', buffer.toString('base64'));
+    form.append('key', apiKey);
+
+    const response = await fetch('https://api.imgbb.com/1/upload', {
+        method: 'POST',
+        body: form
+    });
+
+    if (!response.ok) {
+        throw new Error(`Imgbb respondió HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (result.success && result.data?.url) {
+        return result.data.url;
+    }
+
+    throw new Error('Imgbb no devolvió URL válida');
+}
+
+// ---------- SUBIR A CATBOX (alternativa sin key) ----------
+async function uploadToCatbox(buffer, extension = 'jpg') {
+    const form = new FormData();
+    form.append('reqtype', 'fileupload');
+    form.append('fileToUpload', buffer, {
+        filename: `image.${extension}`,
+        contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`
+    });
+
+    const response = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST',
+        body: form
+    });
+
+    if (!response.ok) {
+        throw new Error(`Catbox respondió HTTP ${response.status}`);
+    }
+
+    const url = await response.text();
+    if (url && url.startsWith('https://files.catbox.moe/')) {
+        return url.trim();
+    }
+
+    throw new Error('Catbox no devolvió URL válida');
+}
+
+// ---------- SUBIR CON FALLBACK ----------
+async function subirImagen(buffer) {
+    const errores = [];
+
+    // Intento 1: Telegraph
+    try {
+        return await uploadToTelegraph(buffer, 'jpg');
+    } catch (e) {
+        errores.push(`Telegraph: ${e.message}`);
+    }
+
+    // Intento 2: Imgbb
+    try {
+        return await uploadToImgbb(buffer);
+    } catch (e) {
+        errores.push(`Imgbb: ${e.message}`);
+    }
+
+    // Intento 3: Catbox
+    try {
+        return await uploadToCatbox(buffer, 'jpg');
+    } catch (e) {
+        errores.push(`Catbox: ${e.message}`);
+    }
+
+    throw new Error('Todos los servicios fallaron:\n' + errores.join('\n'));
 }
 
 // ---------- DESCARGAR CONTENIDO DE MEDIA ----------
 async function descargarMedia(message, sock) {
-    // Método 1: función downloadContentFromMessage (disponible en todos los forks)
+    // Método 1: downloadContentFromMessage
     try {
         const baileys = await import('baileys');
         const downloadFn = baileys.downloadContentFromMessage || baileys.default?.downloadContentFromMessage;
@@ -47,7 +129,7 @@ async function descargarMedia(message, sock) {
         console.error('[XNXX] downloadContentFromMessage falló:', e.message);
     }
 
-    // Método 2: método del socket (si existe)
+    // Método 2: método del socket
     try {
         if (typeof sock.downloadMediaMessage === 'function') {
             const fakeMsg = { message, key: { remoteJid: 'dummy', fromMe: false } };
@@ -57,7 +139,7 @@ async function descargarMedia(message, sock) {
         console.error('[XNXX] sock.downloadMediaMessage falló:', e.message);
     }
 
-    // Método 3: URL directa (siempre existe)
+    // Método 3: URL directa
     const mediaObj = message.imageMessage || message.videoMessage;
     if (mediaObj?.url) {
         const res = await fetch(mediaObj.url, {
@@ -91,7 +173,7 @@ export default {
             try {
                 const buffer = await descargarMedia(msg.message, s);
                 if (buffer && buffer.length > 0) {
-                    imageUrl = await uploadToTelegraph(buffer, 'jpg');
+                    imageUrl = await subirImagen(buffer);
                     metodoUsado = 'imagen enviada';
                 }
             } catch (e) {
@@ -109,7 +191,7 @@ export default {
                 const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
                 const buffer = await descargarMedia(quotedMsg, s);
                 if (buffer && buffer.length > 0) {
-                    imageUrl = await uploadToTelegraph(buffer, 'jpg');
+                    imageUrl = await subirImagen(buffer);
                     metodoUsado = 'imagen citada';
                 }
             } catch (e) {
