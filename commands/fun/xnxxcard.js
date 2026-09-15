@@ -37,6 +37,9 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
+        // Usar el socket correcto (global.conns)
+        const s = global.conns?.[0] || Object.values(global.conns || {})[0] || sock;
+
         const titulo = String(argumento || '').trim() || 'Welcome to BOT-API 😈';
         let imageUrl = '';
         let metodoUsado = '';
@@ -44,7 +47,12 @@ export default {
         // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
         if (msg.message?.imageMessage) {
             try {
-                const buffer = await sock.downloadMediaMessage(msg);
+                // Verificar si downloadMediaMessage existe
+                if (typeof s.downloadMediaMessage !== 'function') {
+                    throw new Error('downloadMediaMessage no disponible en el socket');
+                }
+
+                const buffer = await s.downloadMediaMessage(msg);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen enviada';
@@ -67,7 +75,9 @@ export default {
                             }
                         }
                     }
-                    if (!imageUrl) throw new Error('No se pudo descargar la imagen enviada');
+                    if (!imageUrl) {
+                        throw new Error(`No se pudo descargar la imagen: ${e.message}`);
+                    }
                 } catch (e2) {
                     await responder.texto(
                         '⚠️ *Error con imagen enviada*\n\n' +
@@ -82,6 +92,10 @@ export default {
         // ---------- CASO 2: IMAGEN CITADA ----------
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
+                if (typeof s.downloadMediaMessage !== 'function') {
+                    throw new Error('downloadMediaMessage no disponible en el socket');
+                }
+
                 const quoted = msg.message.extendedTextMessage.contextInfo;
                 const quotedMsg = quoted.quotedMessage;
 
@@ -94,7 +108,7 @@ export default {
                     }
                 };
 
-                const buffer = await sock.downloadMediaMessage(fakeMsg);
+                const buffer = await s.downloadMediaMessage(fakeMsg);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen citada';
@@ -111,7 +125,7 @@ export default {
         // ---------- CASO 3: FOTO DE PERFIL ----------
         if (!imageUrl) {
             try {
-                imageUrl = await sock.profilePictureUrl(sender, 'image');
+                imageUrl = await s.profilePictureUrl(sender, 'image');
                 metodoUsado = 'foto de perfil';
             } catch (e) {
                 imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
