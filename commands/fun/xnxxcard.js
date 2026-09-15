@@ -6,6 +6,7 @@
 // ============================================================
 
 import FormData from 'form-data';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 
 async function uploadToTelegraph(buffer, extension = 'jpg') {
     const form = new FormData();
@@ -37,7 +38,7 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Usar el socket correcto (global.conns)
+        // Socket correcto
         const s = global.conns?.[0] || Object.values(global.conns || {})[0] || sock;
 
         const titulo = String(argumento || '').trim() || 'Welcome to BOT-API 😈';
@@ -47,12 +48,12 @@ export default {
         // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
         if (msg.message?.imageMessage) {
             try {
-                // Verificar si downloadMediaMessage existe
-                if (typeof s.downloadMediaMessage !== 'function') {
-                    throw new Error('downloadMediaMessage no disponible en el socket');
-                }
+                // Usar la función importada de Baileys
+                const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+                    logger: console,
+                    reuploadRequest: s.updateMediaMessage
+                });
 
-                const buffer = await s.downloadMediaMessage(msg);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen enviada';
@@ -60,7 +61,9 @@ export default {
                     throw new Error('Buffer vacío');
                 }
             } catch (e) {
-                // Intentar descarga directa desde URL
+                console.error('[XNXX] Error downloadMediaMessage:', e.message);
+                
+                // Fallback: descarga directa desde URL
                 try {
                     const imgMsg = msg.message.imageMessage;
                     if (imgMsg.url) {
@@ -75,9 +78,7 @@ export default {
                             }
                         }
                     }
-                    if (!imageUrl) {
-                        throw new Error(`No se pudo descargar la imagen: ${e.message}`);
-                    }
+                    if (!imageUrl) throw new Error(`No se pudo descargar: ${e.message}`);
                 } catch (e2) {
                     await responder.texto(
                         '⚠️ *Error con imagen enviada*\n\n' +
@@ -92,10 +93,6 @@ export default {
         // ---------- CASO 2: IMAGEN CITADA ----------
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
-                if (typeof s.downloadMediaMessage !== 'function') {
-                    throw new Error('downloadMediaMessage no disponible en el socket');
-                }
-
                 const quoted = msg.message.extendedTextMessage.contextInfo;
                 const quotedMsg = quoted.quotedMessage;
 
@@ -108,7 +105,11 @@ export default {
                     }
                 };
 
-                const buffer = await s.downloadMediaMessage(fakeMsg);
+                const buffer = await downloadMediaMessage(fakeMsg, 'buffer', {}, {
+                    logger: console,
+                    reuploadRequest: s.updateMediaMessage
+                });
+
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen citada';
