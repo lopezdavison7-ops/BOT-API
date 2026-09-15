@@ -24,7 +24,7 @@ async function uploadToTelegraph(buffer, extension = 'jpg') {
         return 'https://telegra.ph' + result[0].src;
     }
 
-    throw new Error('No se pudo subir la imagen');
+    throw new Error('No se pudo subir la imagen a Telegraph');
 }
 
 export default {
@@ -39,6 +39,7 @@ export default {
 
         const titulo = String(argumento || '').trim() || 'Welcome to BOT-API 😈';
         let imageUrl = '';
+        let metodoUsado = '';
 
         // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
         if (msg.message?.imageMessage) {
@@ -46,11 +47,35 @@ export default {
                 const buffer = await sock.downloadMediaMessage(msg);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
-                    console.log('[XNXX] Imagen subida a Telegraph:', imageUrl);
+                    metodoUsado = 'imagen enviada';
+                } else {
+                    throw new Error('Buffer vacío');
                 }
             } catch (e) {
-                console.error('[XNXX] Error descargando imagen enviada:', e.message);
-                // Fallback: continuar sin imageUrl
+                // Intentar descarga directa desde URL
+                try {
+                    const imgMsg = msg.message.imageMessage;
+                    if (imgMsg.url) {
+                        const res = await fetch(imgMsg.url, {
+                            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+                        });
+                        if (res.ok) {
+                            const buffer = Buffer.from(await res.arrayBuffer());
+                            if (buffer.length > 0) {
+                                imageUrl = await uploadToTelegraph(buffer, 'jpg');
+                                metodoUsado = 'imagen enviada (URL directa)';
+                            }
+                        }
+                    }
+                    if (!imageUrl) throw new Error('No se pudo descargar la imagen enviada');
+                } catch (e2) {
+                    await responder.texto(
+                        '⚠️ *Error con imagen enviada*\n\n' +
+                        `❌ ${e.message}\n` +
+                        `❌ ${e2.message}\n\n` +
+                        '💡 Usando foto de perfil como alternativa...'
+                    );
+                }
             }
         }
 
@@ -72,54 +97,56 @@ export default {
                 const buffer = await sock.downloadMediaMessage(fakeMsg);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
-                    console.log('[XNXX] Imagen citada subida:', imageUrl);
+                    metodoUsado = 'imagen citada';
                 }
             } catch (e) {
-                console.error('[XNXX] Error descargando imagen citada:', e.message);
+                await responder.texto(
+                    '⚠️ *Error con imagen citada*\n\n' +
+                    `❌ ${e.message}\n\n` +
+                    '💡 Usando foto de perfil como alternativa...'
+                );
             }
         }
 
         // ---------- CASO 3: FOTO DE PERFIL ----------
         if (!imageUrl) {
             try {
-                const ppUrl = await sock.profilePictureUrl(sender, 'image');
-                if (ppUrl) {
-                    imageUrl = ppUrl;
-                    console.log('[XNXX] Usando foto de perfil:', imageUrl);
-                }
+                imageUrl = await sock.profilePictureUrl(sender, 'image');
+                metodoUsado = 'foto de perfil';
             } catch (e) {
-                console.log('[XNXX] No hay foto de perfil, usando default');
                 imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+                metodoUsado = 'imagen por defecto';
             }
         }
 
         // Último recurso
         if (!imageUrl) {
             imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+            metodoUsado = 'imagen por defecto';
         }
 
         // Construir URL de la API
         const apiUrl = `https://api.delirius.online/canvas/xnxxcard?image=${encodeURIComponent(imageUrl)}&title=${encodeURIComponent(titulo)}`;
 
-        console.log('[XNXX] API URL:', apiUrl);
-
         // Enviar la imagen generada
         try {
             await responder.imagen(
                 { url: apiUrl },
-                `🔥 *XNXX Card*\n\n📝 ${titulo}\n\n⚡ BOT-API`
+                `🔥 *XNXX Card*\n\n📝 ${titulo}\n📸 Fuente: ${metodoUsado}\n\n⚡ BOT-API`
             );
         } catch (error) {
-            console.error('[XNXX] Error enviando imagen:', error?.message || error);
-            
-            // Si falla la API, enviar texto con link
             await responder.texto(
                 '╭━━〔 ❌ 𝐗𝐍𝐗𝐗 𝐂𝐀𝐑𝐃 〕━━⬣\n' +
                 '┃\n' +
                 '┃ No pude generar la tarjeta.\n' +
                 '┃\n' +
-                '┃ 🔗 Link manual:\n' +
+                `┃ ❌ Error: ${error?.message || 'Desconocido'}\n` +
+                '┃\n' +
+                '┃ 🔗 URL de la API:\n' +
                 '┃ ' + apiUrl + '\n' +
+                '┃\n' +
+                '┃ 💡 Copia la URL y ábrela en el navegador\n' +
+                '┃    para ver si la API responde.\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
