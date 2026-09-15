@@ -1,13 +1,7 @@
 // commands/fun/ship.js
 // ============================================================
-// BOT-API — SHIP (texto con menciones)
+// BOT-API — SHIP (con menciones correctas)
 // ============================================================
-
-// ---------- LIMPIAR JID ----------
-function limpiarJid(jid) {
-    const raw = jid.split('@')[0].split(':')[0];
-    return (jid.includes('@lid') || raw.length > 12) ? raw.slice(-4) : raw;
-}
 
 // ---------- NIVELES DE COMPATIBILIDAD ----------
 const NIVELES = [
@@ -120,7 +114,6 @@ function fraseRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ---------- BARRA DE PROGRESO ----------
 function barraProgreso(percent) {
     const lleno = Math.floor(percent / 10);
     const vacio = 10 - lleno;
@@ -144,7 +137,7 @@ export default {
         let userA = msg.key.participant || msg.key.remoteJid;
         let userB = quotedParticipant || mentioned[0];
 
-        // Si menciona a 2 personas, shipearlas entre ellas
+        // Si menciona a 2 personas
         if (mentioned.length >= 2) {
             userA = mentioned[0];
             userB = mentioned[1];
@@ -188,24 +181,23 @@ export default {
             );
         }
 
-        // Generar porcentaje y nivel
         const percent = Math.floor(Math.random() * 101);
         const nivel = obtenerNivel(percent);
         const frase = fraseRandom(nivel.frases);
         const barra = barraProgreso(percent);
 
-        const n1 = limpiarJid(userA);
-        const n2 = limpiarJid(userB);
+        // Extraer números para mostrar (sin el dominio)
+        const num1 = userA.split('@')[0];
+        const num2 = userB.split('@')[0];
 
-        // Construir mensaje bonito
         const texto =
             '╭━━〔 💘 𝐒𝐇𝐈𝐏𝐏𝐄𝐑 〕━━⬣\n' +
             '┃\n' +
             '┃ 💑 *Pareja del día*\n' +
             '┃\n' +
-            `┃ ❤️ @${n1}\n` +
+            `┃ ❤️ @${num1}\n` +
             '┃      ✖\n' +
-            `┃ ❤️ @${n2}\n` +
+            `┃ ❤️ @${num2}\n` +
             '┃\n' +
             '┃ ━━━━━━━━━━━━━━\n' +
             '┃\n' +
@@ -222,7 +214,7 @@ export default {
             remoteJid,
             {
                 text: texto,
-                mentions: [userA, userB]
+                mentions: [userA, userB]  // Menciones con JID completo
             },
             { quoted: msg }
         );
