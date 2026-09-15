@@ -1,162 +1,24 @@
 // commands/fun/ship.js
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+// ============================================================
+// BOT-API — SHIP (API externa + avatares auto-generados)
+// ============================================================
 
-// ---------- OBTENER NOMBRE REAL (todos los métodos) ----------
-async function obtenerNombre(sock, jid, pushName, remoteJid) {
-    // 1. pushName del mensaje
-    if (pushName && pushName.length > 0 && !/^\d+$/.test(pushName)) {
-        return pushName;
-    }
-    
-    // 2. Buscar en metadata del grupo
-    try {
-        if (remoteJid?.endsWith('@g.us')) {
-            const metadata = await sock.groupMetadata(remoteJid);
-            const p = metadata.participants.find(x => x.id === jid);
-            if (p?.pushName) return p.pushName;
-            if (p?.notify) return p.notify;
-        }
-    } catch {}
-    
-    // 3. onWhatsApp
-    try {
-        const numero = jid.split('@')[0].split(':')[0];
-        const result = await sock.onWhatsApp(numero);
-        if (result?.[0]?.pushName) return result[0].pushName;
-        if (result?.[0]?.name) return result[0].name;
-    } catch {}
-    
-    // 4. sock.getName
-    try {
-        if (typeof sock.getName === 'function') {
-            const n = await sock.getName(jid);
-            if (n && n !== jid && !/^\d+$/.test(n)) return n;
-        }
-    } catch {}
-    
-    // 5. Fallback: últimos 4 dígitos si es LID, o número completo
+// ---------- LIMPIAR JID ----------
+function limpiarJid(jid) {
     const raw = jid.split('@')[0].split(':')[0];
     return (jid.includes('@lid') || raw.length > 12) ? raw.slice(-4) : raw;
 }
 
-// ---------- AVATAR CON INICIALES ----------
-function drawAvatarWithInitials(ctx, x, y, size, nombre, color) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    
-    const initials = String(nombre).substring(0, 2).toUpperCase();
-    ctx.font = `bold ${size * 0.4}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(initials, x + size / 2, y + size / 2);
-    ctx.restore();
-    
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
+// ---------- OBTENER NOMBRE ----------
+function obtenerNombre(jid, pushName) {
+    if (pushName && !/^\d+$/.test(pushName)) return pushName;
+    return limpiarJid(jid);
 }
 
-// ---------- AVATAR CON FOTO ----------
-async function drawAvatarWithPhoto(ctx, sock, jid, x, y, size, nombre, color) {
-    try {
-        const url = await Promise.race([
-            sock.profilePictureUrl(jid, 'image'),
-            new Promise((_, reject) => setTimeout(() => reject('timeout'), 500))
-        ]);
-        
-        if (!url) throw new Error('No URL');
-        
-        const res = await Promise.race([
-            fetch(url),
-            new Promise((_, reject) => setTimeout(() => reject('timeout'), 500))
-        ]);
-        
-        if (!res.ok) throw new Error('Fetch failed');
-        
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const img = await loadImage(buffer);
-        
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img, x, y, size, size);
-        ctx.restore();
-        
-        ctx.beginPath();
-        ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-        ctx.lineWidth = 10;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
-        
-    } catch {
-        drawAvatarWithInitials(ctx, x, y, size, nombre, color);
-    }
-}
-
-// ---------- CORAZÓN ----------
-function drawHeart(ctx, centerX, centerY, size) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY - size * 0.08);
-    ctx.bezierCurveTo(
-        centerX - size * 0.16, centerY - size * 0.36,
-        centerX - size * 0.42, centerY - size * 0.45,
-        centerX - size * 0.42, centerY - size * 0.05
-    );
-    ctx.bezierCurveTo(
-        centerX - size * 0.42, centerY + size * 0.28,
-        centerX - size * 0.2, centerY + size * 0.42,
-        centerX, centerY + size * 0.55
-    );
-    ctx.bezierCurveTo(
-        centerX + size * 0.2, centerY + size * 0.42,
-        centerX + size * 0.42, centerY + size * 0.28,
-        centerX + size * 0.42, centerY - size * 0.05
-    );
-    ctx.bezierCurveTo(
-        centerX + size * 0.42, centerY - size * 0.45,
-        centerX + size * 0.16, centerY - size * 0.36,
-        centerX, centerY - size * 0.08
-    );
-    ctx.closePath();
-    ctx.fillStyle = '#ff007f';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#000000';
-    ctx.stroke();
-    ctx.restore();
-}
-
-// ---------- BARRA DE PROGRESO ----------
-function drawProgressBar(ctx, x, y, width, height, percent) {
-    const radius = height / 2;
-    
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(x, y, width, height, radius);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.restore();
-    
-    const fillWidth = Math.max(0, ((width - 20) * percent) / 100);
-    if (fillWidth > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(x + 10, y + 10, fillWidth, height - 20, radius - 5);
-        ctx.fillStyle = '#ff0505';
-        ctx.fill();
-        ctx.restore();
-    }
-    
-    const heartX = x + 10 + fillWidth;
-    drawHeart(ctx, heartX, y + height / 2, 80);
+// ---------- AVATAR PÚBLICO (ui-avatars.com - instantáneo) ----------
+function avatarUrl(nombre, color) {
+    const name = encodeURIComponent(nombre);
+    return `https://ui-avatars.com/api/?name=${name}&background=${color}&color=fff&size=256&bold=true&format=png`;
 }
 
 export default {
@@ -191,79 +53,47 @@ export default {
                        percent >= 40 ? 'TAL VEZ' :
                        percent >= 25 ? 'AMIGOS' : 'NO';
 
-        // Canvas
-        const canvas = createCanvas(800, 400);
-        const c = canvas.getContext('2d');
+        // Nombres
+        const nombreA = obtenerNombre(userA, msg.pushName);
+        const nombreB = obtenerNombre(userB, null);
 
-        // Fondo
-        const gradient = c.createLinearGradient(0, 0, 800, 400);
-        gradient.addColorStop(0, '#b542e8');
-        gradient.addColorStop(1, '#8e24aa');
-        c.fillStyle = gradient;
-        c.fillRect(0, 0, 800, 400);
+        // Avatares públicos (ui-avatars genera al instante)
+        const img1 = avatarUrl(nombreA, 'ff6b9d');
+        const img2 = avatarUrl(nombreB, '4ecdc4');
 
-        // ---------- OBTENER NOMBRES REALES PARA LA IMAGEN ----------
-        const [nombreRealA, nombreRealB] = await Promise.all([
-            obtenerNombre(s, userA, msg.pushName, remoteJid),
-            obtenerNombre(s, userB, null, remoteJid)
-        ]);
+        // URL de la API de Delirius
+        const apiUrl = `https://api.delirius.online/canvas/ship?` +
+            `image1=${encodeURIComponent(img1)}` +
+            `&image2=${encodeURIComponent(img2)}` +
+            `&name1=${encodeURIComponent(nombreA)}` +
+            `&name2=${encodeURIComponent(nombreB)}` +
+            `&percentage=${percent}` +
+            `&text=${encodeURIComponent(mensaje)}`;
 
-        const colorA = '#ff6b9d';
-        const colorB = '#4ecdc4';
+        const n1 = limpiarJid(userA);
+        const n2 = limpiarJid(userB);
 
-        // Dibujar avatares en paralelo (usando nombres reales)
-        await Promise.all([
-            drawAvatarWithPhoto(c, s, userA, 50, 50, 200, nombreRealA, colorA),
-            drawAvatarWithPhoto(c, s, userB, 550, 50, 200, nombreRealB, colorB)
-        ]);
-
-        // Corazón central
-        drawHeart(c, 400, 150, 120);
-
-        // Porcentaje
-        c.font = 'bold 40px Arial';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillStyle = '#ffffff';
-        c.fillText(`${percent}%`, 400, 150);
-
-        // ---------- NOMBRES DENTRO DE LA IMAGEN (usando nombres reales) ----------
-        const maxLen = 14;
-        const dispA = String(nombreRealA).length > maxLen 
-            ? String(nombreRealA).substring(0, maxLen) + '...' 
-            : String(nombreRealA);
-        const dispB = String(nombreRealB).length > maxLen 
-            ? String(nombreRealB).substring(0, maxLen) + '...' 
-            : String(nombreRealB);
-        
-        c.font = 'bold 24px Arial';
-        c.fillText(dispA, 150, 280);
-        c.fillText(dispB, 650, 280);
-
-        // Barra de progreso
-        drawProgressBar(c, 100, 320, 600, 40, percent);
-
-        // Mensaje
-        c.font = 'bold 28px Arial';
-        c.fillStyle = '#ffffff';
-        c.fillText(mensaje, 400, 380);
-
-        const buffer = canvas.toBuffer('image/png');
-        
-        // Para el caption, usar números limpios
-        const rawA = userA.split('@')[0].split(':')[0];
-        const rawB = userB.split('@')[0].split(':')[0];
-        const n1 = (userA.includes('@lid') || rawA.length > 12) ? rawA.slice(-4) : rawA;
-        const n2 = (userB.includes('@lid') || rawB.length > 12) ? rawB.slice(-4) : rawB;
-
-        await s.sendMessage(
-            remoteJid,
-            {
-                image: buffer,
-                caption: `💑 @${n1} + @${n2}\n📊 *${percent}%* ${mensaje}`,
-                mentions: [userA, userB]
-            },
-            { quoted: msg }
-        );
+        try {
+            await s.sendMessage(
+                remoteJid,
+                {
+                    image: { url: apiUrl },
+                    caption: `💑 @${n1} + @${n2}\n📊 *${percent}%* ${mensaje}`,
+                    mentions: [userA, userB]
+                },
+                { quoted: msg }
+            );
+        } catch (e) {
+            // Fallback: texto simple si falla la API
+            const barra = '█'.repeat(Math.floor(percent / 10)) + '░'.repeat(10 - Math.floor(percent / 10));
+            await s.sendMessage(
+                remoteJid,
+                {
+                    text: `💑 @${n1} + @${n2}\n📊 *${percent}%* ${barra}\n${mensaje}`,
+                    mentions: [userA, userB]
+                },
+                { quoted: msg }
+            );
+        }
     }
 };
