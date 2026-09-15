@@ -1,43 +1,35 @@
 // commands/canvas/xnxx.js
 // ============================================================
 // BOT-API — XNXX CARD (Delirius API)
-// Subidas corregidas con múltiples servicios
+// Usa FormData NATIVO de Node.js (no el paquete form-data)
 // ============================================================
 
-import FormData from 'form-data';
-
-// ---------- SUBIR A TELEGRAPH ----------
+// ---------- SUBIR A TELEGRAPH (FormData nativo) ----------
 async function uploadToTelegraph(buffer) {
-    const form = new FormData();
-    form.append('file', buffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-    });
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    formData.append('file', blob, 'image.jpg');
 
     const response = await fetch('https://telegra.ph/upload', {
         method: 'POST',
-        body: form,
-        headers: form.getHeaders()
+        body: formData
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const result = await response.json();
     
-    // Telegraph devuelve array [{src: '/file/xxx.jpg'}]
     if (Array.isArray(result) && result[0]?.src) {
         return 'https://telegra.ph' + result[0].src;
     }
-    
-    // O puede devolver objeto directo
     if (result?.src) {
         return 'https://telegra.ph' + result.src;
     }
 
-    throw new Error('Respuesta inválida: ' + JSON.stringify(result).substring(0, 100));
+    throw new Error('Respuesta: ' + JSON.stringify(result).substring(0, 150));
 }
 
-// ---------- SUBIR A IMGBB (URLSearchParams, no FormData) ----------
+// ---------- SUBIR A IMGBB ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -46,97 +38,71 @@ async function uploadToImgbb(buffer) {
     const response = await fetch('https://api.imgbb.com/1/upload', {
         method: 'POST',
         body: params,
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const result = await response.json();
-    if (result?.data?.url) {
-        return result.data.url;
-    }
+    if (result?.data?.url) return result.data.url;
 
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR A CATBOX (con headers correctos) ----------
+// ---------- SUBIR A CATBOX (FormData nativo) ----------
 async function uploadToCatbox(buffer) {
-    const form = new FormData();
-    form.append('reqtype', 'fileupload');
-    form.append('fileToUpload', buffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-    });
+    const formData = new FormData();
+    formData.append('reqtype', 'fileupload');
+    formData.append('fileToUpload', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
 
     const response = await fetch('https://catbox.moe/user/api.php', {
         method: 'POST',
-        body: form,
-        headers: {
-            ...form.getHeaders(),
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        body: formData,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const url = await response.text();
-    if (url.includes('catbox.moe')) {
-        return url.trim();
-    }
+    if (url.includes('catbox.moe')) return url.trim();
 
-    throw new Error('Respuesta inválida');
+    throw new Error('Respuesta: ' + url.substring(0, 100));
 }
 
-// ---------- SUBIR A TMPFILES (sin key, simple) ----------
+// ---------- SUBIR A TMPFILES (FormData nativo) ----------
 async function uploadToTmpfiles(buffer) {
-    const form = new FormData();
-    form.append('file', buffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-    });
+    const formData = new FormData();
+    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
 
     const response = await fetch('https://tmpfiles.org/api/v1/upload', {
         method: 'POST',
-        body: form,
-        headers: form.getHeaders()
+        body: formData
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const result = await response.json();
     if (result?.data?.url) {
-        // tmpfiles.org/url → tmpfiles.org/dl/url
         return result.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
     }
 
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR A 0X0.ST (sin key, simple) ----------
-async function uploadTo0x0(buffer) {
-    const form = new FormData();
-    form.append('file', buffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-    });
+// ---------- SUBIR A UGUU (sin key) ----------
+async function uploadToUguu(buffer) {
+    const formData = new FormData();
+    formData.append('files[]', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
 
-    const response = await fetch('https://0x0.st', {
+    const response = await fetch('https://uguu.se/upload.php', {
         method: 'POST',
-        body: form,
-        headers: {
-            ...form.getHeaders(),
-            'User-Agent': 'Mozilla/5.0 (compatible; BOT-API/1.0)'
-        }
+        body: formData
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const url = await response.text();
-    if (url.startsWith('https://')) {
-        return url.trim();
-    }
+    const result = await response.json();
+    if (result?.files?.[0]?.url) return result.files[0].url;
 
     throw new Error('Respuesta inválida');
 }
@@ -150,17 +116,17 @@ async function subirImagen(buffer) {
         ['Imgbb', uploadToImgbb],
         ['Catbox', uploadToCatbox],
         ['Tmpfiles', uploadToTmpfiles],
-        ['0x0.st', uploadTo0x0]
+        ['Uguu', uploadToUguu]
     ];
 
     for (const [nombre, fn] of servicios) {
         try {
             const url = await fn(buffer);
-            console.log(`[XNXX] ✅ Subido a ${nombre}: ${url}`);
+            console.log(`[XNXX] ✅ ${nombre}: ${url}`);
             return url;
         } catch (e) {
             errores.push(`${nombre}: ${e.message}`);
-            console.error(`[XNXX] ❌ ${nombre} falló: ${e.message}`);
+            console.error(`[XNXX] ❌ ${nombre}: ${e.message}`);
         }
     }
 
@@ -184,7 +150,7 @@ async function descargarMedia(message, sock) {
             return Buffer.concat(chunks);
         }
     } catch (e) {
-        console.error('[XNXX] downloadContentFromMessage falló:', e.message);
+        console.error('[XNXX] downloadContentFromMessage:', e.message);
     }
 
     try {
@@ -193,7 +159,7 @@ async function descargarMedia(message, sock) {
             return await sock.downloadMediaMessage(fakeMsg, 'buffer');
         }
     } catch (e) {
-        console.error('[XNXX] sock.downloadMediaMessage falló:', e.message);
+        console.error('[XNXX] sock.downloadMediaMessage:', e.message);
     }
 
     const mediaObj = message.imageMessage || message.videoMessage;
@@ -288,12 +254,12 @@ export default {
                 '┃\n' +
                 '┃ No pude generar la tarjeta.\n' +
                 '┃\n' +
-                `┃  Error: ${error?.message || 'Desconocido'}\n` +
+                `┃ ❌ Error: ${error?.message || 'Desconocido'}\n` +
                 '┃\n' +
                 '┃ 🔗 URL de la API:\n' +
                 '┃ ' + apiUrl + '\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
     }
