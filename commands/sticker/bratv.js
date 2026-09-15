@@ -80,13 +80,13 @@ export default {
                 '┃ • .bratv hola\n' +
                 '┃ • .bratv brat summer\n' +
                 '┃\n' +
-                '┃ 💡 Máximo 50 caracteres\n' +
+                '┃ 💡 Máximo 60 caracteres\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
-        if (texto.length > 50) {
+        if (texto.length > 60) {
             return await responder.texto('❌ El texto es muy largo.\nMáximo 50 caracteres.');
         }
 
