@@ -1,12 +1,10 @@
 // commands/canvas/xnxx.js
 // ============================================================
 // BOT-API — XNXX CARD (Delirius API)
-// ============================================================
-// .xnxx <título> (con foto de perfil o imagen enviada/citada)
+// Compatible con baileys-beta (fork personalizado)
 // ============================================================
 
 import FormData from 'form-data';
-import { downloadMediaMessage } from '@whiskeysockets/baileys';
 
 async function uploadToTelegraph(buffer, extension = 'jpg') {
     const form = new FormData();
@@ -28,6 +26,51 @@ async function uploadToTelegraph(buffer, extension = 'jpg') {
     throw new Error('No se pudo subir la imagen a Telegraph');
 }
 
+// ---------- DESCARGAR CONTENIDO DE MEDIA ----------
+async function descargarMedia(message, sock) {
+    // Método 1: función downloadContentFromMessage (disponible en todos los forks)
+    try {
+        const baileys = await import('baileys');
+        const downloadFn = baileys.downloadContentFromMessage || baileys.default?.downloadContentFromMessage;
+        
+        if (downloadFn) {
+            const mediaType = message.imageMessage ? 'image' : 'video';
+            const stream = await downloadFn(message.imageMessage || message.videoMessage, mediaType);
+            
+            const chunks = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+            return Buffer.concat(chunks);
+        }
+    } catch (e) {
+        console.error('[XNXX] downloadContentFromMessage falló:', e.message);
+    }
+
+    // Método 2: método del socket (si existe)
+    try {
+        if (typeof sock.downloadMediaMessage === 'function') {
+            const fakeMsg = { message, key: { remoteJid: 'dummy', fromMe: false } };
+            return await sock.downloadMediaMessage(fakeMsg, 'buffer');
+        }
+    } catch (e) {
+        console.error('[XNXX] sock.downloadMediaMessage falló:', e.message);
+    }
+
+    // Método 3: URL directa (siempre existe)
+    const mediaObj = message.imageMessage || message.videoMessage;
+    if (mediaObj?.url) {
+        const res = await fetch(mediaObj.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        if (res.ok) {
+            return Buffer.from(await res.arrayBuffer());
+        }
+    }
+
+    throw new Error('Ningún método de descarga funcionó');
+}
+
 export default {
     nombre: 'xnxx',
     categoria: 'canvas',
@@ -38,9 +81,7 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Socket correcto
         const s = global.conns?.[0] || Object.values(global.conns || {})[0] || sock;
-
         const titulo = String(argumento || '').trim() || 'Welcome to BOT-API 😈';
         let imageUrl = '';
         let metodoUsado = '';
@@ -48,68 +89,25 @@ export default {
         // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
         if (msg.message?.imageMessage) {
             try {
-                // Usar la función importada de Baileys
-                const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
-                    logger: console,
-                    reuploadRequest: s.updateMediaMessage
-                });
-
+                const buffer = await descargarMedia(msg.message, s);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen enviada';
-                } else {
-                    throw new Error('Buffer vacío');
                 }
             } catch (e) {
-                console.error('[XNXX] Error downloadMediaMessage:', e.message);
-                
-                // Fallback: descarga directa desde URL
-                try {
-                    const imgMsg = msg.message.imageMessage;
-                    if (imgMsg.url) {
-                        const res = await fetch(imgMsg.url, {
-                            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-                        });
-                        if (res.ok) {
-                            const buffer = Buffer.from(await res.arrayBuffer());
-                            if (buffer.length > 0) {
-                                imageUrl = await uploadToTelegraph(buffer, 'jpg');
-                                metodoUsado = 'imagen enviada (URL directa)';
-                            }
-                        }
-                    }
-                    if (!imageUrl) throw new Error(`No se pudo descargar: ${e.message}`);
-                } catch (e2) {
-                    await responder.texto(
-                        '⚠️ *Error con imagen enviada*\n\n' +
-                        `❌ ${e.message}\n` +
-                        `❌ ${e2.message}\n\n` +
-                        '💡 Usando foto de perfil como alternativa...'
-                    );
-                }
+                await responder.texto(
+                    '⚠️ *Error con imagen enviada*\n\n' +
+                    `❌ ${e.message}\n\n` +
+                    '💡 Usando foto de perfil como alternativa...'
+                );
             }
         }
 
         // ---------- CASO 2: IMAGEN CITADA ----------
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
-                const quoted = msg.message.extendedTextMessage.contextInfo;
-                const quotedMsg = quoted.quotedMessage;
-
-                const fakeMsg = {
-                    message: quotedMsg,
-                    key: {
-                        remoteJid: chatJid,
-                        fromMe: false,
-                        participant: quoted.participant
-                    }
-                };
-
-                const buffer = await downloadMediaMessage(fakeMsg, 'buffer', {}, {
-                    logger: console,
-                    reuploadRequest: s.updateMediaMessage
-                });
-
+                const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
+                const buffer = await descargarMedia(quotedMsg, s);
                 if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
                     metodoUsado = 'imagen citada';
@@ -134,16 +132,13 @@ export default {
             }
         }
 
-        // Último recurso
         if (!imageUrl) {
             imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
             metodoUsado = 'imagen por defecto';
         }
 
-        // Construir URL de la API
         const apiUrl = `https://api.delirius.online/canvas/xnxxcard?image=${encodeURIComponent(imageUrl)}&title=${encodeURIComponent(titulo)}`;
 
-        // Enviar la imagen generada
         try {
             await responder.imagen(
                 { url: apiUrl },
@@ -159,9 +154,6 @@ export default {
                 '┃\n' +
                 '┃ 🔗 URL de la API:\n' +
                 '┃ ' + apiUrl + '\n' +
-                '┃\n' +
-                '┃ 💡 Copia la URL y ábrela en el navegador\n' +
-                '┃    para ver si la API responde.\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
