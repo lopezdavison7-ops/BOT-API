@@ -1,35 +1,21 @@
 // commands/canvas/xnxx.js
 // ============================================================
 // BOT-API — XNXX CARD (Delirius API)
-// Usa FormData NATIVO de Node.js (no el paquete form-data)
+// Usa servicios que dan URL directa de imagen (no HTML wrapper)
 // ============================================================
 
-// ---------- SUBIR A TELEGRAPH (FormData nativo) ----------
-async function uploadToTelegraph(buffer) {
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'image/jpeg' });
-    formData.append('file', blob, 'image.jpg');
-
-    const response = await fetch('https://telegra.ph/upload', {
-        method: 'POST',
-        body: formData
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const result = await response.json();
-    
-    if (Array.isArray(result) && result[0]?.src) {
-        return 'https://telegra.ph' + result[0].src;
+// ---------- VERIFICAR QUE UNA URL ES IMAGEN VÁLIDA ----------
+async function esImagenValida(url) {
+    try {
+        const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+        const ct = res.headers.get('content-type') || '';
+        return res.ok && ct.startsWith('image/');
+    } catch {
+        return false;
     }
-    if (result?.src) {
-        return 'https://telegra.ph' + result.src;
-    }
-
-    throw new Error('Respuesta: ' + JSON.stringify(result).substring(0, 150));
 }
 
-// ---------- SUBIR A IMGBB ----------
+// ---------- 1) IMGBB (URL directa al CDN) ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -41,15 +27,88 @@ async function uploadToImgbb(buffer) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+
+    const result = JSON.parse(text);
+    if (result?.success && result.data?.display_url) {
+        return result.data.display_url; // URL directa a i.ibb.co/xxx.jpg
+    }
+    throw new Error('Respuesta: ' + text.substring(0, 150));
+}
+
+// ---------- 2) IMGUR anónimo (URL directa, sin key) ----------
+async function uploadToImgur(buffer) {
+    // Client-ID público (se puede usar sin registro)
+    const CLIENT_ID = '546c25a59c58ad7';
+    
+    const formData = new FormData();
+    formData.append('image', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
+    formData.append('type', 'file');
+
+    const response = await fetch('https://api.imgur.com/3/image', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'Authorization': `Client-ID ${CLIENT_ID}`
+        }
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+    }
 
     const result = await response.json();
-    if (result?.data?.url) return result.data.url;
-
+    if (result?.data?.link) {
+        return result.data.link; // URL directa a i.imgur.com/xxx.jpg
+    }
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR A CATBOX (FormData nativo) ----------
+// ---------- 3) FREEIMAGE.HOST (key pública) ----------
+async function uploadToFreeImage(buffer) {
+    const params = new URLSearchParams();
+    params.append('key', '6d207e02198a847aa98d0a2a901485a5');
+    params.append('source', buffer.toString('base64'));
+    params.append('format', 'json');
+
+    const response = await fetch('https://freeimage.host/api/1/upload', {
+        method: 'POST',
+        body: params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const result = await response.json();
+    if (result?.image?.url) {
+        return result.image.url; // URL directa
+    }
+    throw new Error('Respuesta inválida');
+}
+
+// ---------- 4) 0X0.ST (URL directa) ----------
+async function uploadTo0x0(buffer) {
+    const formData = new FormData();
+    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
+
+    const response = await fetch('https://0x0.st', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const url = (await response.text()).trim();
+    if (url.startsWith('https://')) return url;
+    throw new Error('Respuesta inválida');
+}
+
+// ---------- 5) CATBOX.MOE (URL directa, si funciona) ----------
 async function uploadToCatbox(buffer) {
     const formData = new FormData();
     formData.append('reqtype', 'fileupload');
@@ -58,70 +117,41 @@ async function uploadToCatbox(buffer) {
     const response = await fetch('https://catbox.moe/user/api.php', {
         method: 'POST',
         body: formData,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const url = await response.text();
-    if (url.includes('catbox.moe')) return url.trim();
-
-    throw new Error('Respuesta: ' + url.substring(0, 100));
-}
-
-// ---------- SUBIR A TMPFILES (FormData nativo) ----------
-async function uploadToTmpfiles(buffer) {
-    const formData = new FormData();
-    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
-
-    const response = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: formData
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const result = await response.json();
-    if (result?.data?.url) {
-        return result.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-    }
-
+    const url = (await response.text()).trim();
+    if (url.includes('catbox.moe')) return url;
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR A UGUU (sin key) ----------
-async function uploadToUguu(buffer) {
-    const formData = new FormData();
-    formData.append('files[]', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
-
-    const response = await fetch('https://uguu.se/upload.php', {
-        method: 'POST',
-        body: formData
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const result = await response.json();
-    if (result?.files?.[0]?.url) return result.files[0].url;
-
-    throw new Error('Respuesta inválida');
-}
-
-// ---------- SUBIR CON FALLBACK ----------
+// ---------- SUBIR CON FALLBACK + VERIFICACIÓN ----------
 async function subirImagen(buffer) {
     const errores = [];
 
+    // Orden: los que más probable funcionan primero
     const servicios = [
-        ['Telegraph', uploadToTelegraph],
         ['Imgbb', uploadToImgbb],
+        ['FreeImage', uploadToFreeImage],
+        ['Imgur', uploadToImgur],
         ['Catbox', uploadToCatbox],
-        ['Tmpfiles', uploadToTmpfiles],
-        ['Uguu', uploadToUguu]
+        ['0x0.st', uploadTo0x0]
     ];
 
     for (const [nombre, fn] of servicios) {
         try {
             const url = await fn(buffer);
+            
+            // Verificar que sea URL de imagen directa
+            const esValida = await esImagenValida(url);
+            if (!esValida) {
+                throw new Error(`URL no es imagen directa: ${url}`);
+            }
+            
             console.log(`[XNXX] ✅ ${nombre}: ${url}`);
             return url;
         } catch (e) {
@@ -144,9 +174,7 @@ async function descargarMedia(message, sock) {
             const stream = await downloadFn(message.imageMessage || message.videoMessage, mediaType);
             
             const chunks = [];
-            for await (const chunk of stream) {
-                chunks.push(chunk);
-            }
+            for await (const chunk of stream) chunks.push(chunk);
             return Buffer.concat(chunks);
         }
     } catch (e) {
@@ -167,9 +195,7 @@ async function descargarMedia(message, sock) {
         const res = await fetch(mediaObj.url, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
         });
-        if (res.ok) {
-            return Buffer.from(await res.arrayBuffer());
-        }
+        if (res.ok) return Buffer.from(await res.arrayBuffer());
     }
 
     throw new Error('Ningún método de descarga funcionó');
