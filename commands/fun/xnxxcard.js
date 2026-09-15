@@ -37,57 +37,71 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Extraer título
         const titulo = String(argumento || '').trim() || 'Welcome to BOT-API 😈';
-
         let imageUrl = '';
 
-        // CASO 1: Usuario envió imagen con el comando
-        const tipoMensaje = Object.keys(msg.message || {})[0];
-
-        if (tipoMensaje === 'imageMessage') {
+        // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
+        if (msg.message?.imageMessage) {
             try {
                 const buffer = await sock.downloadMediaMessage(msg);
-                imageUrl = await uploadToTelegraph(buffer, 'jpg');
-            } catch (e) {
-                console.error('[XNXX] Error descargando imagen:', e);
-                return await responder.texto('❌ Error al procesar la imagen que enviaste.');
-            }
-        }
-        // CASO 2: Imagen citada
-        else if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
-            const quoted = msg.message.extendedTextMessage.contextInfo;
-            const quotedMsg = quoted.quotedMessage;
-
-            if (quotedMsg.imageMessage) {
-                try {
-                    const fakeMsg = {
-                        message: quotedMsg,
-                        key: {
-                            remoteJid: chatJid,
-                            fromMe: false,
-                            participant: quoted.participant
-                        }
-                    };
-                    const buffer = await sock.downloadMediaMessage(fakeMsg);
+                if (buffer && buffer.length > 0) {
                     imageUrl = await uploadToTelegraph(buffer, 'jpg');
-                } catch (e) {
-                    console.error('[XNXX] Error descargando imagen citada:', e);
+                    console.log('[XNXX] Imagen subida a Telegraph:', imageUrl);
                 }
+            } catch (e) {
+                console.error('[XNXX] Error descargando imagen enviada:', e.message);
+                // Fallback: continuar sin imageUrl
             }
         }
 
-        // CASO 3: Foto de perfil
+        // ---------- CASO 2: IMAGEN CITADA ----------
+        if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
+            try {
+                const quoted = msg.message.extendedTextMessage.contextInfo;
+                const quotedMsg = quoted.quotedMessage;
+
+                const fakeMsg = {
+                    message: quotedMsg,
+                    key: {
+                        remoteJid: chatJid,
+                        fromMe: false,
+                        participant: quoted.participant
+                    }
+                };
+
+                const buffer = await sock.downloadMediaMessage(fakeMsg);
+                if (buffer && buffer.length > 0) {
+                    imageUrl = await uploadToTelegraph(buffer, 'jpg');
+                    console.log('[XNXX] Imagen citada subida:', imageUrl);
+                }
+            } catch (e) {
+                console.error('[XNXX] Error descargando imagen citada:', e.message);
+            }
+        }
+
+        // ---------- CASO 3: FOTO DE PERFIL ----------
         if (!imageUrl) {
             try {
-                imageUrl = await sock.profilePictureUrl(sender, 'image');
+                const ppUrl = await sock.profilePictureUrl(sender, 'image');
+                if (ppUrl) {
+                    imageUrl = ppUrl;
+                    console.log('[XNXX] Usando foto de perfil:', imageUrl);
+                }
             } catch (e) {
+                console.log('[XNXX] No hay foto de perfil, usando default');
                 imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
             }
         }
 
+        // Último recurso
+        if (!imageUrl) {
+            imageUrl = 'https://telegra.ph/file/66c5ede2293ccf9e53efa.jpg';
+        }
+
         // Construir URL de la API
         const apiUrl = `https://api.delirius.online/canvas/xnxxcard?image=${encodeURIComponent(imageUrl)}&title=${encodeURIComponent(titulo)}`;
+
+        console.log('[XNXX] API URL:', apiUrl);
 
         // Enviar la imagen generada
         try {
@@ -96,8 +110,19 @@ export default {
                 `🔥 *XNXX Card*\n\n📝 ${titulo}\n\n⚡ BOT-API`
             );
         } catch (error) {
-            console.error('[XNXX] Error enviando:', error?.message || error);
-            await responder.texto('❌ Error generando la tarjeta: ' + (error?.message || 'Intenta de nuevo'));
+            console.error('[XNXX] Error enviando imagen:', error?.message || error);
+            
+            // Si falla la API, enviar texto con link
+            await responder.texto(
+                '╭━━〔 ❌ 𝐗𝐍𝐗𝐗 𝐂𝐀𝐑𝐃 〕━━⬣\n' +
+                '┃\n' +
+                '┃ No pude generar la tarjeta.\n' +
+                '┃\n' +
+                '┃ 🔗 Link manual:\n' +
+                '┃ ' + apiUrl + '\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
         }
     }
 };
