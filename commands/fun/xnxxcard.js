@@ -1,116 +1,174 @@
 // commands/canvas/xnxx.js
 // ============================================================
 // BOT-API — XNXX CARD (Delirius API)
-// Compatible con baileys-beta + múltiples servicios de subida
+// Subidas corregidas con múltiples servicios
 // ============================================================
 
 import FormData from 'form-data';
 
 // ---------- SUBIR A TELEGRAPH ----------
-async function uploadToTelegraph(buffer, extension = 'jpg') {
+async function uploadToTelegraph(buffer) {
     const form = new FormData();
     form.append('file', buffer, {
-        filename: `image.${extension}`,
-        contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
     });
 
     const response = await fetch('https://telegra.ph/upload', {
         method: 'POST',
-        body: form
+        body: form,
+        headers: form.getHeaders()
     });
 
-    if (!response.ok) {
-        throw new Error(`Telegraph respondió HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const result = await response.json();
-    if (result && result[0] && result[0].src) {
+    
+    // Telegraph devuelve array [{src: '/file/xxx.jpg'}]
+    if (Array.isArray(result) && result[0]?.src) {
         return 'https://telegra.ph' + result[0].src;
     }
+    
+    // O puede devolver objeto directo
+    if (result?.src) {
+        return 'https://telegra.ph' + result.src;
+    }
 
-    throw new Error('Telegraph no devolvió URL válida');
+    throw new Error('Respuesta inválida: ' + JSON.stringify(result).substring(0, 100));
 }
 
-// ---------- SUBIR A IMGBB (alternativa) ----------
-async function uploadToImgbb(buffer, apiKey = '64a2723a04b67c579c8977c14b498535') {
-    const form = new FormData();
-    form.append('image', buffer.toString('base64'));
-    form.append('key', apiKey);
+// ---------- SUBIR A IMGBB (URLSearchParams, no FormData) ----------
+async function uploadToImgbb(buffer) {
+    const params = new URLSearchParams();
+    params.append('key', '64a2723a04b67c579c8977c14b498535');
+    params.append('image', buffer.toString('base64'));
 
     const response = await fetch('https://api.imgbb.com/1/upload', {
         method: 'POST',
-        body: form
+        body: params,
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
     });
 
-    if (!response.ok) {
-        throw new Error(`Imgbb respondió HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const result = await response.json();
-    if (result.success && result.data?.url) {
+    if (result?.data?.url) {
         return result.data.url;
     }
 
-    throw new Error('Imgbb no devolvió URL válida');
+    throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR A CATBOX (alternativa sin key) ----------
-async function uploadToCatbox(buffer, extension = 'jpg') {
+// ---------- SUBIR A CATBOX (con headers correctos) ----------
+async function uploadToCatbox(buffer) {
     const form = new FormData();
     form.append('reqtype', 'fileupload');
     form.append('fileToUpload', buffer, {
-        filename: `image.${extension}`,
-        contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
     });
 
     const response = await fetch('https://catbox.moe/user/api.php', {
         method: 'POST',
-        body: form
+        body: form,
+        headers: {
+            ...form.getHeaders(),
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
     });
 
-    if (!response.ok) {
-        throw new Error(`Catbox respondió HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const url = await response.text();
-    if (url && url.startsWith('https://files.catbox.moe/')) {
+    if (url.includes('catbox.moe')) {
         return url.trim();
     }
 
-    throw new Error('Catbox no devolvió URL válida');
+    throw new Error('Respuesta inválida');
+}
+
+// ---------- SUBIR A TMPFILES (sin key, simple) ----------
+async function uploadToTmpfiles(buffer) {
+    const form = new FormData();
+    form.append('file', buffer, {
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
+    });
+
+    const response = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: form,
+        headers: form.getHeaders()
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const result = await response.json();
+    if (result?.data?.url) {
+        // tmpfiles.org/url → tmpfiles.org/dl/url
+        return result.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
+
+    throw new Error('Respuesta inválida');
+}
+
+// ---------- SUBIR A 0X0.ST (sin key, simple) ----------
+async function uploadTo0x0(buffer) {
+    const form = new FormData();
+    form.append('file', buffer, {
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
+    });
+
+    const response = await fetch('https://0x0.st', {
+        method: 'POST',
+        body: form,
+        headers: {
+            ...form.getHeaders(),
+            'User-Agent': 'Mozilla/5.0 (compatible; BOT-API/1.0)'
+        }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const url = await response.text();
+    if (url.startsWith('https://')) {
+        return url.trim();
+    }
+
+    throw new Error('Respuesta inválida');
 }
 
 // ---------- SUBIR CON FALLBACK ----------
 async function subirImagen(buffer) {
     const errores = [];
 
-    // Intento 1: Telegraph
-    try {
-        return await uploadToTelegraph(buffer, 'jpg');
-    } catch (e) {
-        errores.push(`Telegraph: ${e.message}`);
+    const servicios = [
+        ['Telegraph', uploadToTelegraph],
+        ['Imgbb', uploadToImgbb],
+        ['Catbox', uploadToCatbox],
+        ['Tmpfiles', uploadToTmpfiles],
+        ['0x0.st', uploadTo0x0]
+    ];
+
+    for (const [nombre, fn] of servicios) {
+        try {
+            const url = await fn(buffer);
+            console.log(`[XNXX] ✅ Subido a ${nombre}: ${url}`);
+            return url;
+        } catch (e) {
+            errores.push(`${nombre}: ${e.message}`);
+            console.error(`[XNXX] ❌ ${nombre} falló: ${e.message}`);
+        }
     }
 
-    // Intento 2: Imgbb
-    try {
-        return await uploadToImgbb(buffer);
-    } catch (e) {
-        errores.push(`Imgbb: ${e.message}`);
-    }
-
-    // Intento 3: Catbox
-    try {
-        return await uploadToCatbox(buffer, 'jpg');
-    } catch (e) {
-        errores.push(`Catbox: ${e.message}`);
-    }
-
-    throw new Error('Todos los servicios fallaron:\n' + errores.join('\n'));
+    throw new Error('Todos fallaron:\n' + errores.join('\n'));
 }
 
 // ---------- DESCARGAR CONTENIDO DE MEDIA ----------
 async function descargarMedia(message, sock) {
-    // Método 1: downloadContentFromMessage
     try {
         const baileys = await import('baileys');
         const downloadFn = baileys.downloadContentFromMessage || baileys.default?.downloadContentFromMessage;
@@ -129,7 +187,6 @@ async function descargarMedia(message, sock) {
         console.error('[XNXX] downloadContentFromMessage falló:', e.message);
     }
 
-    // Método 2: método del socket
     try {
         if (typeof sock.downloadMediaMessage === 'function') {
             const fakeMsg = { message, key: { remoteJid: 'dummy', fromMe: false } };
@@ -139,7 +196,6 @@ async function descargarMedia(message, sock) {
         console.error('[XNXX] sock.downloadMediaMessage falló:', e.message);
     }
 
-    // Método 3: URL directa
     const mediaObj = message.imageMessage || message.videoMessage;
     if (mediaObj?.url) {
         const res = await fetch(mediaObj.url, {
@@ -232,12 +288,12 @@ export default {
                 '┃\n' +
                 '┃ No pude generar la tarjeta.\n' +
                 '┃\n' +
-                `┃ ❌ Error: ${error?.message || 'Desconocido'}\n` +
+                `┃  Error: ${error?.message || 'Desconocido'}\n` +
                 '┃\n' +
                 '┃ 🔗 URL de la API:\n' +
                 '┃ ' + apiUrl + '\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏 ⚡ 〕━━⬣'
             );
         }
     }
