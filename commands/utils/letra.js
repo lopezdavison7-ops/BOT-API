@@ -1,239 +1,133 @@
-// commands/utils/letra.js
+// commands/search/lyrics.js
 // ============================================================
-// COMANDO: LETRA
-// BOT-API
-//
-// Uso:
-// .letra nombre de la canción
-//
-// Busca una canción mediante Lyrics Finder de YO SOY YO.
-// Muestra título, artista y un fragmento corto.
+// BOT-API — LETRAS DE CANCIONES (Delirius API)
+// ============================================================
+// .letra <canción> → muestra título, artista, álbum y letra
 // ============================================================
 
-import axios from 'axios';
-import config from '../../config.js';
+const API = 'https://api.delirius.online/search/lyrics?query=';
 
-const API_URL =
-    'https://api-yosoyyo-api-ofc.onrender.com/api/lyrics?q=bohemian';
+// ---------- DIVIDIR LETRA LARGA EN PARTES ----------
+function dividirTexto(texto, limite = 2500) {
+    const partes = [];
+    let restante = texto;
+
+    while (restante.length > 0) {
+        if (restante.length <= limite) {
+            partes.push(restante);
+            break;
+        }
+        let corte = restante.lastIndexOf('\n', limite);
+        if (corte < limite * 0.5) corte = limite;
+        partes.push(restante.slice(0, corte));
+        restante = restante.slice(corte).trimStart();
+    }
+
+    return partes;
+}
 
 export default {
     nombre: 'letra',
+    categoria: 'utils',
+    alias: ['lyrics', 'letras', 'lirik'],
+    descripcion: 'Busca la letra completa de una canción',
+    uso: '.letra <canción o artista - canción>',
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
+        const chatJid = msg.key.remoteJid;
+        const s = sock || global.conns?.[0];
+        const q = String(argumento || '').trim();
 
-    categoria: 'utilidades',
-
-    alias: [
-        'lyrics',
-        'cancion'
-    ],
-
-    descripcion:
-        'Busca una canción y muestra información de ella.',
-
-    ejecutar: async ({
-        msg,
-        responder
-    }) => {
-
-        // --------------------------------------------------------
-        // OBTENER CONSULTA
-        // --------------------------------------------------------
-
-        const texto =
-            msg?.body?.trim() ||
-            msg?.message?.conversation?.trim() ||
-            msg?.message?.extendedTextMessage?.text?.trim() ||
-            '';
-
-        const consulta =
-            texto
-                .replace(/^\.letra\b/i, '')
-                .trim();
-
-        // --------------------------------------------------------
-        // SIN CONSULTA
-        // --------------------------------------------------------
-
-        if (!consulta) {
-
-            await responder.texto(
-                `╭〔 🎵 𝐋𝐘𝐑𝐈𝐂𝐒 𝐅𝐈𝐍𝐃𝐄𝐑 〕⬣
-┃
-┃ ❌ Escribe el nombre de una canción.
-┃
-┃ 💡 Ejemplo:
-┃ *.letra Bohemian Rhapsody*
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
+        if (!q) {
+            return await responder.texto(
+                '╭━━〔 🎤 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ❌ Falta el nombre de la canción\n' +
+                '┃\n' +
+                '┃ 📋 Uso:\n' +
+                '┃ • .letra hola remix\n' +
+                '┃ • .letra dalex - hola\n' +
+                '┃ • .lyrics shape of you\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-
-            return;
-        }
-
-        // --------------------------------------------------------
-        // API KEY
-        // --------------------------------------------------------
-
-        const apiKey =
-            config.YOSOYYO_API_KEY ||
-            process.env.YOSOYYO_API_KEY;
-
-        if (!apiKey) {
-
-            console.error(
-                '[LETRA] YOSOYYO_API_KEY no configurada'
-            );
-
-            await responder.texto(
-                '❌ La API de Lyrics no está configurada.'
-            );
-
-            return;
         }
 
         try {
+            // ---------- CONSULTAR API ----------
+            const res = await fetch(API + encodeURIComponent(q));
+            const json = await res.json();
 
-            // ----------------------------------------------------
-            // CONSULTAR API
-            // ----------------------------------------------------
+            const d = json.data || json.datos;
 
-            const respuesta =
-                await axios.get(
-                    API_URL,
-                    {
-                        params: {
-                            q: consulta,
-                            apiKey
-                        },
-                        timeout: 60000
-                    }
+            if (!json.status || !d) {
+                return await responder.texto(
+                    '╭━━〔 ❌ 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ No encontré la letra de:\n' +
+                    '┃ *' + q + '*\n' +
+                    '┃\n' +
+                    '┃ 💡 Intenta con:\n' +
+                    '┃ .letra <artista> <canción>\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
-
-            const datos =
-                respuesta.data;
-
-            const resultado =
-                datos?.result;
-
-            // ----------------------------------------------------
-            // COMPROBAR RESULTADO
-            // ----------------------------------------------------
-
-            if (
-                datos?.status !== true ||
-                !resultado
-            ) {
-
-                await responder.texto(
-                    `╭〔 🎵 𝐋𝐘𝐑𝐈𝐂𝐒 𝐅𝐈𝐍𝐃𝐄𝐑 〕⬣
-┃
-┃ ❌ No encontré esa canción.
-┃
-┃ 🔎 Búsqueda › ${consulta}
-┃
-╰━━━━━━━━━━━━━━━━⬣`
-                );
-
-                return;
             }
 
-            // ----------------------------------------------------
-            // DATOS
-            // ----------------------------------------------------
+            // Normalizar claves (ES / EN)
+            const titulo = d.title || d.título || 'Sin título';
+            const artistas = d.artists || d.artista || 'Desconocido';
+            const album = d.album || d.álbum || null;
+            const duracion = d.duration || d.duración || null;
+            const letra = d.lyrics || d.letra || '';
 
-            const titulo =
-                resultado.title ||
-                consulta;
-
-            const artista =
-                resultado.artist ||
-                'Desconocido';
-
-            let lyrics =
-                String(
-                    resultado.lyrics ||
-                    ''
-                ).trim();
-
-            // ----------------------------------------------------
-            // FRAGMENTO CORTO
-            // ----------------------------------------------------
-
-            if (lyrics) {
-
-                const lineas =
-                    lyrics
-                        .split('\n')
-                        .map(linea => linea.trim())
-                        .filter(Boolean);
-
-                const maxLineas = 8;
-
-                if (lineas.length > maxLineas) {
-
-                    lyrics =
-                        lineas
-                            .slice(0, maxLineas)
-                            .join('\n') +
-                        '\n…';
-                } else {
-
-                    lyrics =
-                        lineas.join('\n');
-                }
-
-            } else {
-
-                lyrics =
-                    'No se encontró un fragmento disponible.';
+            if (!letra) {
+                return await responder.texto(
+                    '╭━━〔 ❌ 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ La canción existe pero no\n' +
+                    '┃ tiene letra disponible.\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
             }
 
-            // ----------------------------------------------------
-            // RESPUESTA BONITA
-            // ----------------------------------------------------
+            // ---------- ENCABEZADO CON INFO ----------
+            const header =
+                '╭━━〔 🎤 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                '┃\n' +
+                '┃ 🎶 *' + titulo + '*\n' +
+                '┃ 🎤 ' + artistas + '\n' +
+                (album ? '┃ 💿 ' + album + '\n' : '') +
+                (duracion ? '┃ ⏱️ ' + duracion + '\n' : '') +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣\n\n';
 
-            const mensaje =
-                `╭〔 🎵 𝐋𝐘𝐑𝐈𝐂𝐒 𝐅𝐈𝐍𝐃𝐄𝐑 〕⬣
-┃
-┃ 🎶 𝐓𝐈́𝐓𝐔𝐋𝐎
-┃ › ${titulo}
-┃
-┃ 👤 𝐀𝐑𝐓𝐈𝐒𝐓𝐀
-┃ › ${artista}
-┃
-╰━━━━━━━━━━━━━━━━⬣
+            // ---------- ENVIAR LETRA (dividida si es larga) ----------
+            const partes = dividirTexto(letra, 2500);
 
-📝 *Fragmento:*
-
-${lyrics}
-
-╭〔 ℹ️ 𝐈𝐍𝐅𝐎 〕⬣
-┃ 🎵 Canción encontrada
-┃ 🔎 Consulta › ${consulta}
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`;
-
-            await responder.texto(mensaje);
-
-        } catch (error) {
-
-            console.error(
-                '[LETRA] Error:',
-                error?.response?.data ||
-                error?.message ||
-                error
+            // Primera parte con el encabezado
+            await responder.texto(
+                header + partes[0] +
+                (partes.length > 1 ? '\n\n📄 (1/' + partes.length + ')' : '')
             );
 
+            // Resto de partes
+            for (let i = 1; i < partes.length; i++) {
+                await responder.texto(
+                    partes[i] + '\n\n📄 (' + (i + 1) + '/' + partes.length + ')'
+                );
+            }
+
+        } catch (error) {
+            console.error('[LYRICS] Error:', error?.message || error);
             await responder.texto(
-                `╭〔 ❌ 𝐋𝐘𝐑𝐈𝐂𝐒 𝐅𝐈𝐍𝐃𝐄𝐑 〕⬣
-┃
-┃ No pude consultar la canción.
-┃
-┃ 🔄 Inténtalo nuevamente.
-┃
-╰━━━━━━━━━━━━━━━━⬣`
+                '╭━━〔 ❌ 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                '┃\n' +
+                '┃ Error buscando la letra.\n' +
+                '┃\n' +
+                `┃ ⚠️ ${error?.message || 'Error desconocido'}\n` +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
     }
