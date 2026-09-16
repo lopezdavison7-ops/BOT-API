@@ -1,6 +1,7 @@
 // commands/ia/age.js
 // ============================================================
 // BOT-API — DETECTOR DE EDAD (Delirius AI)
+// Con diagnóstico completo en WhatsApp
 // ============================================================
 
 // ---------- SUBIR A TELEGRAPH ----------
@@ -18,12 +19,12 @@ async function uploadToTelegraph(buffer) {
 
     const result = await response.json();
     if (Array.isArray(result) && result[0]?.src) {
-        return 'https://telegra.ph' + result[0].src;
+        return { url: 'https://telegra.ph' + result[0].src, servicio: 'Telegraph' };
     }
     if (result?.src) {
-        return 'https://telegra.ph' + result.src;
+        return { url: 'https://telegra.ph' + result.src, servicio: 'Telegraph' };
     }
-    throw new Error('Telegraph respuesta: ' + JSON.stringify(result).substring(0, 100));
+    throw new Error('Respuesta: ' + JSON.stringify(result).substring(0, 100));
 }
 
 // ---------- SUBIR A IMGBB ----------
@@ -43,12 +44,12 @@ async function uploadToImgbb(buffer) {
 
     const result = JSON.parse(text);
     if (result?.success && result.data?.display_url) {
-        return result.data.display_url;
+        return { url: result.data.display_url, servicio: 'Imgbb' };
     }
-    throw new Error('Imgbb respuesta: ' + text.substring(0, 100));
+    throw new Error('Respuesta: ' + text.substring(0, 100));
 }
 
-// ---------- SUBIR A IMGGUR (anónimo) ----------
+// ---------- SUBIR A IMGUR ----------
 async function uploadToImgur(buffer) {
     const CLIENT_ID = '546c25a59c58ad7';
     
@@ -59,9 +60,7 @@ async function uploadToImgur(buffer) {
     const response = await fetch('https://api.imgur.com/3/image', {
         method: 'POST',
         body: formData,
-        headers: {
-            'Authorization': `Client-ID ${CLIENT_ID}`
-        }
+        headers: { 'Authorization': `Client-ID ${CLIENT_ID}` }
     });
 
     if (!response.ok) {
@@ -71,31 +70,9 @@ async function uploadToImgur(buffer) {
 
     const result = await response.json();
     if (result?.data?.link) {
-        return result.data.link;
+        return { url: result.data.link, servicio: 'Imgur' };
     }
-    throw new Error('Imgur respuesta inválida');
-}
-
-// ---------- SUBIR A FREEIMAGE ----------
-async function uploadToFreeImage(buffer) {
-    const params = new URLSearchParams();
-    params.append('key', '6d207e02198a847aa98d0a2a901485a5');
-    params.append('source', buffer.toString('base64'));
-    params.append('format', 'json');
-
-    const response = await fetch('https://freeimage.host/api/1/upload', {
-        method: 'POST',
-        body: params,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const result = await response.json();
-    if (result?.image?.url) {
-        return result.image.url;
-    }
-    throw new Error('FreeImage respuesta inválida');
+    throw new Error('Respuesta inválida');
 }
 
 // ---------- SUBIR CON FALLBACK ----------
@@ -105,22 +82,19 @@ async function subirImagen(buffer) {
     const servicios = [
         ['Telegraph', uploadToTelegraph],
         ['Imgbb', uploadToImgbb],
-        ['Imgur', uploadToImgur],
-        ['FreeImage', uploadToFreeImage]
+        ['Imgur', uploadToImgur]
     ];
 
     for (const [nombre, fn] of servicios) {
         try {
-            const url = await fn(buffer);
-            console.log(`[AGE] ✅ ${nombre}: ${url}`);
-            return url;
+            const result = await fn(buffer);
+            return { ...result, erroresPrevios: errores };
         } catch (e) {
             errores.push(`${nombre}: ${e.message}`);
-            console.error(`[AGE] ❌ ${nombre}: ${e.message}`);
         }
     }
 
-    throw new Error('Todos los servicios de subida fallaron:\n' + errores.join('\n'));
+    throw new Error('Todos los servicios fallaron:\n' + errores.join('\n'));
 }
 
 // ---------- DESCARGAR IMAGEN ----------
@@ -137,7 +111,7 @@ async function descargarMedia(message, sock) {
             return Buffer.concat(chunks);
         }
     } catch (e) {
-        console.error('[AGE] downloadContentFromMessage:', e.message);
+        throw new Error('downloadContentFromMessage: ' + e.message);
     }
 
     const mediaObj = message.imageMessage || message.videoMessage;
@@ -153,46 +127,17 @@ async function descargarMedia(message, sock) {
 
 // ---------- TRADUCCIONES ----------
 function traducirGenero(g) {
-    const map = {
-        'mujer': '👩 Mujer',
-        'hombre': '👨 Hombre',
-        'male': '👨 Hombre',
-        'female': '👩 Mujer'
-    };
+    const map = { 'mujer': '👩 Mujer', 'hombre': '👨 Hombre', 'male': '👨 Hombre', 'female': '👩 Mujer' };
     return map[String(g).toLowerCase()] || `👤 ${g}`;
 }
 
 function traducirExpresion(e) {
-    const map = {
-        'ninguna': '😐 Ninguna / Neutral',
-        'none': '😐 Ninguna / Neutral',
-        'feliz': '😄 Feliz',
-        'happy': '😄 Feliz',
-        'triste': '😢 Triste',
-        'sad': '😢 Triste',
-        'sorprendido': '😮 Sorprendido',
-        'surprised': '😮 Sorprendido',
-        'enojado': '😠 Enojado',
-        'angry': '😠 Enojado'
-    };
+    const map = { 'ninguna': '😐 Neutral', 'none': '😐 Neutral', 'feliz': '😄 Feliz', 'happy': '😄 Feliz', 'triste': '😢 Triste', 'sad': '😢 Triste', 'sorprendido': '😮 Sorprendido', 'enojado': '😠 Enojado' };
     return map[String(e).toLowerCase()] || `🎭 ${e}`;
 }
 
 function traducirForma(f) {
-    const map = {
-        'redonda': '🔵 Redonda',
-        'round': '🔵 Redonda',
-        'ovalada': '🥚 Ovalada',
-        'oval': '🥚 Ovalada',
-        'cuadrada': '⬜ Cuadrada',
-        'square': '⬜ Cuadrada',
-        'corazón': '💖 Corazón',
-        'heart': '💖 Corazón',
-        'diamante': '💎 Diamante',
-        'diamond': '💎 Diamante',
-        'alargada': '📏 Alargada',
-        'oblong': '📏 Alargada'
-    };
+    const map = { 'redonda': '🔵 Redonda', 'round': '🔵 Redonda', 'ovalada': '🥚 Ovalada', 'cuadrada': '⬜ Cuadrada', 'corazón': '💖 Corazón', 'diamante': '💎 Diamante', 'alargada': '📏 Alargada' };
     return map[String(f).toLowerCase()] || `🎨 ${f}`;
 }
 
@@ -206,13 +151,13 @@ export default {
     descripcion: 'Detecta edad, género, expresión y forma de cara con IA',
     uso: '.age | .age <url> | [foto] .age',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
-        const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
-
         const s = global.conns?.[0] || Object.values(global.conns || {})[0] || sock;
 
         let imageUrl = '';
         let metodoUsado = '';
+        let servicioUpload = '';
+        let erroresUpload = [];
 
         const argumentoTrim = String(argumento || '').trim();
 
@@ -222,19 +167,22 @@ export default {
             metodoUsado = 'URL directa';
         }
 
-        // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
+        // ---------- CASO 1: IMAGEN ENVIADA ----------
         if (!imageUrl && msg.message?.imageMessage) {
             try {
                 const buffer = await descargarMedia(msg.message, s);
                 if (buffer?.length > 0) {
-                    imageUrl = await subirImagen(buffer);
+                    const result = await subirImagen(buffer);
+                    imageUrl = result.url;
+                    servicioUpload = result.servicio;
+                    erroresUpload = result.erroresPrevios || [];
                     metodoUsado = 'imagen enviada';
                 }
             } catch (e) {
                 return await responder.texto(
                     '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ Error procesando la imagen enviada.\n' +
+                    '┃ *ERROR: Imagen enviada*\n' +
                     '┃\n' +
                     `┃ ⚠️ ${e.message}\n` +
                     '┃\n' +
@@ -249,14 +197,17 @@ export default {
                 const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
                 const buffer = await descargarMedia(quotedMsg, s);
                 if (buffer?.length > 0) {
-                    imageUrl = await subirImagen(buffer);
+                    const result = await subirImagen(buffer);
+                    imageUrl = result.url;
+                    servicioUpload = result.servicio;
+                    erroresUpload = result.erroresPrevios || [];
                     metodoUsado = 'imagen citada';
                 }
             } catch (e) {
                 return await responder.texto(
                     '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ Error procesando la imagen citada.\n' +
+                    '┃ *ERROR: Imagen citada*\n' +
                     '┃\n' +
                     `┃ ⚠️ ${e.message}\n` +
                     '┃\n' +
@@ -286,20 +237,62 @@ export default {
             }
         }
 
-        // ---------- LLAMAR A LA API DE DELIRIUS ----------
+        // ---------- LLAMAR API ----------
         try {
             const apiUrl = `https://api.delirius.online/ia/age?image=${encodeURIComponent(imageUrl)}&language=es`;
 
             const res = await fetch(apiUrl);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await res.text();
 
-            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`, { status: res.status, body: text });
+            }
+
+            let json;
+            try {
+                json = JSON.parse(text);
+            } catch (e) {
+                throw new Error(`Respuesta no es JSON: ${text.substring(0, 150)}`);
+            }
+
             const data = json.data || json.datos;
 
             if (!json.status || !data) {
-                throw new Error('La API no devolvió datos válidos');
+                const motivo = json.msg || json.message || json.error || 'No se detectó cara';
+                
+                // 🔍 DIAGNÓSTICO COMPLETO
+                let diag =
+                    '╭━━〔 🔍 𝐃𝐈𝐀𝐆𝐍𝐎𝐒𝐓𝐈𝐂𝐎 〕━━⬣\n' +
+                    '┃\n' +
+                    `┃ ❌ *Error:* ${motivo}\n` +
+                    '┃\n' +
+                    `┃ 📸 Fuente: ${metodoUsado}\n` +
+                    (servicioUpload ? `┃ 📤 Subida a: ${servicioUpload}\n` : '') +
+                    '┃\n' +
+                    '┃ 🔗 *URL subida:*\n' +
+                    `┃ ${imageUrl}\n` +
+                    '┃\n' +
+                    '┃ 🌐 *URL API:*\n' +
+                    `┃ ${apiUrl}\n` +
+                    '┃\n' +
+                    '┃ 📥 *Respuesta API:*\n' +
+                    `┃ ${text.substring(0, 200)}\n` +
+                    '┃\n';
+
+                if (erroresUpload.length > 0) {
+                    diag += '┃ ⚠️ *Servicios que fallaron:*\n';
+                    erroresUpload.forEach(e => {
+                        diag += `┃ • ${e}\n`;
+                    });
+                    diag += '┃\n';
+                }
+
+                diag += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+                return await responder.texto(diag);
             }
 
+            // ✅ ÉXITO
             const edad = data.age || data.edad || 'N/A';
             const genero = traducirGenero(data.gender || data.genero || 'Desconocido');
             const expresion = traducirExpresion(data.expression || data.expresion || 'ninguna');
@@ -314,28 +307,45 @@ export default {
                 '┃ ' + forma + '\n' +
                 '┃\n' +
                 `┃ 📸 Fuente: ${metodoUsado}\n` +
+                (servicioUpload ? `┃ 📤 Subida: ${servicioUpload}\n` : '') +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            await responder.imagen(
-                { url: imageUrl },
-                texto
-            );
+            await responder.imagen({ url: imageUrl }, texto);
 
         } catch (error) {
-            console.error('[AGE] Error API:', error?.message || error);
-            await responder.texto(
-                '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
+            // 🔍 DIAGNÓSTICO DE ERROR DE API
+            let diag =
+                '╭━━〔 🔍 𝐄𝐑𝐑𝐎𝐑 𝐃𝐄 𝐀𝐏𝐈 〕━━⬣\n' +
                 '┃\n' +
-                '┃ No pude analizar la imagen.\n' +
+                `┃ ❌ ${error.message}\n` +
                 '┃\n' +
-                `┃ ⚠️ ${error?.message || 'Error desconocido'}\n` +
+                `┃ 📸 Fuente: ${metodoUsado}\n` +
+                (servicioUpload ? `┃ 📤 Subida: ${servicioUpload}\n` : '') +
                 '┃\n' +
-                '┃ 💡 Asegúrate de que la imagen\n' +
-                '┃    tenga una cara visible.\n' +
+                '┃ 🔗 *URL de imagen:*\n' +
+                `┃ ${imageUrl}\n` +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+                '┃ 🌐 *URL API:* (ver logs del servidor)\n' +
+                '┃\n';
+
+            if (error.body) {
+                diag += '┃ 📥 *Respuesta API:*\n' +
+                        `┃ ${error.body.substring(0, 200)}\n` +
+                        '┃\n';
+            }
+
+            if (erroresUpload.length > 0) {
+                diag += '┃ ⚠️ *Servicios de subida que fallaron:*\n';
+                erroresUpload.forEach(e => {
+                    diag += `┃ • ${e}\n`;
+                });
+                diag += '┃\n';
+            }
+
+            diag += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+            await responder.texto(diag);
         }
     }
 };
