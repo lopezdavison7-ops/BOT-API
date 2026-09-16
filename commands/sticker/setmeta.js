@@ -2,10 +2,10 @@
 // ============================================================
 // BOT-API — SETMETA (re-etiqueta stickers con tu marca)
 // ============================================================
-// Cita un sticker y usa:
-// .setmeta Alex              → packname=Alex, autor=default
-// .setmeta Alex|Mi Autor     → packname=Alex, autor=Mi Autor
+// Usa wa-sticker-formatter para escribir metadata EXIF real
 // ============================================================
+
+import { Sticker } from 'wa-sticker-formatter';
 
 export default {
     nombre: 'setmeta',
@@ -34,7 +34,6 @@ export default {
                 '┃ 💡 Ejemplos:\n' +
                 '┃ • .setmeta Alex\n' +
                 '┃ • .setmeta Alex|Mi Bot\n' +
-                '┃ • .setmeta El Crack 💥\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
@@ -54,12 +53,9 @@ export default {
         // ---------- BUSCAR STICKER CITADO ----------
         let stickerMessage = null;
 
-        // Caso 1: Sticker citado en extendedTextMessage
         if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.stickerMessage) {
             stickerMessage = msg.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage;
-        }
-        // Caso 2: El mensaje mismo es un sticker (con caption)
-        else if (msg.message?.stickerMessage) {
+        } else if (msg.message?.stickerMessage) {
             stickerMessage = msg.message.stickerMessage;
         }
 
@@ -74,10 +70,6 @@ export default {
                 '┃ 2. Responde a ese sticker\n' +
                 '┃    con: .setmeta Alex\n' +
                 '┃\n' +
-                '┃ 💡 También puedes mandar el\n' +
-                '┃    sticker con caption:\n' +
-                '┃    .setmeta Alex\n' +
-                '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
@@ -86,7 +78,7 @@ export default {
         try {
             let buffer = null;
 
-            // Método 1: downloadContentFromMessage (baileys)
+            // Método 1: downloadContentFromMessage
             try {
                 const baileys = await import('baileys');
                 const downloadFn = baileys.downloadContentFromMessage || baileys.default?.downloadContentFromMessage;
@@ -130,15 +122,22 @@ export default {
                 throw new Error('No se pudo descargar el sticker');
             }
 
-            // ---------- REENVIAR CON NUEVA MARCA ----------
+            // ---------- APLICAR MARCA CON wa-sticker-formatter ----------
+            const isAnimated = stickerMessage.isAnimated || false;
+
+            const sticker = new Sticker(buffer, {
+                pack: packname,
+                author: author,
+                type: isAnimated ? 'animated' : 'default',
+                quality: 90
+            });
+
+            const stickerConMarca = await sticker.toBuffer();
+
+            // ---------- ENVIAR STICKER CON MARCA ----------
             await s.sendMessage(
                 chatJid,
-                {
-                    sticker: buffer,
-                    packname: packname,
-                    author: author,
-                    isAnimated: stickerMessage.isAnimated || false
-                },
+                { sticker: stickerConMarca },
                 { quoted: msg }
             );
 
