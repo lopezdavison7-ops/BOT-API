@@ -2,15 +2,31 @@
 // ============================================================
 // BOT-API — DETECTOR DE EDAD (Delirius AI)
 // ============================================================
-// .age → Analiza tu foto de perfil
-// .age <url> → Analiza imagen por URL
-// [Foto] .age → Analiza la imagen enviada
-// [Citar foto] .age → Analiza la imagen citada
-// ============================================================
 
-import FormData from 'form-data';
+// ---------- SUBIR A TELEGRAPH ----------
+async function uploadToTelegraph(buffer) {
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    formData.append('file', blob, 'image.jpg');
 
-// ---------- SUBIR IMAGEN (varios servicios con fallback) ----------
+    const response = await fetch('https://telegra.ph/upload', {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const result = await response.json();
+    if (Array.isArray(result) && result[0]?.src) {
+        return 'https://telegra.ph' + result[0].src;
+    }
+    if (result?.src) {
+        return 'https://telegra.ph' + result.src;
+    }
+    throw new Error('Telegraph respuesta: ' + JSON.stringify(result).substring(0, 100));
+}
+
+// ---------- SUBIR A IMGBB ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -23,46 +39,88 @@ async function uploadToImgbb(buffer) {
     });
 
     const text = await response.text();
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text.substring(0, 80)}`);
 
     const result = JSON.parse(text);
     if (result?.success && result.data?.display_url) {
         return result.data.display_url;
     }
-    throw new Error('Respuesta inválida');
+    throw new Error('Imgbb respuesta: ' + text.substring(0, 100));
 }
 
-async function uploadToCatbox(buffer) {
+// ---------- SUBIR A IMGGUR (anónimo) ----------
+async function uploadToImgur(buffer) {
+    const CLIENT_ID = '546c25a59c58ad7';
+    
     const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('fileToUpload', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
+    formData.append('image', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
+    formData.append('type', 'file');
 
-    const response = await fetch('https://catbox.moe/user/api.php', {
+    const response = await fetch('https://api.imgur.com/3/image', {
         method: 'POST',
         body: formData,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        headers: {
+            'Authorization': `Client-ID ${CLIENT_ID}`
+        }
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text.substring(0, 80)}`);
+    }
+
+    const result = await response.json();
+    if (result?.data?.link) {
+        return result.data.link;
+    }
+    throw new Error('Imgur respuesta inválida');
+}
+
+// ---------- SUBIR A FREEIMAGE ----------
+async function uploadToFreeImage(buffer) {
+    const params = new URLSearchParams();
+    params.append('key', '6d207e02198a847aa98d0a2a901485a5');
+    params.append('source', buffer.toString('base64'));
+    params.append('format', 'json');
+
+    const response = await fetch('https://freeimage.host/api/1/upload', {
+        method: 'POST',
+        body: params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const url = (await response.text()).trim();
-    if (url.includes('catbox.moe')) return url;
-    throw new Error('Respuesta inválida');
+
+    const result = await response.json();
+    if (result?.image?.url) {
+        return result.image.url;
+    }
+    throw new Error('FreeImage respuesta inválida');
 }
 
+// ---------- SUBIR CON FALLBACK ----------
 async function subirImagen(buffer) {
+    const errores = [];
+
     const servicios = [
+        ['Telegraph', uploadToTelegraph],
         ['Imgbb', uploadToImgbb],
-        ['Catbox', uploadToCatbox]
+        ['Imgur', uploadToImgur],
+        ['FreeImage', uploadToFreeImage]
     ];
 
     for (const [nombre, fn] of servicios) {
         try {
-            return await fn(buffer);
+            const url = await fn(buffer);
+            console.log(`[AGE] ✅ ${nombre}: ${url}`);
+            return url;
         } catch (e) {
-            console.error(`[AGE] ${nombre} falló:`, e.message);
+            errores.push(`${nombre}: ${e.message}`);
+            console.error(`[AGE] ❌ ${nombre}: ${e.message}`);
         }
     }
-    throw new Error('No se pudo subir la imagen');
+
+    throw new Error('Todos los servicios de subida fallaron:\n' + errores.join('\n'));
 }
 
 // ---------- DESCARGAR IMAGEN ----------
@@ -173,7 +231,15 @@ export default {
                     metodoUsado = 'imagen enviada';
                 }
             } catch (e) {
-                return await responder.texto('❌ Error procesando la imagen enviada: ' + e.message);
+                return await responder.texto(
+                    '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ Error procesando la imagen enviada.\n' +
+                    '┃\n' +
+                    `┃ ⚠️ ${e.message}\n` +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
             }
         }
 
@@ -187,7 +253,15 @@ export default {
                     metodoUsado = 'imagen citada';
                 }
             } catch (e) {
-                return await responder.texto('❌ Error procesando la imagen citada: ' + e.message);
+                return await responder.texto(
+                    '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ Error procesando la imagen citada.\n' +
+                    '┃\n' +
+                    `┃ ⚠️ ${e.message}\n` +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
             }
         }
 
@@ -249,7 +323,7 @@ export default {
             );
 
         } catch (error) {
-            console.error('[AGE] Error:', error?.message || error);
+            console.error('[AGE] Error API:', error?.message || error);
             await responder.texto(
                 '╭━━〔 ❌ 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
                 '┃\n' +
