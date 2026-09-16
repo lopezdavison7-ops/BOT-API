@@ -1,81 +1,23 @@
 // commands/ia/age.js
 // ============================================================
 // BOT-API — DETECTOR DE EDAD (Delirius AI)
-// ============================================================
-// .age              → Analiza tu foto de perfil
-// .age <url>        → Analiza imagen por URL
-// [Foto] .age       → Analiza la imagen enviada
-// [Citar foto] .age → Analiza la imagen citada
+// Usa FormData NATIVO de Node (igual que xnxx.js)
 // ============================================================
 
-import FormData from 'form-data';
+// ⚠️ NO importa form-data — usa el FormData global de Node 18+
 
-// ============================================================
-// SERVICIOS DE SUBIDA (orden: los que NO bloquean servidores)
-// ============================================================
-
-// ---------- 1) TELEGRAPH ----------
-async function uploadToTelegraph(buffer) {
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'image/jpeg' });
-    formData.append('file', blob, 'foto.jpg');
-
-    const response = await fetch('https://telegra.ph/upload', {
-        method: 'POST',
-        body: formData
-    });
-
-    const text = await response.text();
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text.substring(0, 80)}`);
-
-    let result;
-    try { result = JSON.parse(text); } catch { throw new Error('No es JSON: ' + text.substring(0, 80)); }
-
-    if (Array.isArray(result) && result[0]?.src) {
-        return { url: 'https://telegra.ph' + result[0].src, servicio: 'Telegraph' };
+// ---------- VERIFICAR QUE UNA URL ES IMAGEN VÁLIDA ----------
+async function esImagenValida(url) {
+    try {
+        const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+        const ct = res.headers.get('content-type') || '';
+        return res.ok && ct.startsWith('image/');
+    } catch {
+        return false;
     }
-    if (result?.src) {
-        return { url: 'https://telegra.ph' + result.src, servicio: 'Telegraph' };
-    }
-    throw new Error('Respuesta: ' + text.substring(0, 100));
 }
 
-// ---------- 2) CATBOX ----------
-async function uploadToCatbox(buffer) {
-    const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('fileToUpload', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
-
-    const response = await fetch('https://catbox.moe/user/api.php', {
-        method: 'POST',
-        body: formData,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const url = (await response.text()).trim();
-    if (url.startsWith('https://')) return { url, servicio: 'Catbox' };
-    throw new Error('Respuesta: ' + url.substring(0, 80));
-}
-
-// ---------- 3) 0X0.ST ----------
-async function uploadTo0x0(buffer) {
-    const formData = new FormData();
-    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
-
-    const response = await fetch('https://0x0.st', {
-        method: 'POST',
-        body: formData,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BOT-API/1.0)' }
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const url = (await response.text()).trim();
-    if (url.startsWith('https://')) return { url, servicio: '0x0.st' };
-    throw new Error('Respuesta: ' + url.substring(0, 80));
-}
-
-// ---------- 4) IMGBB (respaldo) ----------
+// ---------- 1) IMGBB ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -88,15 +30,98 @@ async function uploadToImgbb(buffer) {
     });
 
     const text = await response.text();
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+
     const result = JSON.parse(text);
     if (result?.success && result.data?.display_url) {
-        return { url: result.data.display_url, servicio: 'Imgbb' };
+        return result.data.display_url;
+    }
+    throw new Error('Respuesta: ' + text.substring(0, 150));
+}
+
+// ---------- 2) TELEGRAPH ----------
+async function uploadToTelegraph(buffer) {
+    const formData = new FormData();
+    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
+
+    const response = await fetch('https://telegra.ph/upload', {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const text = await response.text();
+    let result;
+    try { result = JSON.parse(text); } catch { throw new Error('No es JSON'); }
+
+    if (Array.isArray(result) && result[0]?.src) {
+        return 'https://telegra.ph' + result[0].src;
+    }
+    if (result?.src) {
+        return 'https://telegra.ph' + result.src;
     }
     throw new Error('Respuesta: ' + text.substring(0, 100));
 }
 
-// ---------- FALLBACK CON ERRORES ----------
+// ---------- 3) CATBOX ----------
+async function uploadToCatbox(buffer) {
+    const formData = new FormData();
+    formData.append('reqtype', 'fileupload');
+    formData.append('fileToUpload', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
+
+    const response = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST',
+        body: formData,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const url = (await response.text()).trim();
+    if (url.includes('catbox.moe')) return url;
+    throw new Error('Respuesta: ' + url.substring(0, 80));
+}
+
+// ---------- 4) 0X0.ST ----------
+async function uploadTo0x0(buffer) {
+    const formData = new FormData();
+    formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
+
+    const response = await fetch('https://0x0.st', {
+        method: 'POST',
+        body: formData,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const url = (await response.text()).trim();
+    if (url.startsWith('https://')) return url;
+    throw new Error('Respuesta: ' + url.substring(0, 80));
+}
+
+// ---------- 5) FREEIMAGE ----------
+async function uploadToFreeImage(buffer) {
+    const params = new URLSearchParams();
+    params.append('key', '6d207e02198a847aa98d0a2a901485a5');
+    params.append('source', buffer.toString('base64'));
+    params.append('format', 'json');
+
+    const response = await fetch('https://freeimage.host/api/1/upload', {
+        method: 'POST',
+        body: params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const result = await response.json();
+    if (result?.image?.url) return result.image.url;
+    throw new Error('Respuesta inválida');
+}
+
+// ---------- SUBIR CON FALLBACK ----------
 async function subirImagen(buffer) {
     const errores = [];
 
@@ -104,24 +129,27 @@ async function subirImagen(buffer) {
         ['Telegraph', uploadToTelegraph],
         ['Catbox', uploadToCatbox],
         ['0x0.st', uploadTo0x0],
+        ['FreeImage', uploadToFreeImage],
         ['Imgbb', uploadToImgbb]
     ];
 
     for (const [nombre, fn] of servicios) {
         try {
-            const result = await fn(buffer);
-            return { ...result, erroresPrevios: errores };
+            const url = await fn(buffer);
+            const esValida = await esImagenValida(url);
+            if (!esValida) throw new Error(`URL no es imagen directa`);
+            console.log(`[AGE] ✅ ${nombre}: ${url}`);
+            return { url, servicio: nombre, erroresPrevios: errores };
         } catch (e) {
             errores.push(`${nombre}: ${e.message}`);
+            console.error(`[AGE] ❌ ${nombre}: ${e.message}`);
         }
     }
 
     throw new Error('Todos fallaron:\n' + errores.join('\n'));
 }
 
-// ============================================================
-// DESCARGAR IMAGEN (compatible con baileys-beta)
-// ============================================================
+// ---------- DESCARGAR MEDIA ----------
 async function descargarMedia(message, sock) {
     try {
         const baileys = await import('baileys');
@@ -146,37 +174,20 @@ async function descargarMedia(message, sock) {
         if (res.ok) return Buffer.from(await res.arrayBuffer());
     }
 
-    throw new Error('No se pudo descargar la imagen');
+    throw new Error('No se pudo descargar');
 }
 
-// ============================================================
-// TRADUCCIONES
-// ============================================================
+// ---------- TRADUCCIONES ----------
 function traducirGenero(g) {
     const map = { 'mujer': '👩 Mujer', 'hombre': '👨 Hombre', 'male': '👨 Hombre', 'female': '👩 Mujer' };
     return map[String(g).toLowerCase()] || `👤 ${g}`;
 }
-
 function traducirExpresion(e) {
-    const map = {
-        'ninguna': '😐 Neutral', 'none': '😐 Neutral',
-        'feliz': '😄 Feliz', 'happy': '😄 Feliz',
-        'triste': '😢 Triste', 'sad': '😢 Triste',
-        'sorprendido': '😮 Sorprendido', 'surprised': '😮 Sorprendido',
-        'enojado': '😠 Enojado', 'angry': '😠 Enojado'
-    };
+    const map = { 'ninguna': '😐 Neutral', 'none': '😐 Neutral', 'feliz': '😄 Feliz', 'happy': '😄 Feliz', 'triste': '😢 Triste', 'sad': '😢 Triste', 'sorprendido': '😮 Sorprendido', 'enojado': '😠 Enojado' };
     return map[String(e).toLowerCase()] || `🎭 ${e}`;
 }
-
 function traducirForma(f) {
-    const map = {
-        'redonda': '🔵 Redonda', 'round': '🔵 Redonda',
-        'ovalada': '🥚 Ovalada', 'oval': '🥚 Ovalada',
-        'cuadrada': '⬜ Cuadrada', 'square': '⬜ Cuadrada',
-        'corazón': '💖 Corazón', 'heart': '💖 Corazón',
-        'diamante': '💎 Diamante', 'diamond': '💎 Diamante',
-        'alargada': '📏 Alargada', 'oblong': '📏 Alargada'
-    };
+    const map = { 'redonda': '🔵 Redonda', 'round': '🔵 Redonda', 'ovalada': '🥚 Ovalada', 'cuadrada': '⬜ Cuadrada', 'corazón': '💖 Corazón', 'diamante': '💎 Diamante', 'alargada': '📏 Alargada' };
     return map[String(f).toLowerCase()] || `🎨 ${f}`;
 }
 
@@ -200,13 +211,13 @@ export default {
 
         const argumentoTrim = String(argumento || '').trim();
 
-        // ---------- CASO 0: URL DIRECTA ----------
+        // CASO 0: URL DIRECTA
         if (argumentoTrim && /^https?:\/\//i.test(argumentoTrim)) {
             imageUrl = argumentoTrim;
             metodoUsado = 'URL directa';
         }
 
-        // ---------- CASO 1: IMAGEN ENVIADA ----------
+        // CASO 1: IMAGEN ENVIADA
         if (!imageUrl && msg.message?.imageMessage) {
             try {
                 const buffer = await descargarMedia(msg.message, s);
@@ -230,7 +241,7 @@ export default {
             }
         }
 
-        // ---------- CASO 2: IMAGEN CITADA ----------
+        // CASO 2: IMAGEN CITADA
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
                 const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
@@ -255,7 +266,7 @@ export default {
             }
         }
 
-        // ---------- CASO 3: FOTO DE PERFIL ----------
+        // CASO 3: FOTO DE PERFIL
         if (!imageUrl) {
             try {
                 imageUrl = await s.profilePictureUrl(sender, 'image');
@@ -276,31 +287,23 @@ export default {
             }
         }
 
-        // ---------- LLAMAR API DE DELIRIUS ----------
+        // ---------- LLAMAR API ----------
         try {
             const apiUrl = `https://api.delirius.online/ia/age?image=${encodeURIComponent(imageUrl)}&language=es`;
 
             const res = await fetch(apiUrl);
             const text = await res.text();
 
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`, { status: res.status, body: text });
-            }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             let json;
-            try {
-                json = JSON.parse(text);
-            } catch (e) {
-                throw new Error(`Respuesta no es JSON: ${text.substring(0, 150)}`);
-            }
+            try { json = JSON.parse(text); } catch { throw new Error('Respuesta no es JSON'); }
 
             const data = json.data || json.datos;
 
-            // ---------- ERROR DE LA API ----------
             if (!json.status || !data) {
                 const motivo = json.msg || json.message || json.error || 'Error desconocido';
 
-                // Mensaje bonito si es "Face not found"
                 if (motivo.toLowerCase().includes('face not found')) {
                     return await responder.texto(
                         '╭━━〔 🧠 𝐀𝐆𝐄 𝐀𝐈 〕━━⬣\n' +
@@ -313,33 +316,29 @@ export default {
                         '┃ 📸 Intenta:\n' +
                         '┃ • Selfie con buena iluminación\n' +
                         '┃ • Cara completa y frontal\n' +
-                        '┃ • Sin gafas de sol ni mascarilla\n' +
+                        '┃ • Sin gafas ni mascarilla\n' +
                         '┃\n' +
                         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     );
                 }
 
-                // Diagnóstico completo para otros errores
                 let diag =
                     '╭━━〔 🔍 𝐃𝐈𝐀𝐆𝐍𝐎𝐒𝐓𝐈𝐂𝐎 〕━━⬣\n' +
                     '┃\n' +
-                    `┃ ❌ *Error:* ${motivo}\n` +
+                    `┃ ❌ ${motivo}\n` +
                     '┃\n' +
                     `┃ 📸 Fuente: ${metodoUsado}\n` +
-                    (servicioUpload ? `┃ 📤 Subida a: ${servicioUpload}\n` : '') +
+                    (servicioUpload ? `┃ 📤 Subida: ${servicioUpload}\n` : '') +
                     '┃\n' +
-                    '┃ 🔗 *URL subida:*\n' +
+                    '┃ 🔗 URL imagen:\n' +
                     `┃ ${imageUrl}\n` +
                     '┃\n' +
-                    '┃ 🌐 *URL API:*\n' +
-                    `┃ ${apiUrl}\n` +
-                    '┃\n' +
-                    '┃ 📥 *Respuesta API:*\n' +
-                    `┃ ${text.substring(0, 200)}\n` +
+                    '┃ 📥 Respuesta:\n' +
+                    `┃ ${text.substring(0, 150)}\n` +
                     '┃\n';
 
                 if (erroresUpload.length > 0) {
-                    diag += '┃ ⚠️ *Servicios que fallaron:*\n';
+                    diag += '┃ ⚠️ Servicios que fallaron:\n';
                     erroresUpload.forEach(e => { diag += `┃ • ${e}\n`; });
                     diag += '┃\n';
                 }
@@ -348,7 +347,7 @@ export default {
                 return await responder.texto(diag);
             }
 
-            // ---------- ÉXITO ----------
+            // ÉXITO
             const edad = data.age || data.edad || 'N/A';
             const genero = traducirGenero(data.gender || data.genero || 'Desconocido');
             const expresion = traducirExpresion(data.expression || data.expresion || 'ninguna');
@@ -378,18 +377,12 @@ export default {
                 `┃ 📸 Fuente: ${metodoUsado}\n` +
                 (servicioUpload ? `┃ 📤 Subida: ${servicioUpload}\n` : '') +
                 '┃\n' +
-                '┃ 🔗 *URL de imagen:*\n' +
+                '┃ 🔗 URL imagen:\n' +
                 `┃ ${imageUrl}\n` +
                 '┃\n';
 
-            if (error.body) {
-                diag += '┃ 📥 *Respuesta API:*\n' +
-                        `┃ ${error.body.substring(0, 200)}\n` +
-                        '┃\n';
-            }
-
             if (erroresUpload.length > 0) {
-                diag += '┃ ⚠️ *Servicios de subida que fallaron:*\n';
+                diag += '┃ ⚠️ Servicios que fallaron:\n';
                 erroresUpload.forEach(e => { diag += `┃ • ${e}\n`; });
                 diag += '┃\n';
             }
