@@ -2,8 +2,6 @@
 // ============================================================
 // BOT-API — INSTAGRAM STALK (Delirius API)
 // ============================================================
-// .igstalk <usuario> → ficha completa del perfil de Instagram
-// ============================================================
 
 const API = 'https://api.delirius.online/tools/igstalk?username=';
 
@@ -15,10 +13,24 @@ function fmtNum(n) {
     return String(num);
 }
 
+// ---------- DETECTAR SI EL PERFIL ESTÁ VACÍO ----------
+function perfilVacio(d) {
+    const username = d['nombre de usuario'] || d.username || '';
+    const posts = d.publicaciones || d.posts || '0';
+    const seguidores = d.seguidores || d.followers || '0';
+    const siguiendo = d.siguiendo || d.following || '0';
+
+    return (
+        username === '-' ||
+        username === '' ||
+        (posts === '0' && seguidores === '0' && siguiendo === '0')
+    );
+}
+
 export default {
     nombre: 'igstalk',
     categoria: 'tools',
-    alias: ['instastalk', 'stalkig'],
+    alias: ['ig', 'instagram', 'instastalk', 'stalkig'],
     descripcion: 'Ver ficha completa de un perfil de Instagram',
     uso: '.igstalk <usuario>',
     ejecutar: async ({ msg, argumento, responder }) => {
@@ -60,6 +72,27 @@ export default {
                     '┃\n' +
                     '┃ 💡 Revisa que el nombre esté\n' +
                     '┃    bien escrito.\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
+            }
+
+            // ---------- DETECTAR PERFIL VACÍO ----------
+            if (perfilVacio(d)) {
+                return await responder.texto(
+                    '╭━━〔 ❌ 𝐈𝐍𝐒𝐓𝐀𝐆𝐑𝐀𝐌 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ El perfil *@' + usuario + '* no existe\n' +
+                    '┃ o la API no puede acceder.\n' +
+                    '┃\n' +
+                    '┃ 💡 Posibles causas:\n' +
+                    '┃ • El usuario no existe\n' +
+                    '┃ • La cuenta es privada y no\n' +
+                    '┃   se puede ver sin seguir\n' +
+                    '┃ • Instagram bloqueó la API\n' +
+                    '┃\n' +
+                    '┃ 🔍 Intenta con otro usuario\n' +
+                    '┃    o verifica el nombre exacto\n' +
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
@@ -144,7 +177,6 @@ export default {
 
             ficha += '┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // ---------- ENVIAR (sin foto por ahora, la API no la devuelve) ----------
             await responder.texto(ficha);
 
         } catch (error) {
