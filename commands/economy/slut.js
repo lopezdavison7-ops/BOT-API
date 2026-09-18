@@ -119,7 +119,7 @@ function getBarra(porcentaje) {
 export default {
     nombre: 'slut',
     categoria: 'economy',
-    alias: ['slutmeter', 'aventura', 'noche', 'salir'],
+    alias: ['slutmeter', 'puta', 'noche', 'salir'],
     descripcion: 'Aventura nocturna con dinero, XP y mucha historia',
     uso: '.slut',
     ejecutar: async ({ sock, msg, responder }) => {
