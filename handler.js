@@ -4,6 +4,7 @@ import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
+import { manejarMemoriaIA } from './lib/memoria.js'; // ← NUEVA LÍNEA
 import fs from 'fs';
 import path from 'path';
 
@@ -140,6 +141,16 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
             const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
             if (fueAdivinanza) return;
+        }
+
+        // ============================================
+        // 🧠 MEMORIA IA (nuevo)
+        // Responde cuando mencionan al bot por nombre
+        // SIN prefijo, antes de procesar comandos
+        // ============================================
+        if (!fromMe) {
+            const fueMemoria = await manejarMemoriaIA(sock, msg);
+            if (fueMemoria) return;
         }
 
         // ============================================
