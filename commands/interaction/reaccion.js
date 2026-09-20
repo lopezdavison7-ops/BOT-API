@@ -1,14 +1,10 @@
-// commands/interaction/reacciones.js — 🎭 Reacciones anime
+// commands/interaction/reacciones.js — 🎭 Reacciones anime (SOLO AlyaCore)
 // ============================================================
-// Fuentes: Delirius → AlyaCore (key) → otakugifs (respaldo)
-// Caption: solo la frase con emoji (sin título)
+// Fuente única: api.alyacore.xyz/sfw/interaction
+// 67 reacciones oficiales de AlyaCore
 // ============================================================
 
-const DELIRIUS_RX = 'https://api.delirius.online/reactions/';
-const OTAKUGIFS = 'https://api.otakugifs.xyz/gif?reaction=';
-
-// ---------- ALYACORE (API CON KEY) ----------
-const ALYA_BASE = 'https://api.alyacore.xyz/';
+const ALYA_BASE = 'https://api.alyacore.xyz/sfw/interaction';
 const ALYA_KEY = 'oboe';
 
 // ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
@@ -19,79 +15,78 @@ function bold(texto) {
     });
 }
 
-// ---------- CATÁLOGO ----------
+// ---------- CATÁLOGO: LAS 67 REACCIONES DE ALYACORE ----------
 const REACCIONES = {
-    kiss:      { alias: ['besar', 'beso'],        con: 'quiere dar muchos besos a',     solo: 'quiere un beso',            emoji: '💋' },
-    hug:       { alias: ['abrazar', 'abrazo'],    con: 'quiere abrazar fuerte a',       solo: 'quiere un abrazo',          emoji: '🤗' },
-    pat:       { alias: ['acariciar', 'caricia'], con: 'quiere acariciar a',            solo: 'quiere una caricia',        emoji: '🥰' },
-    slap:      { alias: ['bofetada', 'abofetear'],con: 'quiere dar una bofetada a',     solo: 'se dio una bofetada',       emoji: '👋' },
-    punch:     { alias: ['punetazo', 'golpear'],  con: 'le dio un punetazo a',          solo: 'se golpeo solo',            emoji: '👊' },
-    poke:      { alias: ['picar', 'pokear'],      con: 'quiere picar a',                solo: 'se pico solo',              emoji: '👉' },
-    bite:      { alias: ['morder', 'mordida'],    con: 'mordio a',                      solo: 'se mordio solo',            emoji: '😬' },
-    cry:       { alias: ['llorar', 'llora'],      con: 'lloro con',                     solo: 'quiere llorar',             emoji: '😢' },
-    laugh:     { alias: ['reir', 'risa'],         con: 'se rio con',                    solo: 'se rie solo',               emoji: '😂' },
-    smile:     { alias: ['sonreir', 'sonrisa'],   con: 'le sonrio a',                   solo: 'sonrie sin razon',          emoji: '😄' },
-    happy:     { alias: ['feliz', 'alegre'],      con: 'esta feliz con',                solo: 'esta feliz de la vida',     emoji: '😊' },
-    angry:     { alias: ['enojado', 'furioso'],   con: 'esta furioso con',              solo: 'esta que trueno',           emoji: '😡' },
-    sad:       { alias: ['triste'],               con: 'esta triste por',               solo: 'esta triste',               emoji: '😔' },
-    blush:     { alias: ['sonrojo', 'sonrojarse'],con: 'se sonrojo por',                solo: 'se sonrojo solit@',         emoji: '☺️' },
-    shy:       { alias: ['timido'],               con: 'se puso timid@ con',            solo: 'se pone timid@',            emoji: '😳' },
-    wink:      { alias: ['guino'],                con: 'le guino el ojo a',             solo: 'guina el ojo',              emoji: '😜' },
-    bleh:      { alias: ['lengua'],               con: 'le saco la lengua a',           solo: 'bleh',                      emoji: '😝' },
-    pout:      { alias: ['pucheros'],             con: 'le hizo pucheros a',            solo: 'hace pucheros',             emoji: '😡' },
-    bored:     { alias: ['aburrido'],             con: 'se aburrio con',                solo: 'esta aburrid@',             emoji: '😑' },
-    scared:    { alias: ['miedo', 'asustar'],     con: 'se asusto de',                  solo: 'se asusta solo',            emoji: '😨' },
-    sleep:     { alias: ['dormir', 'sueno'],      con: 'se durmio junto a',             solo: 'quiere dormir',             emoji: '😴' },
-    dance:     { alias: ['bailar', 'baile'],      con: 'bailo con',                     solo: 'baila solito',              emoji: '💃' },
-    run:       { alias: ['correr', 'huir'],       con: 'corrio hacia',                  solo: 'corre sin destino',         emoji: '🏃' },
-    think:     { alias: ['pensar'],               con: 'esta pensando en',              solo: 'piensa profundamente',      emoji: '🤔' },
-    facepalm:  { alias: ['palma'],                con: 'se hizo facepalm por',          solo: 'facepalm epico',            emoji: '🤦' },
-    clap:      { alias: ['aplaudir', 'aplauso'],  con: 'le aplaudio a',                 solo: 'aplaude solo',              emoji: '👏' },
-    cuddle:    { alias: ['acurrucar', 'mimar'],   con: 'se acurruco con',               solo: 'quiere mimitos',            emoji: '🤗' },
-    love:      { alias: ['amar', 'amor'],         con: 'ama a',                         solo: 'se ama a si mism@',         emoji: '❤️' },
-    lick:      { alias: ['lamer'],                con: 'lame a',                        solo: 'se lame el labio',          emoji: '👅' },
-    kill:      { alias: ['matar'],                con: 'quiere matar a',                solo: 'quiere autodestruirse',     emoji: '🔪' },
-    eat:       { alias: ['comer'],                con: 'come frente a',                 solo: 'esta comiendo',             emoji: '🍜' },
-    coffee:    { alias: ['cafe'],                 con: 'toma cafe pensando en',         solo: 'sorbe su cafecito',         emoji: '☕' },
-    smoke:     { alias: ['fumar'],                con: 'fuma pensando en',              solo: 'fuma tranquilo',            emoji: '🚬' },
-    drunk:     { alias: ['borracho'],             con: 'esta borrach@ por',             solo: 'esta borrach@',             emoji: '🍺' },
-    bath:      { alias: ['banar', 'bano'],        con: 'se bana junto a',               solo: 'se esta banando',           emoji: '🛁' },
-    wave:      { alias: ['saludar', 'saludo'],    con: 'saludo a',                      solo: 'saluda al viento',          emoji: '👋' },
-    highfive:  { alias: ['chocar', 'chocala'],    con: 'choco los cinco con',           solo: 'choca los cinco al aire',   emoji: '🙌' },
-    handshake: { alias: ['apreton'],              con: 'le estrecho la mano a',         solo: 'se estrecha la mano',       emoji: '🤝' },
-    thumbsup:  { alias: ['pulgar', 'like'],       con: 'le dio pulgar arriba a',        solo: 'se da pulgar arriba',       emoji: '👍' },
-    tickle:    { alias: ['cosquillas'],           con: 'le hizo cosquillas a',          solo: 'quiere cosquillas',         emoji: '🖐️' },
-    yeet:      { alias: ['lanzar'],               con: 'lanzo por los aires a',         solo: 'se yeeteo',                 emoji: '💨' },
-    bonk:      { alias: [],                       con: 'le dio un BONK a',              solo: 'se bonkeo',                 emoji: '🔨' },
-    kick:      { alias: ['patear', 'patada'],     con: 'pateo a',                       solo: 'pateo el aire',             emoji: '🦵' },
-    stare:     { alias: ['mirar', 'mirada'],      con: 'miro fijamente a',              solo: 'mira perdido en la nada',   emoji: '👀' },
-    smug:      { alias: ['presumido'],            con: 'miro con superioridad a',       solo: 'modo presumido activado',   emoji: '😏' },
-    baka:      { alias: ['tonto', 'idiota'],      con: 'le dijo BAKA a',                solo: 'se dice baka a si mismo',   emoji: '🤡' },
-    nod:       { alias: ['asentir'],              con: 'le dio la razon a',             solo: 'asiente solo',              emoji: '🙂' },
-    nope:      { alias: ['nel'],                  con: 'le dijo que NO a',              solo: 'nope, ni de chiste',        emoji: '🙅' },
-    shrug:     { alias: ['nose'],                 con: 'se encogio de hombros ante',    solo: 'no sabe ni le importa',     emoji: '🤷' },
-    tableflip: { alias: ['mesa'],                 con: 'volteo la mesa por',            solo: 'voltea la mesa',            emoji: '🪑' },
-    confused:  { alias: ['confundido'],           con: 'quedo confundido con',          solo: 'esta confundid@',           emoji: '😵' },
-    shocked:   { alias: ['shock'],                con: 'quedo en shock por',            solo: 'esta en shock',             emoji: '😱' },
-    yawn:      { alias: ['bostezo'],              con: 'bostezo junto a',               solo: 'tiene suenito',             emoji: '🥱' },
-    sip:       { alias: ['beber', 'sorber'],      con: 'sorbio su bebida junto a',      solo: 'sorbe su cafecito',         emoji: '☕' },
-    feed:      { alias: ['alimentar'],            con: 'le dio de comer a',             solo: 'quiere que le den de comer',emoji: '🍙' },
-    nom:       { alias: ['nomnom'],               con: 'se comio a',                    solo: 'nom nom nom',               emoji: '🍽️' },
-    peck:      { alias: ['besito'],               con: 'le dio un besito a',            solo: 'quiere un besito',          emoji: '💋' },
-    blowkiss:  { alias: ['besovolado'],           con: 'le mando un beso volado a',     solo: 'manda besitos al aire',     emoji: '💨' },
-    handhold:  { alias: ['mano'],                 con: 'tomo de la mano a',             solo: 'quiere agarrar una manito', emoji: '❤️' },
-    carry:     { alias: ['cargar', 'upita'],      con: 'cargo a',                       solo: 'quiere que lo carguen',     emoji: '💪' },
-    kabedon:   { alias: [],                       con: 'le hizo kabedon a',             solo: 'hizo kabedon a la pared',   emoji: '🧱' },
-    lappillow: { alias: ['regazo'],               con: 'se recosto en el regazo de',    solo: 'quiere un regazo',          emoji: '🛏️' },
-    salute:    { alias: ['firmes'],               con: 'saludo militarmente a',         solo: 'se saluda a si mismo',      emoji: '🫡' },
-    spin:      { alias: ['girar'],                con: 'dio vueltas con',               solo: 'gira sin parar',            emoji: '🌀' },
-    shake:     { alias: ['sacudir'],              con: 'sacudio a',                     solo: 'tiembla sin control',       emoji: '🫨' },
-    lurk:      { alias: ['acechar'],              con: 'acecha a',                      solo: 'acecha en las sombras',     emoji: '🕵️' },
-    shoot:     { alias: ['disparar'],             con: 'le disparo a',                  solo: 'practica tiro al blanco',   emoji: '🔫' },
-    wag:       { alias: ['colita'],               con: 'meneo la colita para',          solo: 'menea la colita',           emoji: '🐶' },
-    nya:       { alias: ['miau'],                 con: 'le dijo nya~ a',                solo: 'nya~',                      emoji: '🐱' }
+    peek:       { alias: ['chismear', 'fisgonear'],   con: 'esta fisgoneando a',          solo: 'chismea por ahi',              emoji: '👀' },
+    comfort:    { alias: ['consolar'],                con: 'consolo a',                   solo: 'necesita consuelo',            emoji: '🫂' },
+    thinkhard:  { alias: ['pensarfuerte'],            con: 'piensa demasiado en',         solo: 'piensa demasiado fuerte',      emoji: '🤯' },
+    curious:    { alias: ['curioso'],                 con: 'siente curiosidad por',       solo: 'esta curios@',                 emoji: '🧐' },
+    sniff:      { alias: ['oler', 'olfatear'],        con: 'olfateo a',                   solo: 'huele algo raro',              emoji: '👃' },
+    stare:      { alias: ['mirar', 'mirada'],         con: 'mira fijamente a',            solo: 'mira perdido en la nada',      emoji: '👀' },
+    trip:       { alias: ['viajar'],                  con: 'se fue de viaje con',         solo: 'se va de viaje',               emoji: '✈️' },
+    blowkiss:   { alias: ['besovolado'],              con: 'le mando un beso volado a',   solo: 'manda besitos al aire',        emoji: '💨' },
+    snuggle:    { alias: ['acurrucarse'],             con: 'se acurruco juntito con',     solo: 'quiere acurrucarse',           emoji: '🛌' },
+    angry:      { alias: ['enojado', 'furioso'],      con: 'esta furioso con',            solo: 'esta que trueno',              emoji: '😡' },
+    bleh:       { alias: ['lengua'],                  con: 'le saco la lengua a',         solo: 'bleh',                         emoji: '😝' },
+    bored:      { alias: ['aburrido'],                con: 'se aburrio con',              solo: 'esta aburrid@',                emoji: '😑' },
+    clap:       { alias: ['aplaudir', 'aplauso'],     con: 'le aplaudio a',               solo: 'aplaude solo',                 emoji: '👏' },
+    coffee:     { alias: ['cafe'],                    con: 'toma cafe pensando en',       solo: 'sorbe su cafecito',            emoji: '☕' },
+    dramatic:   { alias: ['dramatico'],               con: 'hizo un drama por',           solo: 'esta dramatic@',               emoji: '🎭' },
+    drunk:      { alias: ['borracho'],                con: 'esta borrach@ por',           solo: 'esta borrach@',                emoji: '🍺' },
+    cold:       { alias: ['frio'],                    con: 'tiene frio junt@ a',          solo: 'tiene frio',                   emoji: '🥶' },
+    impregnate: { alias: ['prenar', 'embarazar'],     con: 'preño a',                     solo: 'se preño a si mism@',          emoji: '🤰' },
+    kisscheek:  { alias: ['besoenmejilla'],           con: 'le beso la mejilla a',        solo: 'quiere un beso en la mejilla', emoji: '😚' },
+    sing:       { alias: ['cantar'],                  con: 'le canto a',                  solo: 'canta solit@',                 emoji: '🎤' },
+    tickle:     { alias: ['cosquillas'],              con: 'le hizo cosquillas a',        solo: 'quiere cosquillas',            emoji: '🖐️' },
+    scream:     { alias: ['gritar'],                  con: 'le grito a',                  solo: 'grito de la nada',             emoji: '😱' },
+    push:       { alias: ['empujar'],                 con: 'empujo a',                    solo: 'empujo el aire',               emoji: '🤜' },
+    nope:       { alias: ['nel'],                     con: 'le dijo que NO a',            solo: 'nope, ni de chiste',           emoji: '🙅' },
+    jump:       { alias: ['saltar'],                  con: 'salto con',                   solo: 'salta de la emocion',          emoji: '🦘' },
+    heat:       { alias: ['calor', 'caliente'],       con: 'suda la gota gorda por',      solo: 'esta que se derrite',          emoji: '🥵' },
+    gaming:     { alias: ['jugar', 'gamear'],         con: 'juega con',                   solo: 'esta gameando',                emoji: '🎮' },
+    draw:       { alias: ['dibujar'],                 con: 'dibuja a',                    solo: 'dibuja en su cuaderno',        emoji: '🎨' },
+    call:       { alias: ['llamar'],                  con: 'llama a',                     solo: 'hace una llamadita',           emoji: '📞' },
+    laugh:      { alias: ['reir', 'risa'],            con: 'se rio con',                  solo: 'se rie solo',                  emoji: '😂' },
+    love:       { alias: ['amar', 'amor'],            con: 'ama a',                       solo: 'se ama a si mism@',            emoji: '❤️' },
+    pout:       { alias: ['pucheros'],                con: 'le hizo pucheros a',          solo: 'hace pucheros',                emoji: '😡' },
+    punch:      { alias: ['punetazo', 'golpear'],     con: 'le dio un punetazo a',        solo: 'se golpeo solo',               emoji: '👊' },
+    run:        { alias: ['correr', 'huir'],          con: 'corrio hacia',                solo: 'corre sin destino',            emoji: '🏃' },
+    sad:        { alias: ['triste'],                  con: 'esta triste por',             solo: 'esta triste',                  emoji: '😔' },
+    scared:     { alias: ['miedo', 'asustar'],        con: 'se asusto de',                solo: 'se asusta solo',               emoji: '😨' },
+    seduce:     { alias: ['seducir'],                 con: 'intenta seducir a',           solo: 'modo seductor activado',       emoji: '😘' },
+    shy:        { alias: ['timido'],                  con: 'se puso timid@ con',          solo: 'se pone timid@',               emoji: '😳' },
+    sleep:      { alias: ['dormir', 'sueno'],         con: 'se durmio junto a',           solo: 'quiere dormir',                emoji: '😴' },
+    smoke:      { alias: ['fumar'],                   con: 'fuma pensando en',            solo: 'fuma tranquilo',               emoji: '🚬' },
+    spit:       { alias: ['escupir'],                 con: 'escupio a',                   solo: 'escupio al suelo',             emoji: '🤮' },
+    step:       { alias: ['pisar'],                   con: 'piso a',                      solo: 'camina sin mirar',             emoji: '👣' },
+    think:      { alias: ['pensar'],                  con: 'esta pensando en',            solo: 'piensa profundamente',         emoji: '🤔' },
+    walk:       { alias: ['caminar'],                 con: 'camina con',                  solo: 'camina solo',                  emoji: '🚶' },
+    hug:        { alias: ['abrazar', 'abrazo'],       con: 'quiere abrazar fuerte a',     solo: 'quiere un abrazo',             emoji: '🤗' },
+    kill:       { alias: ['matar'],                   con: 'quiere matar a',              solo: 'quiere autodestruirse',        emoji: '🔪' },
+    eat:        { alias: ['comer'],                   con: 'come frente a',               solo: 'esta comiendo',                emoji: '🍜' },
+    kiss:       { alias: ['besar', 'beso'],           con: 'quiere dar muchos besos a',   solo: 'quiere un beso',               emoji: '💋' },
+    wink:       { alias: ['guino'],                   con: 'le guino el ojo a',           solo: 'guina el ojo',                 emoji: '😜' },
+    pat:        { alias: ['acariciar', 'caricia'],    con: 'quiere acariciar a',          solo: 'quiere una caricia',           emoji: '🥰' },
+    happy:      { alias: ['feliz', 'alegre'],         con: 'esta feliz con',              solo: 'esta feliz de la vida',        emoji: '😊' },
+    bully:      { alias: ['molestar', 'bullyear'],    con: 'molesta sin parar a',         solo: 'hace bullying solo',           emoji: '😈' },
+    bite:       { alias: ['morder', 'mordida'],       con: 'mordio a',                    solo: 'se mordio solo',               emoji: '😬' },
+    blush:      { alias: ['sonrojo', 'sonrojarse'],   con: 'se sonrojo por',              solo: 'se sonrojo solit@',            emoji: '☺️' },
+    wave:       { alias: ['saludar', 'saludo'],       con: 'saludo a',                    solo: 'saluda al viento',             emoji: '👋' },
+    bath:       { alias: ['banar', 'bano'],           con: 'se bana junto a',             solo: 'se esta banando',              emoji: '🛁' },
+    smug:       { alias: ['presumido'],               con: 'miro con superioridad a',     solo: 'modo presumido activado',      emoji: '😏' },
+    smile:      { alias: ['sonreir', 'sonrisa'],      con: 'le sonrio a',                 solo: 'sonrie sin razon',             emoji: '😄' },
+    highfive:   { alias: ['chocar', 'chocala'],       con: 'choco los cinco con',         solo: 'choca los cinco al aire',      emoji: '🙌' },
+    handhold:   { alias: ['mano', 'tomardemano'],     con: 'tomo de la mano a',           solo: 'quiere agarrar una manito',    emoji: '❤️' },
+    cringe:     { alias: ['verguenza'],               con: 'siente cringe por',           solo: 'esta cringe total',            emoji: '😬' },
+    bonk:       { alias: [],                          con: 'le dio un BONK a',            solo: 'se bonkeo',                    emoji: '🔨' },
+    cry:        { alias: ['llorar', 'llora'],         con: 'lloro con',                   solo: 'quiere llorar',                emoji: '😢' },
+    lick:       { alias: ['lamer'],                   con: 'lame a',                      solo: 'se lame el labio',             emoji: '👅' },
+    slap:       { alias: ['bofetada', 'abofetear'],   con: 'quiere dar una bofetada a',   solo: 'se dio una bofetada',          emoji: '👋' },
+    dance:      { alias: ['bailar', 'baile'],         con: 'bailo con',                   solo: 'baila solito',                 emoji: '💃' },
+    cuddle:     { alias: ['acurrucar', 'mimar'],      con: 'se acurruco con',             solo: 'quiere mimitos',               emoji: '🤗' }
 };
 
+// ---------- MAPEO ALIAS → TIPO ----------
 const MAPA = {};
 for (const [tipo, d] of Object.entries(REACCIONES)) {
     MAPA[tipo] = tipo;
@@ -99,24 +94,7 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- EQUIVALENTES otakugifs (último respaldo) ----------
-const OTAKUGIFS_MAP = {
-    baka: 'angry', kill: 'angry', bonk: 'angry', tableflip: 'angry',
-    smoke: 'bored', drunk: 'bored',
-    kick: 'slap', punch: 'slap', shoot: 'slap', yeet: 'slap',
-    lick: 'kiss', love: 'kiss', peck: 'kiss', blowkiss: 'kiss',
-    eat: 'nom', nom: 'nom', feed: 'nom',
-    coffee: 'sip', sip: 'sip',
-    kabedon: 'hug', carry: 'hug', handhold: 'hug', lappillow: 'hug',
-    spin: 'dance', shake: 'dance',
-    shocked: 'cry', scared: 'cry',
-    smug: 'smile', nod: 'thumbsup', salute: 'thumbsup',
-    nope: 'shrug', shrug: 'shrug',
-    confused: 'think', stare: 'think', lurk: 'think',
-    yawn: 'sleep', wag: 'happy', nya: 'happy'
-};
-
-// ---------- MENCION LIMPIA ----------
+// ---------- MENCION LIMPIA (resuelve @lid) ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -130,95 +108,55 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0], jids: [jid] };
 }
 
-// ---------- EXTRAER URL DE CUALQUIER FORMA DE JSON ----------
+// ---------- SACAR URL DE CUALQUIER FORMATO DE RESPUESTA ----------
 function sacarUrl(json) {
     if (!json || typeof json !== 'object') return null;
-    const d = json.data ?? json.result ?? json.results ?? json.datos ?? json;
-    if (typeof d === 'string') return d;
-    if (Array.isArray(d) && d[0]) return d[0].url || d[0].video || d[0].gif || null;
-    if (d && typeof d === 'object') {
-        return d.url || d.video || d.gif || d.image || d.img || d.file || null;
+    if (json.status === false) return null;
+    const candidatos = [
+        json.url, json.video, json.gif, json.link, json.file,
+        json.result?.url, json.result?.video, json.result?.gif,
+        json.data?.url, json.data?.video, json.data?.gif,
+        json.res?.url, json.response?.url
+    ];
+    for (const c of candidatos) {
+        if (typeof c === 'string' && c.startsWith('http')) return c;
     }
+    if (typeof json.result === 'string' && json.result.startsWith('http')) return json.result;
+    if (typeof json.data === 'string' && json.data.startsWith('http')) return json.data;
     return null;
 }
 
-// ---------- FUENTE 1: DELIRIUS ----------
-async function pedirDelirius(tipo) {
+// ---------- PEDIR A ALYACORE ----------
+async function pedirAlyaCore(tipo) {
     try {
-        const res = await fetch(DELIRIUS_RX + tipo);
+        const url = `${ALYA_BASE}?inter=${encodeURIComponent(tipo)}&key=${ALYA_KEY}`;
+        const res = await fetch(url);
         if (!res.ok) return null;
         const json = await res.json();
-        const url = sacarUrl(json);
-        return url ? { url, tipo: 'mp4', fuente: 'delirius' } : null;
-    } catch (e) { return null; }
-}
-
-// ---------- FUENTE 2: ALYACORE (con key, varios patrones) ----------
-async function pedirAlyaCore(tipo) {
-    const rutas = [
-        `reactions/${tipo}?apikey=${ALYA_KEY}`,
-        `reactions/${tipo}?key=${ALYA_KEY}`,
-        `reaction/${tipo}?apikey=${ALYA_KEY}`,
-        `api/reactions/${tipo}?apikey=${ALYA_KEY}`,
-        `reactions/${tipo}`
-    ];
-
-    for (const ruta of rutas) {
-        try {
-            const res = await fetch(ALYA_BASE + ruta, {
-                headers: {
-                    'apikey': ALYA_KEY,
-                    'Authorization': 'Bearer ' + ALYA_KEY,
-                    'Accept': 'application/json'
-                }
-            });
-            if (!res.ok) continue;
-            const json = await res.json();
-            const url = sacarUrl(json);
-            if (url) return { url, tipo: url.endsWith('.mp4') ? 'mp4' : 'gif', fuente: 'alyacore' };
-        } catch (e) { continue; }
+        const urlVideo = sacarUrl(json);
+        if (!urlVideo) return null;
+        return { url: urlVideo, esMp4: urlVideo.endsWith('.mp4') };
+    } catch (e) {
+        console.error('[ALYA] error:', e.message);
+        return null;
     }
-    return null;
 }
 
-// ---------- FUENTE 3: OTAKUGIFS (gif + equivalentes) ----------
-async function pedirOtakugifs(tipo) {
-    const candidatos = [tipo, OTAKUGIFS_MAP[tipo]].filter(Boolean);
-    const vistos = new Set();
-
-    for (const c of candidatos) {
-        if (vistos.has(c)) continue;
-        vistos.add(c);
-        try {
-            const res = await fetch(OTAKUGIFS + c);
-            if (!res.ok) continue;
-            const json = await res.json();
-            if (json?.url) return { url: json.url, tipo: 'gif', fuente: 'otakugifs' };
-        } catch (e) {}
-    }
-    return null;
-}
-
-// ---------- CADENA: delirius → alyacore → otakugifs ----------
-async function obtenerVideo(tipo) {
-    return (await pedirDelirius(tipo))
-        || (await pedirAlyaCore(tipo))
-        || (await pedirOtakugifs(tipo));
-}
-
-// ---------- EXTRAER COMANDO ----------
+// ---------- EXTRAER COMANDO (acepta .kiss y . kiss) ----------
 function extraerComando(msg) {
     const texto = msg.message?.extendedTextMessage?.text
                || msg.message?.conversation || '';
     const limpio = texto.trim().replace(/^\.+\s*/, '');
     return (limpio.split(/\s+/)[0] || '').toLowerCase();
 }
-
+// ============================================================
+// COMANDO PRINCIPAL
+// ============================================================
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...TIPOS, ...Object.values(REACCIONES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime: Delirius + AlyaCore + otakugifs',
+    descripcion: 'Reacciones anime (AlyaCore): kiss, hug, smoke, seduce... 67 tipos',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -235,15 +173,16 @@ export default {
                     lista += TIPOS.slice(i, i + 4).map(t => REACCIONES[t].emoji + ' .' + t).join('  ') + '\n';
                 }
                 return await responder.texto(
-                    bold('REACCIONES') + ' 🎭\n' +
+                    bold('REACCIONES') + ' 🎭 (' + TIPOS.length + ')\n' +
                     'Usa .<reaccion> [@user]\n\n' +
                     lista + '\n⚡ ' + bold('BOT-API')
                 );
             }
 
+            // ---------- DETECTAR TIPO ----------
             const tipo = MAPA[invocado] || null;
             if (!tipo) {
-                return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
+                return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver las ' + TIPOS.length + ' disponibles.');
             }
 
             const d = REACCIONES[tipo];
@@ -264,18 +203,18 @@ export default {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- OBTENER VIDEO ----------
-            const video = await obtenerVideo(tipo);
+            // ---------- PEDIR VIDEO A ALYACORE ----------
+            const video = await pedirAlyaCore(tipo);
 
             if (!video) {
-                return await responder.texto('❌ Ninguna API tiene: *' + tipo + '*');
+                return await responder.texto('❌ AlyaCore no tiene: *' + tipo + '*');
             }
 
-            // ---------- ENVIAR ----------
+            // ---------- ENVIAR VIDEO ANIMADO ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url: video.url },
-                    mimetype: 'video/mp4',
+                    mimetype: video.esMp4 ? 'video/mp4' : 'image/gif',
                     gifPlayback: true,
                     caption,
                     mentions
