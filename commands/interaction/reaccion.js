@@ -2,19 +2,20 @@
 // ============================================================
 // .kiss @Eve  →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐝𝐚𝐫 𝐦𝐮𝐜𝐡𝐨𝐬 𝐛𝐞𝐬𝐨𝐬 𝐚 @Eve 💋
 // .kiss       →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐮𝐧 𝐛𝐞𝐬𝐨 💋
+// Acepta: .kiss | . kiss | .  kiss
 // Fuentes: nekos.best → waifu.pics → Delirius
 // ============================================================
 
 import fetch from 'node-fetch';
+import { request as undiciRequest } from 'undici';
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
 
-// ---------- HEADERS (anti-bloqueo de APIs) ----------
+// ---------- HEADERS (User-Agent de bot, NO de navegador) ----------
 const HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-    'Accept': 'application/json, image/gif, */*',
-    'Accept-Language': 'es'
+    'User-Agent': 'BOT-API/2.0',
+    'Accept': 'application/json'
 };
 
 // ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
@@ -96,7 +97,7 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- EQUIVALENCIAS waifu.pics (respaldo confiable) ----------
+// ---------- EQUIVALENCIAS waifu.pics ----------
 const WAIFU_PICS_MAP = {
     kiss: 'kiss', peck: 'kiss', blowkiss: 'kiss',
     hug: 'hug', cuddle: 'cuddle', handhold: 'handhold',
@@ -109,7 +110,7 @@ const WAIFU_PICS_MAP = {
     kabedon: 'bully', stare: 'cringe', confused: 'cringe', feed: 'nom', sip: 'nom'
 };
 
-// ---------- MENCION LIMPIA (resuelve @lid) ----------
+// ---------- MENCION LIMPIA ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -119,20 +120,28 @@ async function datosMencion(sock, jid) {
                 return { token: '@' + pj.split('@')[0].replace(/\D/g, ''), jids: [pj] };
             }
         }
-    } catch (e) { /* sin mapeo */ }
+    } catch (e) {}
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
-// ---------- FUENTE 1: nekos.best ----------
+// ---------- FUENTE 1: nekos.best (con undici, como el ejemplo que funciona) ----------
 async function pedirNekos(tipo) {
     try {
-        const res = await fetch(NEKOS + tipo, { headers: HEADERS, timeout: 15000 });
-        if (!res.ok) {
-            console.error(`[REACCION] nekos respondió HTTP ${res.status}`);
+        const response = await undiciRequest(NEKOS + tipo, {
+            signal: AbortSignal.timeout(10000),
+            headers: HEADERS
+        });
+
+        if (response.statusCode !== 200) {
+            console.error(`[REACCION] nekos respondió HTTP ${response.statusCode}`);
+            await response.body.dump();
             return null;
         }
-        const json = await res.json();
-        return json?.results?.[0]?.url || null;
+
+        const bodyText = await response.body.text();
+        const data = JSON.parse(bodyText);
+        return data?.results?.[0]?.url || null;
+
     } catch (e) {
         console.error('[REACCION] nekos error:', e.message);
         return null;
@@ -144,10 +153,17 @@ async function pedirWaifuPics(tipo) {
     const cat = WAIFU_PICS_MAP[tipo];
     if (!cat) return null;
     try {
-        const res = await fetch('https://api.waifu.pics/sfw/' + cat, { headers: HEADERS, timeout: 15000 });
-        if (!res.ok) return null;
-        const json = await res.json();
-        return json?.url || null;
+        const response = await undiciRequest('https://api.waifu.pics/sfw/' + cat, {
+            signal: AbortSignal.timeout(10000),
+            headers: HEADERS
+        });
+        if (response.statusCode !== 200) {
+            await response.body.dump();
+            return null;
+        }
+        const bodyText = await response.body.text();
+        const data = JSON.parse(bodyText);
+        return data?.url || null;
     } catch (e) {
         console.error('[REACCION] waifupics error:', e.message);
         return null;
@@ -157,7 +173,7 @@ async function pedirWaifuPics(tipo) {
 // ---------- FUENTE 3: Delirius ----------
 async function pedirDelirius(tipo) {
     try {
-        const res = await fetch(DELIRIUS + tipo, { headers: HEADERS, timeout: 15000 });
+        const res = await fetch(DELIRIUS + tipo, { timeout: 15000 });
         if (!res.ok) return null;
         const json = await res.json();
         const d = json.data ?? json.datos;
@@ -180,12 +196,16 @@ async function obtenerUrl(tipo) {
     return await pedirDelirius(tipo);
 }
 
-// ---------- DETECTAR QUÉ REACCIÓN SE INVOCÓ ----------
-function detectarTipo(msg) {
+// ---------- EXTRAER NOMBRE DEL COMANDO (acepta espacios) ----------
+function extraerComando(msg) {
     const texto = msg.message?.extendedTextMessage?.text
                || msg.message?.conversation || '';
-    const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
-    return MAPA[invocado] || null;
+    const limpio = texto.trim().replace(/^\.+\s*/, '');
+    return (limpio.split(/\s+/)[0] || '').toLowerCase();
+}
+
+function detectarTipo(msg) {
+    return MAPA[extraerComando(msg)] || null;
 }
 
 export default {
@@ -200,10 +220,9 @@ export default {
             const sender = msg.key.participant || msg.key.remoteJid;
             const senderName = msg.pushName || sender.split('@')[0].replace(/\D/g, '');
 
-            const texto = msg.message?.extendedTextMessage?.text || msg.message?.conversation || '';
-            const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
+            const invocado = extraerComando(msg);
 
-            // ---------- AYUDA: .reacciones ----------
+            // ---------- AYUDA ----------
             if (invocado === 'reacciones' || invocado === 'reaction' || invocado === 'reaccion') {
                 let lista = '';
                 for (let i = 0; i < TIPOS.length; i += 4) {
@@ -216,7 +235,6 @@ export default {
                 );
             }
 
-            // ---------- DETECTAR TIPO ----------
             const tipo = detectarTipo(msg);
             if (!tipo) {
                 return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
@@ -224,7 +242,7 @@ export default {
 
             const d = REACCIONES[tipo];
 
-            // ---------- DETECTAR OBJETIVO ----------
+            // ---------- OBJETIVO ----------
             const ctx = msg.message?.extendedTextMessage?.contextInfo;
             let target = ctx?.participant || ctx?.mentionedJid?.[0] || null;
             if (target === sender) target = null;
@@ -250,11 +268,10 @@ export default {
                 );
             }
 
-            // ---------- MÉTODO 1: URL directa a Baileys ----------
+            // ---------- MÉTODO 1: URL directa (como tu ejemplo funcional) ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url },
-                    gifPlayback: true,
                     caption,
                     mentions
                 }, { quoted: msg });
@@ -263,7 +280,7 @@ export default {
                 console.error('[REACCION] metodo1 URL:', e.message);
             }
 
-            // ---------- MÉTODO 2: descargar buffer ----------
+            // ---------- MÉTODO 2: buffer ----------
             try {
                 const res = await fetch(url, { headers: HEADERS, timeout: 20000 });
                 const buffer = Buffer.from(await res.arrayBuffer());
@@ -290,7 +307,6 @@ export default {
                 console.error('[REACCION] metodo3 sticker:', e.message);
             }
 
-            // ---------- ÚLTIMO RECURSO: solo texto ----------
             await responder.texto(caption);
 
         } catch (error) {
