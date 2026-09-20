@@ -7,12 +7,11 @@
 // ============================================================
 
 import fetch from 'node-fetch';
-import { request as undiciRequest } from 'undici';
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
 
-// ---------- HEADERS (User-Agent de bot, NO de navegador) ----------
+// ---------- HEADERS (User-Agent tipo bot, NO Chrome) ----------
 const HEADERS = {
     'User-Agent': 'BOT-API/2.0',
     'Accept': 'application/json'
@@ -124,22 +123,24 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
-// ---------- FUENTE 1: nekos.best (con undici, como el ejemplo que funciona) ----------
+// ---------- FUENTE 1: nekos.best (con User-Agent tipo bot) ----------
 async function pedirNekos(tipo) {
     try {
-        const response = await undiciRequest(NEKOS + tipo, {
-            signal: AbortSignal.timeout(10000),
-            headers: HEADERS
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
-        if (response.statusCode !== 200) {
-            console.error(`[REACCION] nekos respondió HTTP ${response.statusCode}`);
-            await response.body.dump();
+        const res = await fetch(NEKOS + tipo, {
+            headers: HEADERS,
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+            console.error(`[REACCION] nekos respondió HTTP ${res.status}`);
             return null;
         }
 
-        const bodyText = await response.body.text();
-        const data = JSON.parse(bodyText);
+        const data = await res.json();
         return data?.results?.[0]?.url || null;
 
     } catch (e) {
@@ -153,16 +154,17 @@ async function pedirWaifuPics(tipo) {
     const cat = WAIFU_PICS_MAP[tipo];
     if (!cat) return null;
     try {
-        const response = await undiciRequest('https://api.waifu.pics/sfw/' + cat, {
-            signal: AbortSignal.timeout(10000),
-            headers: HEADERS
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const res = await fetch('https://api.waifu.pics/sfw/' + cat, {
+            headers: HEADERS,
+            signal: controller.signal
         });
-        if (response.statusCode !== 200) {
-            await response.body.dump();
-            return null;
-        }
-        const bodyText = await response.body.text();
-        const data = JSON.parse(bodyText);
+        clearTimeout(timeout);
+
+        if (!res.ok) return null;
+        const data = await res.json();
         return data?.url || null;
     } catch (e) {
         console.error('[REACCION] waifupics error:', e.message);
@@ -268,7 +270,7 @@ export default {
                 );
             }
 
-            // ---------- MÉTODO 1: URL directa (como tu ejemplo funcional) ----------
+            // ---------- MÉTODO 1: URL directa (sin forzar mp4) ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url },
