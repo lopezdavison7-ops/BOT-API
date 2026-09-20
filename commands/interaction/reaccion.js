@@ -1,17 +1,12 @@
 // commands/interaction/reaccion.js — 🎭 Reacciones anime GIF
 // ============================================================
-// .kiss @Eve  →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐝𝐚𝐫 𝐦𝐮𝐜𝐡𝐨𝐬 𝐛𝐞𝐬𝐨𝐬 𝐚 @Eve 💋
-// .kiss       →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐮𝐧 𝐛𝐞𝐬𝐨 💋
-// Acepta: .kiss | . kiss | .  kiss
-// Fuentes: nekos.best → waifu.pics → Delirius
+// SIN IMPORTS EXTERNOS — usa el fetch global de Node
+// (el mismo que usan tus comandos que SÍ funcionan)
 // ============================================================
-
-import fetch from 'node-fetch';
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
 
-// ---------- HEADERS (User-Agent tipo bot, NO Chrome) ----------
 const HEADERS = {
     'User-Agent': 'BOT-API/2.0',
     'Accept': 'application/json'
@@ -25,7 +20,7 @@ function bold(texto) {
     });
 }
 
-// ---------- CATÁLOGO: 60 GIFS DE REACCIÓN ----------
+// ---------- CATÁLOGO: 60 GIFS ----------
 const REACCIONES = {
     kiss:      { alias: ['besar', 'beso'],         con: 'quiere dar muchos besos a',      solo: 'quiere un beso',               emoji: '💋' },
     hug:       { alias: ['abrazar', 'abrazo'],     con: 'quiere abrazar fuerte a',        solo: 'quiere un abrazo',             emoji: '🤗' },
@@ -88,7 +83,6 @@ const REACCIONES = {
     nya:       { alias: ['nekomode', 'miau'],      con: 'le dice nya~ a',                 solo: 'nya~',                         emoji: '🐱' }
 };
 
-// ---------- MAPEO ALIAS → TIPO ----------
 const MAPA = {};
 for (const [tipo, d] of Object.entries(REACCIONES)) {
     MAPA[tipo] = tipo;
@@ -96,7 +90,6 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- EQUIVALENCIAS waifu.pics ----------
 const WAIFU_PICS_MAP = {
     kiss: 'kiss', peck: 'kiss', blowkiss: 'kiss',
     hug: 'hug', cuddle: 'cuddle', handhold: 'handhold',
@@ -123,91 +116,70 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
-// ---------- FUENTE 1: nekos.best (con User-Agent tipo bot) ----------
+// ---------- FUENTES (fetch GLOBAL + errores visibles) ----------
 async function pedirNekos(tipo) {
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        const res = await fetch(NEKOS + tipo, {
-            headers: HEADERS,
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
-
-        if (!res.ok) {
-            console.error(`[REACCION] nekos respondió HTTP ${res.status}`);
-            return null;
-        }
-
+        const res = await fetch(NEKOS + tipo, { headers: HEADERS });
+        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
         const data = await res.json();
-        return data?.results?.[0]?.url || null;
-
+        const url = data?.results?.[0]?.url || null;
+        return { url, error: url ? null : 'sin resultados' };
     } catch (e) {
-        console.error('[REACCION] nekos error:', e.message);
-        return null;
+        return { url: null, error: e.message };
     }
 }
 
-// ---------- FUENTE 2: waifu.pics ----------
 async function pedirWaifuPics(tipo) {
     const cat = WAIFU_PICS_MAP[tipo];
-    if (!cat) return null;
+    if (!cat) return { url: null, error: 'sin equivalente' };
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        const res = await fetch('https://api.waifu.pics/sfw/' + cat, {
-            headers: HEADERS,
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
-
-        if (!res.ok) return null;
+        const res = await fetch('https://api.waifu.pics/sfw/' + cat, { headers: HEADERS });
+        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
         const data = await res.json();
-        return data?.url || null;
+        return { url: data?.url || null, error: data?.url ? null : 'sin resultados' };
     } catch (e) {
-        console.error('[REACCION] waifupics error:', e.message);
-        return null;
+        return { url: null, error: e.message };
     }
 }
 
-// ---------- FUENTE 3: Delirius ----------
 async function pedirDelirius(tipo) {
     try {
-        const res = await fetch(DELIRIUS + tipo, { timeout: 15000 });
-        if (!res.ok) return null;
+        const res = await fetch(DELIRIUS + tipo, { headers: HEADERS });
+        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
         const json = await res.json();
         const d = json.data ?? json.datos;
-        if (typeof d === 'string') return d;
-        return d?.url || d?.gif || d?.image || d?.img || null;
+        const url = typeof d === 'string' ? d : (d?.url || d?.gif || d?.image || d?.img || null);
+        return { url, error: url ? null : 'sin resultados' };
     } catch (e) {
-        console.error('[REACCION] delirius error:', e.message);
-        return null;
+        return { url: null, error: e.message };
     }
 }
 
-// ---------- CADENA: nekos → waifu.pics → Delirius ----------
+// ---------- CADENA CON DIAGNÓSTICO ----------
 async function obtenerUrl(tipo) {
-    const url = await pedirNekos(tipo);
-    if (url) return url;
+    const errores = [];
 
-    const url2 = await pedirWaifuPics(tipo);
-    if (url2) return url2;
+    const n = await pedirNekos(tipo);
+    if (n.url) return { url: n.url, errores };
+    errores.push('nekos: ' + n.error);
 
-    return await pedirDelirius(tipo);
+    const w = await pedirWaifuPics(tipo);
+    if (w.url) return { url: w.url, errores };
+    errores.push('waifu: ' + w.error);
+
+    const d = await pedirDelirius(tipo);
+    if (d.url) return { url: d.url, errores };
+    errores.push('delirius: ' + d.error);
+
+    return { url: null, errores };
 }
 
-// ---------- EXTRAER NOMBRE DEL COMANDO (acepta espacios) ----------
+// ---------- EXTRAER COMANDO (acepta espacios) ----------
 function extraerComando(msg) {
     const texto = msg.message?.extendedTextMessage?.text
                || msg.message?.conversation || '';
     const limpio = texto.trim().replace(/^\.+\s*/, '');
     return (limpio.split(/\s+/)[0] || '').toLowerCase();
-}
-
-function detectarTipo(msg) {
-    return MAPA[extraerComando(msg)] || null;
 }
 
 export default {
@@ -237,7 +209,7 @@ export default {
                 );
             }
 
-            const tipo = detectarTipo(msg);
+            const tipo = MAPA[invocado] || null;
             if (!tipo) {
                 return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
             }
@@ -260,17 +232,19 @@ export default {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- OBTENER URL DEL GIF ----------
-            const url = await obtenerUrl(tipo);
+            // ---------- OBTENER GIF ----------
+            const { url, errores } = await obtenerUrl(tipo);
 
             if (!url) {
                 return await responder.texto(
                     '❌ No encontre gif para: *' + tipo + '*\n' +
-                    'Las 3 fuentes fallaron. Revisa la consola del bot.'
+                    '🔎 Diagnostico:\n' +
+                    errores.map(e => '• ' + e).join('\n') + '\n\n' +
+                    '📸 Mandame esta captura pa arreglarlo'
                 );
             }
 
-            // ---------- MÉTODO 1: URL directa (sin forzar mp4) ----------
+            // ---------- MÉTODO 1: URL directa ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url },
@@ -279,12 +253,12 @@ export default {
                 }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] metodo1 URL:', e.message);
+                console.error('[REACCION] metodo1:', e.message);
             }
 
             // ---------- MÉTODO 2: buffer ----------
             try {
-                const res = await fetch(url, { headers: HEADERS, timeout: 20000 });
+                const res = await fetch(url);
                 const buffer = Buffer.from(await res.arrayBuffer());
                 await sock.sendMessage(jid, {
                     video: buffer,
@@ -295,7 +269,7 @@ export default {
                 }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] metodo2 buffer:', e.message);
+                console.error('[REACCION] metodo2:', e.message);
             }
 
             // ---------- MÉTODO 3: sticker animado ----------
@@ -306,7 +280,7 @@ export default {
                 await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] metodo3 sticker:', e.message);
+                console.error('[REACCION] metodo3:', e.message);
             }
 
             await responder.texto(caption);
