@@ -1,8 +1,21 @@
 // commands/interaction/reaccion.js — 🎭 Reacciones anime GIF
-import fetch from 'node-fetch';  // ⬅️ ESTE FALTABA, ES LA CLAVE
+// ============================================================
+// .kiss @Eve  →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐝𝐚𝐫 𝐦𝐮𝐜𝐡𝐨𝐬 𝐛𝐞𝐬𝐨𝐬 𝐚 @Eve 💋
+// .kiss       →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐮𝐧 𝐛𝐞𝐬𝐨 💋
+// Fuentes: nekos.best → waifu.pics → Delirius
+// ============================================================
+
+import fetch from 'node-fetch';
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
+
+// ---------- HEADERS (anti-bloqueo de APIs) ----------
+const HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Accept': 'application/json, image/gif, */*',
+    'Accept-Language': 'es'
+};
 
 // ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
 function bold(texto) {
@@ -83,7 +96,20 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- MENCION LIMPIA ----------
+// ---------- EQUIVALENCIAS waifu.pics (respaldo confiable) ----------
+const WAIFU_PICS_MAP = {
+    kiss: 'kiss', peck: 'kiss', blowkiss: 'kiss',
+    hug: 'hug', cuddle: 'cuddle', handhold: 'handhold',
+    highfive: 'highfive', handshake: 'handhold',
+    slap: 'slap', punch: 'bully', kick: 'kick', baka: 'bully', angry: 'bully',
+    bite: 'bite', bonk: 'bonk', poke: 'poke', yeet: 'yeet', carry: 'glomp',
+    cry: 'cry', laugh: 'happy', smile: 'smile', happy: 'happy',
+    blush: 'blush', wink: 'wink', smug: 'smug', wave: 'wave',
+    dance: 'dance', nom: 'nom', tickle: 'lick', lappillow: 'hug',
+    kabedon: 'bully', stare: 'cringe', confused: 'cringe', feed: 'nom', sip: 'nom'
+};
+
+// ---------- MENCION LIMPIA (resuelve @lid) ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -93,15 +119,18 @@ async function datosMencion(sock, jid) {
                 return { token: '@' + pj.split('@')[0].replace(/\D/g, ''), jids: [pj] };
             }
         }
-    } catch (e) {}
+    } catch (e) { /* sin mapeo */ }
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
-// ---------- FUENTES: nekos.best → Delirius ----------
+// ---------- FUENTE 1: nekos.best ----------
 async function pedirNekos(tipo) {
     try {
-        const res = await fetch(NEKOS + tipo, { timeout: 15000 });
-        if (!res.ok) return null;
+        const res = await fetch(NEKOS + tipo, { headers: HEADERS, timeout: 15000 });
+        if (!res.ok) {
+            console.error(`[REACCION] nekos respondió HTTP ${res.status}`);
+            return null;
+        }
         const json = await res.json();
         return json?.results?.[0]?.url || null;
     } catch (e) {
@@ -110,9 +139,25 @@ async function pedirNekos(tipo) {
     }
 }
 
+// ---------- FUENTE 2: waifu.pics ----------
+async function pedirWaifuPics(tipo) {
+    const cat = WAIFU_PICS_MAP[tipo];
+    if (!cat) return null;
+    try {
+        const res = await fetch('https://api.waifu.pics/sfw/' + cat, { headers: HEADERS, timeout: 15000 });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json?.url || null;
+    } catch (e) {
+        console.error('[REACCION] waifupics error:', e.message);
+        return null;
+    }
+}
+
+// ---------- FUENTE 3: Delirius ----------
 async function pedirDelirius(tipo) {
     try {
-        const res = await fetch(DELIRIUS + tipo, { timeout: 15000 });
+        const res = await fetch(DELIRIUS + tipo, { headers: HEADERS, timeout: 15000 });
         if (!res.ok) return null;
         const json = await res.json();
         const d = json.data ?? json.datos;
@@ -124,9 +169,14 @@ async function pedirDelirius(tipo) {
     }
 }
 
+// ---------- CADENA: nekos → waifu.pics → Delirius ----------
 async function obtenerUrl(tipo) {
     const url = await pedirNekos(tipo);
     if (url) return url;
+
+    const url2 = await pedirWaifuPics(tipo);
+    if (url2) return url2;
+
     return await pedirDelirius(tipo);
 }
 
@@ -153,27 +203,35 @@ export default {
             const texto = msg.message?.extendedTextMessage?.text || msg.message?.conversation || '';
             const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
 
-            // ---------- AYUDA ----------
+            // ---------- AYUDA: .reacciones ----------
             if (invocado === 'reacciones' || invocado === 'reaction' || invocado === 'reaccion') {
                 let lista = '';
                 for (let i = 0; i < TIPOS.length; i += 4) {
                     lista += TIPOS.slice(i, i + 4).map(t => REACCIONES[t].emoji + ' .' + t).join('  ') + '\n';
                 }
-                return await responder.texto(bold('REACCIONES') + ' 🎭\nUsa .<reaccion> [@user]\n\n' + lista + '\n⚡ ' + bold('BOT-API'));
+                return await responder.texto(
+                    bold('REACCIONES') + ' 🎭\n' +
+                    'Usa .<reaccion> [@user]\n\n' +
+                    lista + '\n⚡ ' + bold('BOT-API')
+                );
             }
 
+            // ---------- DETECTAR TIPO ----------
             const tipo = detectarTipo(msg);
-            if (!tipo) return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
+            if (!tipo) {
+                return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
+            }
 
             const d = REACCIONES[tipo];
 
-            // ---------- OBJETIVO ----------
+            // ---------- DETECTAR OBJETIVO ----------
             const ctx = msg.message?.extendedTextMessage?.contextInfo;
             let target = ctx?.participant || ctx?.mentionedJid?.[0] || null;
             if (target === sender) target = null;
 
             let caption;
             const mentions = [];
+
             if (target) {
                 const t = await datosMencion(sock, target);
                 mentions.push(...t.jids);
@@ -184,11 +242,15 @@ export default {
 
             // ---------- OBTENER URL DEL GIF ----------
             const url = await obtenerUrl(tipo);
+
             if (!url) {
-                return await responder.texto('❌ No encontre gif para: ' + tipo);
+                return await responder.texto(
+                    '❌ No encontre gif para: *' + tipo + '*\n' +
+                    'Las 3 fuentes fallaron. Revisa la consola del bot.'
+                );
             }
 
-            // ---------- MÉTODO 1: URL directa a Baileys (más confiable) ----------
+            // ---------- MÉTODO 1: URL directa a Baileys ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url },
@@ -203,7 +265,7 @@ export default {
 
             // ---------- MÉTODO 2: descargar buffer ----------
             try {
-                const res = await fetch(url, { timeout: 20000 });
+                const res = await fetch(url, { headers: HEADERS, timeout: 20000 });
                 const buffer = Buffer.from(await res.arrayBuffer());
                 await sock.sendMessage(jid, {
                     video: buffer,
@@ -228,7 +290,7 @@ export default {
                 console.error('[REACCION] metodo3 sticker:', e.message);
             }
 
-            // ---------- ÚLTIMO RECURSO ----------
+            // ---------- ÚLTIMO RECURSO: solo texto ----------
             await responder.texto(caption);
 
         } catch (error) {
