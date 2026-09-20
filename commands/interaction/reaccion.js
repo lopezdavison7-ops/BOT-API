@@ -1,16 +1,17 @@
 // commands/interaction/reaccion.js — 🎭 Reacciones anime GIF
 // ============================================================
-// SIN IMPORTS EXTERNOS — usa el fetch global de Node
-// (el mismo que usan tus comandos que SÍ funcionan)
+// ANTI-BLOQUEO: directo → allorigins → codetabs
+// (si tu hosting bloquea nekos.best, el proxy lo salta)
 // ============================================================
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
+const PROXIES = [
+    (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+    (u) => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
+];
 
-const HEADERS = {
-    'User-Agent': 'BOT-API/2.0',
-    'Accept': 'application/json'
-};
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 // ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
 function bold(texto) {
@@ -116,62 +117,66 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
-// ---------- FUENTES (fetch GLOBAL + errores visibles) ----------
-async function pedirNekos(tipo) {
+// ---------- JSON MULTI-RUTA: directo → proxy1 → proxy2 ----------
+async function getJsonMulti(url) {
+    // 1) directo
     try {
-        const res = await fetch(NEKOS + tipo, { headers: HEADERS });
-        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
-        const data = await res.json();
-        const url = data?.results?.[0]?.url || null;
-        return { url, error: url ? null : 'sin resultados' };
-    } catch (e) {
-        return { url: null, error: e.message };
+        const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+        if (r.ok) return await r.json();
+    } catch (e) {}
+
+    // 2) proxies
+    for (const px of PROXIES) {
+        try {
+            const r = await fetch(px(url));
+            if (r.ok) return JSON.parse(await r.text());
+        } catch (e) {}
     }
+    return null;
 }
 
-async function pedirWaifuPics(tipo) {
-    const cat = WAIFU_PICS_MAP[tipo];
-    if (!cat) return { url: null, error: 'sin equivalente' };
+// ---------- BYTES MULTI-RUTA (para el gif) ----------
+async function getBytesMulti(url) {
     try {
-        const res = await fetch('https://api.waifu.pics/sfw/' + cat, { headers: HEADERS });
-        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
-        const data = await res.json();
-        return { url: data?.url || null, error: data?.url ? null : 'sin resultados' };
-    } catch (e) {
-        return { url: null, error: e.message };
+        const r = await fetch(url, { headers: { 'User-Agent': UA } });
+        if (r.ok) return Buffer.from(await r.arrayBuffer());
+    } catch (e) {}
+
+    for (const px of PROXIES) {
+        try {
+            const r = await fetch(px(url));
+            if (r.ok) return Buffer.from(await r.arrayBuffer());
+        } catch (e) {}
     }
+    return null;
 }
 
-async function pedirDelirius(tipo) {
-    try {
-        const res = await fetch(DELIRIUS + tipo, { headers: HEADERS });
-        if (!res.ok) return { url: null, error: 'HTTP ' + res.status };
-        const json = await res.json();
-        const d = json.data ?? json.datos;
-        const url = typeof d === 'string' ? d : (d?.url || d?.gif || d?.image || d?.img || null);
-        return { url, error: url ? null : 'sin resultados' };
-    } catch (e) {
-        return { url: null, error: e.message };
-    }
-}
-
-// ---------- CADENA CON DIAGNÓSTICO ----------
+// ---------- OBTENER URL DEL GIF ----------
 async function obtenerUrl(tipo) {
-    const errores = [];
+    // nekos.best (con proxies si tu hosting lo bloquea)
+    const n = await getJsonMulti(NEKOS + tipo);
+    const urlN = n?.results?.[0]?.url;
+    if (urlN) return urlN;
 
-    const n = await pedirNekos(tipo);
-    if (n.url) return { url: n.url, errores };
-    errores.push('nekos: ' + n.error);
+    // waifu.pics (con proxies)
+    const cat = WAIFU_PICS_MAP[tipo];
+    if (cat) {
+        const w = await getJsonMulti('https://api.waifu.pics/sfw/' + cat);
+        if (w?.url) return w.url;
+    }
 
-    const w = await pedirWaifuPics(tipo);
-    if (w.url) return { url: w.url, errores };
-    errores.push('waifu: ' + w.error);
+    // delirius directo
+    try {
+        const r = await fetch(DELIRIUS + tipo);
+        if (r.ok) {
+            const j = await r.json();
+            const d = j.data ?? j.datos;
+            const u = typeof d === 'string' ? d : (d?.url || d?.gif || d?.image || null);
+            if (u) return u;
+        }
+    } catch (e) {}
 
-    const d = await pedirDelirius(tipo);
-    if (d.url) return { url: d.url, errores };
-    errores.push('delirius: ' + d.error);
-
-    return { url: null, errores };
+    return null;
 }
 
 // ---------- EXTRAER COMANDO (acepta espacios) ----------
@@ -232,55 +237,56 @@ export default {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- OBTENER GIF ----------
-            const { url, errores } = await obtenerUrl(tipo);
-
+            // ---------- OBTENER URL ----------
+            const url = await obtenerUrl(tipo);
             if (!url) {
-                return await responder.texto(
-                    '❌ No encontre gif para: *' + tipo + '*\n' +
-                    '🔎 Diagnostico:\n' +
-                    errores.map(e => '• ' + e).join('\n') + '\n\n' +
-                    '📸 Mandame esta captura pa arreglarlo'
-                );
+                return await responder.texto('❌ No encontre gif para: *' + tipo + '* (ni con proxies)');
             }
 
-            // ---------- MÉTODO 1: URL directa ----------
-            try {
-                await sock.sendMessage(jid, {
-                    video: { url },
-                    caption,
-                    mentions
-                }, { quoted: msg });
-                return;
-            } catch (e) {
-                console.error('[REACCION] metodo1:', e.message);
+            // ---------- DESCARGAR BYTES (con proxies) ----------
+            const buffer = await getBytesMulti(url);
+
+            // ---------- MÉTODO 1: buffer como gif ----------
+            if (buffer) {
+                try {
+                    await sock.sendMessage(jid, {
+                        video: buffer,
+                        mimetype: 'image/gif',
+                        gifPlayback: true,
+                        caption,
+                        mentions
+                    }, { quoted: msg });
+                    return;
+                } catch (e) {
+                    console.error('[REACCION] metodo1:', e.message);
+                }
+
+                // ---------- MÉTODO 2: sticker animado ----------
+                try {
+                    const { Sticker } = await import('wa-sticker-formatter');
+                    const st = new Sticker(buffer, { pack: 'BOT-API ⚡', author: d.emoji, type: 'animated', quality: 80 });
+                    await sock.sendMessage(jid, { sticker: await st.toBuffer() }, { quoted: msg });
+                    await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
+                    return;
+                } catch (e) {
+                    console.error('[REACCION] metodo2:', e.message);
+                }
+
+                // ---------- MÉTODO 3: imagen fija ----------
+                try {
+                    await sock.sendMessage(jid, { image: buffer, caption, mentions }, { quoted: msg });
+                    return;
+                } catch (e) {
+                    console.error('[REACCION] metodo3:', e.message);
+                }
             }
 
-            // ---------- MÉTODO 2: buffer ----------
+            // ---------- MÉTODO 4: URL directa ----------
             try {
-                const res = await fetch(url);
-                const buffer = Buffer.from(await res.arrayBuffer());
-                await sock.sendMessage(jid, {
-                    video: buffer,
-                    mimetype: 'video/mp4',
-                    gifPlayback: true,
-                    caption,
-                    mentions
-                }, { quoted: msg });
+                await sock.sendMessage(jid, { video: { url }, caption, mentions }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] metodo2:', e.message);
-            }
-
-            // ---------- MÉTODO 3: sticker animado ----------
-            try {
-                const { Sticker } = await import('wa-sticker-formatter');
-                const st = new Sticker(url, { pack: 'BOT-API ⚡', author: d.emoji, type: 'animated', quality: 80 });
-                await sock.sendMessage(jid, { sticker: await st.toBuffer() }, { quoted: msg });
-                await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
-                return;
-            } catch (e) {
-                console.error('[REACCION] metodo3:', e.message);
+                console.error('[REACCION] metodo4:', e.message);
             }
 
             await responder.texto(caption);
