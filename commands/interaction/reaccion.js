@@ -1,151 +1,238 @@
-// commands/interaction/reacciones.js — 🎭 33 reacciones anime en GIF + mención real
-import fetch from 'node-fetch';
+// commands/interaction/reaccion.js — 🎭 Reacciones anime GIF (nekos.best + Delirius)
+// ============================================================
+// .kiss @Eve  →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐝𝐚𝐫 𝐦𝐮𝐜𝐡𝐨𝐬 𝐛𝐞𝐬𝐨𝐬 𝐚 @Eve 💋
+// .kiss       →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐮𝐧 𝐛𝐞𝐬𝐨 💋
+// ============================================================
 
+const NEKOS = 'https://nekos.best/api/v2/';
+const DELIRIUS = 'https://api.delirius.online/anime/';
+
+// ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
+function bold(texto) {
+    return String(texto).replace(/[A-Za-z]/g, c => {
+        const base = c <= 'Z' ? 0x1D400 - 65 : 0x1D41A - 97;
+        return String.fromCodePoint(base + c.charCodeAt(0));
+    });
+}
+
+// ---------- CATÁLOGO: 60 GIFS DE REACCIÓN (nekos.best) ----------
+// con = frase con objetivo | solo = frase sin objetivo
 const REACCIONES = {
-  angry:    { self: "está furioso/a",             target: "está furioso/a con",            emoji: "😡", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b3fdb76c39.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be96ac752d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2f63e591be.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/712040c297.mp4"] },
-  bath:     { self: "se está bañando",            target: "se baña junto a",               emoji: "🛁", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6295b8c041.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/38a2241162.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3fb9740eef.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e748493aa9.mp4"] },
-  bite:     { self: "se muerde a sí mismo",       target: "muerde a",                      emoji: "😬", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4140bc2f28.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b04fc17494.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/63bb388035.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/56aebcb2ea.mp4"] },
-  bleh:     { self: "se saca la lengua",          target: "le saca la lengua a",           emoji: "😝", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/006ba5556a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8370ebb329.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e0862f6761.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7fe38d833c.mp4"] },
-  blush:    { self: "se sonroja",                 target: "se sonroja por",                emoji: "☺️", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/27e2b1104b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f02931cc79.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a9fca1e6a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0292d63bbc.mp4"] },
-  bored:    { self: "está aburrido/a",            target: "está aburrido/a de",            emoji: "😑", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d1437c05a6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/55f668ef05.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9e5482e641.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b27a530165.mp4"] },
-  clap:     { self: "se aplaude a sí mismo",      target: "le aplaude a",                  emoji: "👏", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2b5bb45998.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a937dbc61c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f8ec47a3f2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2181289bb9.mp4"] },
-  coffee:   { self: "toma café tranquilo/a",      target: "toma café pensando en",         emoji: "☕", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/219c5a89b7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/31b80f901d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a7761ceedc.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/07df0366ed.mp4"] },
-  cry:      { self: "llora",                      target: "llora por",                     emoji: "😢", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b79fce84d5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/dd26822d9a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/c54fc328de.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2c4c1039ae.mp4"] },
-  cuddle:   { self: "se acurruca solo/a",         target: "se acurruca con",               emoji: "🤗", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0613060e12.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2e0a770c30.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/324999251a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3e5d93c849.mp4"] },
-  dance:    { self: "baila solo/a",               target: "baila con",                     emoji: "💃", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3a2b027ee7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7ea032e20f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be8392dd68.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7ece5ac35b.mp4"] },
-  drunk:    { self: "está borracho/a",            target: "está borracho/a por",           emoji: "🍺", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2feae282de.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/127c0820bd.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6911db461f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9b22e99ddf.mp4"] },
-  eat:      { self: "está comiendo",              target: "come frente a",                 emoji: "🍜", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/ee941f7baf.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6083d8f12a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a58d888a58.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/bba920bb2d.mp4"] },
-  facepalm: { self: "se da un facepalm",          target: "se da un facepalm por",         emoji: "🤦", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/51bb8762ac.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1c49c203b9.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/0906825871.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1a6c762666.mp4"] },
-  happy:    { self: "está feliz",                 target: "está feliz con",                emoji: "😊", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8c35ee09a4.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/78b56befb8.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/a9cfe8c25d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/57f55bf8df.mp4"] },
-  hug:      { self: "se abraza a sí mismo",       target: "abraza a",                      emoji: "🤗", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7bef690da7.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/67bae006db.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d3249d8807.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/15683d855e.mp4"] },
-  kill:     { self: "quiere autodestruirse",      target: "quiere matar a",                emoji: "🔪", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/02c521383b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/94a522d0bd.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/44d02783f3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/196ae9d291.mp4"] },
-  kiss:     { self: "se tira un beso al espejo",  target: "le llena la carita de besitos a", emoji: "💋", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4ff07288ee.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/ce510b67c8.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa15c6ac5c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/d9c3493c73.mp4"] },
-  laugh:    { self: "se ríe solo/a",              target: "se ríe de",                     emoji: "😂", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2f3731235f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/b112780a5a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e08d760e5a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/c86e858e9d.mp4"] },
-  lick:     { self: "se lame el labio",           target: "lame a",                        emoji: "👅", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4bda625d3d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/23a545f27a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/09d5d52abf.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/da16559384.mp4"] },
-  love:     { self: "se ama a sí mismo",          target: "ama a",                         emoji: "❤️", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/fec823db8b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/73329b64c9.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6a788cf7a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8113b2774c.mp4"] },
-  pat:      { self: "se acaricia la cabeza",      target: "acaricia la cabeza de",         emoji: "🥰", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1c3cd5d64b.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/73509c8f87.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6a81d38227.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/590262909b.mp4"] },
-  poke:     { self: "se pica a sí mismo",         target: "molesta (poke) a",              emoji: "👉", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/263affc4c2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/cf47db1dce.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/76f2bcce0c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/93b5135827.mp4"] },
-  pout:     { self: "hace pucheros",              target: "hace pucheros por",             emoji: "😡", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b3524f151.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/22f694c285.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/5bfca56869.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/91c2aac9e3.mp4"] },
-  punch:    { self: "se golpea solo/a",           target: "golpea a",                      emoji: "👊", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f53f89c8d5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/2a13d90ed4.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/8ed0a8dc87.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/01be60a41e.mp4"] },
-  run:      { self: "sale corriendo",             target: "huye de",                       emoji: "🏃", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/5f2e7ffa77.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/fefcbdcc80.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f25ab9250c.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/10e625a814.mp4"] },
-  sad:      { self: "está triste",                target: "está triste por",               emoji: "😔", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1db59a2438.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/1db492db24.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/56dd412254.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4c53e50d39.mp4"] },
-  scared:   { self: "se asusta solo/a",           target: "se asusta de",                  emoji: "😨", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3ba7464666.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/97c6ecc1e5.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/3fbc999de6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa59f5a8d2.mp4"] },
-  shy:      { self: "se pone tímido/a",           target: "se pone tímido/a con",          emoji: "😳", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b8e063062.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/db06acbd0f.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/97fdab3b08.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/34de85c05d.mp4"] },
-  slap:     { self: "se abofetea a sí mismo",     target: "abofetea a",                    emoji: "👋", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/4fcbb04a12.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e4c1ac962d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e890d1fc39.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/54d9a5a3ac.mp4"] },
-  sleep:    { self: "se queda dormido/a",         target: "se queda dormido/a cerca de",   emoji: "😴", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/e6e04aae5d.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/798f87eef6.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/94a1fd3e7a.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f3bde98d73.mp4"] },
-  smoke:    { self: "fuma tranquilo/a",           target: "fuma pensando en",              emoji: "🚬", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/58fa4809a2.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/721adf16f3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/9535cb9a55.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/6b238024da.mp4"] },
-  think:    { self: "piensa en sus cosas",        target: "piensa en",                     emoji: "🤔", videos: ["https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/be310f02b3.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/f35004c537.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/aa04882cf0.mp4","https://raw.githubusercontent.com/Kone457/Nexus/refs/heads/main/Anime/7f567b121c.mp4"] }
+    kiss:      { alias: ['besar', 'beso'],         con: 'quiere dar muchos besos a',      solo: 'quiere un beso',               emoji: '💋' },
+    hug:       { alias: ['abrazar', 'abrazo'],     con: 'quiere abrazar fuerte a',        solo: 'quiere un abrazo',             emoji: '🤗' },
+    pat:       { alias: ['acariciar', 'caricia'],  con: 'quiere acariciar a',             solo: 'quiere una caricia',           emoji: '🫳' },
+    cuddle:    { alias: ['acurrucar', 'mimar'],    con: 'quiere acurrucarse con',         solo: 'quiere mimitos',               emoji: '🤱' },
+    peck:      { alias: ['besito'],                con: 'quiere dar un besito a',         solo: 'quiere un besito',             emoji: '💋' },
+    blowkiss:  { alias: ['besovolado'],            con: 'le manda un beso volado a',      solo: 'manda besitos al aire',        emoji: '💨' },
+    handhold:  { alias: ['mano', 'tomardemano'],   con: 'quiere tomar de la mano a',      solo: 'quiere agarrar una manito',    emoji: '❤️' },
+    highfive:  { alias: ['chocar', 'chocala'],     con: 'quiere chocar los cinco con',    solo: 'choca los cinco al aire',      emoji: '🙌' },
+    handshake: { alias: ['apreton'],               con: 'le estrecha la mano a',          solo: 'se estrecha la mano',          emoji: '🤝' },
+    slap:      { alias: ['bofetada', 'abofetear'], con: 'quiere dar una bofetada a',      solo: 'se dio una bofetada',          emoji: '👋' },
+    punch:     { alias: ['punetazo', 'golpear'],   con: 'quiere dar un punetazo a',       solo: 'se golpeo solo',               emoji: '👊' },
+    kick:      { alias: ['patear', 'patada'],      con: 'quiere patear a',                solo: 'pateo el aire',                emoji: '🦵' },
+    bite:      { alias: ['morder', 'mordida'],     con: 'quiere morder a',                solo: 'se mordio solo',               emoji: '🦷' },
+    bonk:      { alias: [],                        con: 'le da un BONK a',                solo: 'se bonkeo',                    emoji: '🔨' },
+    tickle:    { alias: ['cosquillas'],            con: 'quiere hacer cosquillas a',      solo: 'quiere cosquillas',            emoji: '🖐️' },
+    poke:      { alias: ['picar', 'pokear'],       con: 'quiere picar a',                 solo: 'se pico solo',                 emoji: '👉' },
+    yeet:      { alias: ['lanzar', 'yeetear'],     con: 'quiere lanzar por los aires a',  solo: 'se yeeteo',                    emoji: '💨' },
+    carry:     { alias: ['cargar', 'upita'],       con: 'quiere cargar a',                solo: 'quiere que lo carguen',        emoji: '💪' },
+    kabedon:   { alias: [],                        con: 'le hace kabedon a',              solo: 'hizo kabedon a la pared',      emoji: '🧱' },
+    lappillow: { alias: ['regazo'],                con: 'quiere recostarse en el regazo de', solo: 'quiere un regazo de almohada', emoji: '🛏️' },
+    cry:       { alias: ['llorar', 'llora'],       con: 'quiere llorar con',              solo: 'quiere llorar',                emoji: '😭' },
+    laugh:     { alias: ['reir', 'risa'],          con: 'se rie a carcajadas con',        solo: 'se rie solo',                  emoji: '😂' },
+    smile:     { alias: ['sonreir', 'sonrisa'],    con: 'le sonrie a',                    solo: 'sonrie sin razon',             emoji: '😄' },
+    happy:     { alias: ['feliz', 'alegre'],       con: 'esta feliz con',                 solo: 'esta feliz de la vida',        emoji: '😊' },
+    angry:     { alias: ['enojado', 'furioso'],    con: 'esta furioso con',               solo: 'esta que trueno',              emoji: '😡' },
+    pout:      { alias: ['pucheros'],              con: 'le hace pucheros a',             solo: 'hace pucheros',                emoji: '😾' },
+    blush:     { alias: ['sonrojo', 'sonrojarse'], con: 'se sonrojo por',                 solo: 'se sonrojo solit@',            emoji: '😳' },
+    wink:      { alias: ['guino'],                 con: 'le guina el ojo a',              solo: 'guina el ojo',                 emoji: '😜' },
+    teehee:    { alias: ['travieso'],              con: 'le saca la lengua a',            solo: 'esta travies@',                emoji: '😝' },
+    bleh:      { alias: ['lengua'],                con: 'le saca la lengua a',            solo: 'bleh',                         emoji: '😛' },
+    smug:      { alias: ['presumido'],             con: 'mira con superioridad a',        solo: 'modo presumido activado',      emoji: '😏' },
+    baka:      { alias: ['tonto', 'idiota'],       con: 'le dice BAKA a',                 solo: 'se dice baka a si mismo',      emoji: '🤡' },
+    stare:     { alias: ['mirar', 'mirada'],       con: 'mira fijamente a',               solo: 'mira perdido en la nada',      emoji: '👀' },
+    wave:      { alias: ['saludar', 'saludo'],     con: 'saluda a',                       solo: 'saluda al viento',             emoji: '👋' },
+    salute:    { alias: ['firmes'],                con: 'saluda militarmente a',          solo: 'se saluda a si mismo',         emoji: '🫡' },
+    nod:       { alias: ['asentir'],               con: 'le da la razon a',               solo: 'asiente solo',                 emoji: '🙂' },
+    nope:      { alias: ['nel'],                   con: 'le dice que NO a',               solo: 'nope, ni de chiste',           emoji: '🙅' },
+    thumbsup:  { alias: ['pulgar', 'like'],        con: 'le da pulgar arriba a',          solo: 'se da pulgar arriba',          emoji: '👍' },
+    clap:      { alias: ['aplaudir', 'aplauso'],   con: 'le aplaude a',                   solo: 'aplaude solo',                 emoji: '👏' },
+    shrug:     { alias: ['nose'],                  con: 'se encoge de hombros ante',      solo: 'no sabe ni le importa',        emoji: '🤷' },
+    facepalm:  { alias: ['palma'],                 con: 'se hace facepalm por',           solo: 'facepalm epico',               emoji: '🤦' },
+    tableflip: { alias: ['mesa', 'voltearmesa'],   con: 'voltea la mesa por',             solo: 'voltea la mesa',               emoji: '🪑' },
+    think:     { alias: ['pensar'],                con: 'esta pensando en',               solo: 'piensa profundamente',         emoji: '🤔' },
+    confused:  { alias: ['confundido'],            con: 'queda confundido con',           solo: 'esta confundid@',              emoji: '😵' },
+    shocked:   { alias: ['shock'],                 con: 'queda en shock por',             solo: 'esta en shock',                emoji: '😱' },
+    bored:     { alias: ['aburrido'],              con: 'se aburre con',                  solo: 'esta aburrid@',                emoji: '🥱' },
+    yawn:      { alias: ['bostezo', 'bostezar'],   con: 'bosteza junto a',                solo: 'tiene suenito',                emoji: '🥱' },
+    sleep:     { alias: ['dormir', 'sueno'],       con: 'quiere dormir junto a',          solo: 'quiere dormir',                emoji: '😴' },
+    dance:     { alias: ['bailar', 'baile'],       con: 'quiere bailar con',              solo: 'baila solito',                 emoji: '🕺' },
+    spin:      { alias: ['girar', 'vueltas'],      con: 'quiere dar vueltas con',         solo: 'gira sin parar',               emoji: '🌀' },
+    shake:     { alias: ['sacudir'],               con: 'sacude a',                       solo: 'tiembla sin control',          emoji: '🫨' },
+    run:       { alias: ['correr', 'huir'],        con: 'corre hacia',                    solo: 'corre sin destino',            emoji: '🏃' },
+    lurk:      { alias: ['acechar'],               con: 'acecha a',                       solo: 'acecha en las sombras',        emoji: '🕵️' },
+    shoot:     { alias: ['disparar'],              con: 'le dispara a',                   solo: 'practica tiro al blanco',      emoji: '🔫' },
+    feed:      { alias: ['alimentar', 'darcomer'], con: 'quiere dar de comer a',          solo: 'quiere que le den de comer',   emoji: '🍙' },
+    nom:       { alias: ['comer', 'nomnom'],       con: 'se quiere comer a',              solo: 'nom nom nom',                  emoji: '🍽️' },
+    sip:       { alias: ['beber', 'sorber', 'cafe'], con: 'sorbe su bebida junto a',      solo: 'sorbe su cafecito',            emoji: '☕' },
+    wag:       { alias: ['colita'],                con: 'menea la colita para',           solo: 'menea la colita',              emoji: '🐶' },
+    nya:       { alias: ['nekomode', 'miau'],      con: 'le dice nya~ a',                 solo: 'nya~',                         emoji: '🐱' }
 };
+
+// ---------- MAPEO ALIAS → TIPO ----------
+const MAPA = {};
+for (const [tipo, d] of Object.entries(REACCIONES)) {
+    MAPA[tipo] = tipo;
+    for (const a of d.alias) MAPA[a] = tipo;
+}
 
 const TIPOS = Object.keys(REACCIONES);
 
-// Detecta qué reacción se invocó leyendo el texto original del mensaje
-function detectarTipo(msg) {
-    const texto = msg.message?.conversation
-        || msg.message?.extendedTextMessage?.text
-        || msg.message?.imageMessage?.caption
-        || '';
-    const match = texto.match(/^\s*[.!/](\w+)/);
-    if (!match) return null;
-    const invocado = match[1].toLowerCase();
-    return TIPOS.includes(invocado) ? invocado : null;
-}
-
-// Extrae menciones del mensaje (soporta @lid y @s.whatsapp.net)
-function extraerMenciones(msg) {
-    const ctx = msg.message?.extendedTextMessage?.contextInfo
-        || msg.message?.imageMessage?.contextInfo
-        || msg.message?.videoMessage?.contextInfo
-        || {};
-    const mencionados = ctx.mentionedJid || [];
-    return Array.isArray(mencionados) ? mencionados : [];
-}
-
-// Mención LIMPIA: PN real resuelto o @lid puro. NADA de JIDs inventados.
+// ---------- MENCION LIMPIA (resuelve @lid como antes) ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
             if (pn) {
                 const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                return { token: '@' + pj.split('@')[0], jids: [pj] };
+                return { token: '@' + pj.split('@')[0].replace(/\D/g, ''), jids: [pj] };
             }
         }
-    } catch (e) { /* sin mapeo local */ }
-    return { token: '@' + jid.split('@')[0], jids: [jid] };
+    } catch (e) { /* sin mapeo */ }
+    return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
+}
+
+// ---------- FUENTES: nekos.best → Delirius ----------
+async function pedirNekos(tipo) {
+    try {
+        const res = await fetch(NEKOS + tipo);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json?.results?.[0]?.url || null;
+    } catch { return null; }
+}
+
+async function pedirDelirius(tipo) {
+    try {
+        const res = await fetch(DELIRIUS + tipo);
+        if (!res.ok) return null;
+        const json = await res.json();
+        const d = json.data ?? json.datos;
+        if (typeof d === 'string') return d;
+        return d?.url || d?.gif || d?.image || d?.img || null;
+    } catch { return null; }
+}
+
+async function obtenerUrl(tipo) {
+    return (await pedirNekos(tipo)) || (await pedirDelirius(tipo));
+}
+
+// ---------- DESCARGAR ----------
+async function descargar(url) {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 15000);
+    const res = await fetch(url, { signal: c.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return Buffer.from(await res.arrayBuffer());
+}
+
+// ---------- DETECTAR QUÉ REACCIÓN SE INVOCÓ ----------
+function detectarTipo(msg) {
+    const texto = msg.message?.extendedTextMessage?.text
+               || msg.message?.conversation || '';
+    const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
+    return MAPA[invocado] || null;
 }
 
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
-    alias: [...TIPOS, 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime en GIF: angry, hug, kill, kiss, pat, slap... +30 más',
+    alias: [...TIPOS, ...Object.values(REACCIONES).flatMap(d => d.alias), 'reacciones', 'reaction'],
+    descripcion: 'Reacciones anime GIF: kiss, hug, slap, pat... +55 más',
     uso: '.<reaccion> [@usuario]',
-    ejecutar: async ({ sock, msg, argumento, responder }) => {
+    ejecutar: async ({ sock, msg, responder }) => {
         try {
-            const from = msg.key.remoteJid;
+            const jid = msg.key.remoteJid;
+            const sender = msg.key.participant || msg.key.remoteJid;
+            const senderName = msg.pushName || sender.split('@')[0].replace(/\D/g, '');
 
-            // Lista de todas las reacciones
-            const textoOriginal = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().trim();
-            if (/^\s*[.!/](reacciones|reaction|reactionlist)\s*$/i.test(textoOriginal) || argumento?.trim().toLowerCase() === 'help') {
-                const lista = TIPOS.map(t => REACCIONES[t].emoji + ' ' + t).join('  ·  ');
+            // ---------- AYUDA: .reacciones ----------
+            const texto = msg.message?.extendedTextMessage?.text || msg.message?.conversation || '';
+            const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
+
+            if (invocado === 'reacciones' || invocado === 'reaction' || invocado === 'reaccion') {
+                let lista = '';
+                for (let i = 0; i < TIPOS.length; i += 4) {
+                    lista += TIPOS.slice(i, i + 4).map(t => REACCIONES[t].emoji + ' .' + t).join('  ') + '\n';
+                }
                 return await responder.texto(
-                    '╭━━〔 🎭 𝐑𝐄𝐂𝐎𝐄 𝐀𝐈𝐄 〕━━\n' +
-                    '┃\n' +
-                    '┃ Usa: .<tipo> [@usuario]\n' +
-                    '┃ Ej: .kill @alguien · .hug · .slap\n' +
-                    '┃\n' +
-                    '┃ ' + lista + '\n' +
-                    '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    bold('REACCIONES') + ' 🎭\n' +
+                    'Usa .<reaccion> [@user]\n\n' +
+                    lista + '\n⚡ ' + bold('BOT-API')
                 );
             }
 
-            // Detectar qué reacción se invocó
+            // ---------- DETECTAR TIPO ----------
             const tipo = detectarTipo(msg);
             if (!tipo) {
-                return await responder.texto('❌ Reacción no válida. Usa .reacciones para ver todas.');
+                return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
             }
 
-            const data = REACCIONES[tipo];
-            const videoUrl = data.videos[Math.floor(Math.random() * data.videos.length)];
+            const d = REACCIONES[tipo];
 
-            // Autor de la reacción
-            const autorJid = msg.key.participant || msg.key.remoteJid;
-            const autorMen = await datosMencion(sock, autorJid);
+            // ---------- DETECTAR OBJETIVO ----------
+            const ctx = msg.message?.extendedTextMessage?.contextInfo;
+            let target = ctx?.participant || ctx?.mentionedJid?.[0] || null;
+            if (target === sender) target = null;
 
-            // Target (si mencionaron a alguien)
-            const mencionados = extraerMenciones(msg).filter(j => j !== autorJid);
-            let caption, menciones = [...autorMen.jids];
+            const yo = { token: '`' + senderName + '`' };
+            let caption;
+            const mentions = [];
 
-            if (mencionados.length > 0) {
-                const targetMen = await datosMencion(sock, mencionados[0]);
-                targetMen.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
-                caption = `${data.emoji} ${autorMen.token} *${data.target}* ${targetMen.token}`;
+            if (target) {
+                const t = await datosMencion(sock, target);
+                mentions.push(...t.jids);
+                caption = yo.token + ' ' + bold(d.con) + ' ' + t.token + ' ' + d.emoji;
             } else {
-                caption = `${data.emoji} ${autorMen.token} *${data.self}*`;
+                caption = yo.token + ' ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // Descargar el video
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000);
-            const vidResp = await fetch(videoUrl, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (!vidResp.ok) throw new Error('Video respondió ' + vidResp.status);
-            const vidBuffer = Buffer.from(await vidResp.arrayBuffer());
+            // ---------- OBTENER GIF ----------
+            const url = await obtenerUrl(tipo);
 
-            // Enviar como GIF (loop automático en el chat)
-            await sock.sendMessage(from, {
-                video: vidBuffer,
-                mimetype: 'video/mp4',
-                gifPlayback: true,
-                caption,
-                mentions: menciones
-            }, { quoted: msg });
+            if (!url) {
+                return await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
+            }
+
+            // ---------- ENVIAR: gif → sticker → texto ----------
+            try {
+                const buf = await descargar(url);
+                await sock.sendMessage(
+                    jid,
+                    { video: buf, mimetype: 'video/mp4', gifPlayback: true, caption, mentions },
+                    { quoted: msg }
+                );
+                return;
+            } catch (e) {
+                console.error('[REACCION] video:', e.message);
+            }
+
+            try {
+                const { Sticker } = await import('wa-sticker-formatter');
+                const st = new Sticker(url, { pack: 'BOT-API ⚡', author: d.emoji, type: 'animated', quality: 80 });
+                await sock.sendMessage(jid, { sticker: await st.toBuffer() }, { quoted: msg });
+                await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
+                return;
+            } catch (e) {
+                console.error('[REACCION] sticker:', e.message);
+            }
+
+            await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
 
         } catch (error) {
             console.error('[REACCION] Error:', error);
-            await responder.texto('❌ Error enviando la reacción: ' + (error.message || error));
+            await responder.texto('❌ Error enviando la reaccion: ' + (error.message || error));
         }
     }
 };
