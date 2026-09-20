@@ -1,8 +1,5 @@
-// commands/interaction/reaccion.js — 🎭 Reacciones anime GIF (nekos.best + Delirius)
-// ============================================================
-// .kiss @Eve  →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐝𝐚𝐫 𝐦𝐮𝐜𝐡𝐨𝐬 𝐛𝐞𝐬𝐨𝐬 𝐚 @Eve 💋
-// .kiss       →  `RHLM` 𝐪𝐮𝐢𝐞𝐫𝐞 𝐮𝐧 𝐛𝐞𝐬𝐨 💋
-// ============================================================
+// commands/interaction/reaccion.js — 🎭 Reacciones anime GIF
+import fetch from 'node-fetch';  // ⬅️ ESTE FALTABA, ES LA CLAVE
 
 const NEKOS = 'https://nekos.best/api/v2/';
 const DELIRIUS = 'https://api.delirius.online/anime/';
@@ -15,8 +12,7 @@ function bold(texto) {
     });
 }
 
-// ---------- CATÁLOGO: 60 GIFS DE REACCIÓN (nekos.best) ----------
-// con = frase con objetivo | solo = frase sin objetivo
+// ---------- CATÁLOGO: 60 GIFS DE REACCIÓN ----------
 const REACCIONES = {
     kiss:      { alias: ['besar', 'beso'],         con: 'quiere dar muchos besos a',      solo: 'quiere un beso',               emoji: '💋' },
     hug:       { alias: ['abrazar', 'abrazo'],     con: 'quiere abrazar fuerte a',        solo: 'quiere un abrazo',             emoji: '🤗' },
@@ -85,10 +81,9 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
     MAPA[tipo] = tipo;
     for (const a of d.alias) MAPA[a] = tipo;
 }
-
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- MENCION LIMPIA (resuelve @lid como antes) ----------
+// ---------- MENCION LIMPIA ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -98,43 +93,41 @@ async function datosMencion(sock, jid) {
                 return { token: '@' + pj.split('@')[0].replace(/\D/g, ''), jids: [pj] };
             }
         }
-    } catch (e) { /* sin mapeo */ }
+    } catch (e) {}
     return { token: '@' + jid.split('@')[0].replace(/\D/g, ''), jids: [jid] };
 }
 
 // ---------- FUENTES: nekos.best → Delirius ----------
 async function pedirNekos(tipo) {
     try {
-        const res = await fetch(NEKOS + tipo);
+        const res = await fetch(NEKOS + tipo, { timeout: 15000 });
         if (!res.ok) return null;
         const json = await res.json();
         return json?.results?.[0]?.url || null;
-    } catch { return null; }
+    } catch (e) {
+        console.error('[REACCION] nekos error:', e.message);
+        return null;
+    }
 }
 
 async function pedirDelirius(tipo) {
     try {
-        const res = await fetch(DELIRIUS + tipo);
+        const res = await fetch(DELIRIUS + tipo, { timeout: 15000 });
         if (!res.ok) return null;
         const json = await res.json();
         const d = json.data ?? json.datos;
         if (typeof d === 'string') return d;
         return d?.url || d?.gif || d?.image || d?.img || null;
-    } catch { return null; }
+    } catch (e) {
+        console.error('[REACCION] delirius error:', e.message);
+        return null;
+    }
 }
 
 async function obtenerUrl(tipo) {
-    return (await pedirNekos(tipo)) || (await pedirDelirius(tipo));
-}
-
-// ---------- DESCARGAR ----------
-async function descargar(url) {
-    const c = new AbortController();
-    const t = setTimeout(() => c.abort(), 15000);
-    const res = await fetch(url, { signal: c.signal });
-    clearTimeout(t);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return Buffer.from(await res.arrayBuffer());
+    const url = await pedirNekos(tipo);
+    if (url) return url;
+    return await pedirDelirius(tipo);
 }
 
 // ---------- DETECTAR QUÉ REACCIÓN SE INVOCÓ ----------
@@ -157,67 +150,74 @@ export default {
             const sender = msg.key.participant || msg.key.remoteJid;
             const senderName = msg.pushName || sender.split('@')[0].replace(/\D/g, '');
 
-            // ---------- AYUDA: .reacciones ----------
             const texto = msg.message?.extendedTextMessage?.text || msg.message?.conversation || '';
             const invocado = (texto.match(/^\.([^\s]+)/)?.[1] || '').toLowerCase();
 
+            // ---------- AYUDA ----------
             if (invocado === 'reacciones' || invocado === 'reaction' || invocado === 'reaccion') {
                 let lista = '';
                 for (let i = 0; i < TIPOS.length; i += 4) {
                     lista += TIPOS.slice(i, i + 4).map(t => REACCIONES[t].emoji + ' .' + t).join('  ') + '\n';
                 }
-                return await responder.texto(
-                    bold('REACCIONES') + ' 🎭\n' +
-                    'Usa .<reaccion> [@user]\n\n' +
-                    lista + '\n⚡ ' + bold('BOT-API')
-                );
+                return await responder.texto(bold('REACCIONES') + ' 🎭\nUsa .<reaccion> [@user]\n\n' + lista + '\n⚡ ' + bold('BOT-API'));
             }
 
-            // ---------- DETECTAR TIPO ----------
             const tipo = detectarTipo(msg);
-            if (!tipo) {
-                return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
-            }
+            if (!tipo) return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver todas.');
 
             const d = REACCIONES[tipo];
 
-            // ---------- DETECTAR OBJETIVO ----------
+            // ---------- OBJETIVO ----------
             const ctx = msg.message?.extendedTextMessage?.contextInfo;
             let target = ctx?.participant || ctx?.mentionedJid?.[0] || null;
             if (target === sender) target = null;
 
-            const yo = { token: '`' + senderName + '`' };
             let caption;
             const mentions = [];
-
             if (target) {
                 const t = await datosMencion(sock, target);
                 mentions.push(...t.jids);
-                caption = yo.token + ' ' + bold(d.con) + ' ' + t.token + ' ' + d.emoji;
+                caption = '`' + senderName + '` ' + bold(d.con) + ' ' + t.token + ' ' + d.emoji;
             } else {
-                caption = yo.token + ' ' + bold(d.solo) + ' ' + d.emoji;
+                caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- OBTENER GIF ----------
+            // ---------- OBTENER URL DEL GIF ----------
             const url = await obtenerUrl(tipo);
-
             if (!url) {
-                return await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
+                return await responder.texto('❌ No encontre gif para: ' + tipo);
             }
 
-            // ---------- ENVIAR: gif → sticker → texto ----------
+            // ---------- MÉTODO 1: URL directa a Baileys (más confiable) ----------
             try {
-                const buf = await descargar(url);
-                await sock.sendMessage(
-                    jid,
-                    { video: buf, mimetype: 'video/mp4', gifPlayback: true, caption, mentions },
-                    { quoted: msg }
-                );
+                await sock.sendMessage(jid, {
+                    video: { url },
+                    gifPlayback: true,
+                    caption,
+                    mentions
+                }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] video:', e.message);
+                console.error('[REACCION] metodo1 URL:', e.message);
             }
 
+            // ---------- MÉTODO 2: descargar buffer ----------
+            try {
+                const res = await fetch(url, { timeout: 20000 });
+                const buffer = Buffer.from(await res.arrayBuffer());
+                await sock.sendMessage(jid, {
+                    video: buffer,
+                    mimetype: 'video/mp4',
+                    gifPlayback: true,
+                    caption,
+                    mentions
+                }, { quoted: msg });
+                return;
+            } catch (e) {
+                console.error('[REACCION] metodo2 buffer:', e.message);
+            }
+
+            // ---------- MÉTODO 3: sticker animado ----------
             try {
                 const { Sticker } = await import('wa-sticker-formatter');
                 const st = new Sticker(url, { pack: 'BOT-API ⚡', author: d.emoji, type: 'animated', quality: 80 });
@@ -225,14 +225,15 @@ export default {
                 await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
                 return;
             } catch (e) {
-                console.error('[REACCION] sticker:', e.message);
+                console.error('[REACCION] metodo3 sticker:', e.message);
             }
 
-            await sock.sendMessage(jid, { text: caption, mentions }, { quoted: msg });
+            // ---------- ÚLTIMO RECURSO ----------
+            await responder.texto(caption);
 
         } catch (error) {
             console.error('[REACCION] Error:', error);
-            await responder.texto('❌ Error enviando la reaccion: ' + (error.message || error));
+            await responder.texto('❌ Error: ' + (error.message || error));
         }
     }
 };
