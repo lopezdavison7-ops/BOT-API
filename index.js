@@ -18,8 +18,6 @@ import readline from 'readline';
 import { handleMessage } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
 import { manejarDespedida } from './commands/group/despedida.js';
-import { registrarRutasSubbot } from './lib/subbotWeb.js';
-import { inicializarGestorSubbots, reconectarSubbotsGuardados } from './lib/subbotManager.js';
 
 const baileys = baileysNS.default ?? baileysNS;
 const makeWASocket = typeof baileys === 'function' ? baileys : baileys.makeWASocket;
@@ -46,15 +44,7 @@ let comandos = null;
 
 const app = Fastify({ logger: false });
 
-// En Render usamos un solo Web Service.
-// Panel web de subbots dentro del MISMO servidor/puerto de Render.
-registrarRutasSubbot(app);
-
-// La página principal abre directamente el panel de subbots.
-// La ruta /subbot es la que sirve el HTML real.
-app.get('/', async (req, reply) => {
-    return reply.redirect('/subbot');
-});
+app.get('/', async () => ({ status: 'online', bot: 'BOT-API' }));
 
 app.get('/qr', async (req, reply) => {
     if (!ultimoQR) {
@@ -188,17 +178,6 @@ async function iniciarBot() {
 
         comandos = await loadCommands();
         console.log(`📦 Comandos cargados: ${comandos.size}`);
-
-        // Los subbots reutilizan el mismo Map de comandos del bot principal.
-        // Esto permite que /subbot funcione aunque Render solo ejecute
-        // `npm start` (index.js) y no un segundo proceso.
-        inicializarGestorSubbots(() => comandos);
-
-        // Recuperar sesiones de subbots que ya estaban guardadas.
-        // Se ejecuta en segundo plano para no bloquear el arranque principal.
-        reconectarSubbotsGuardados().catch(error => {
-            console.error('[SUBBOT] ❌ Error reconectando sesiones:', error?.message || error);
-        });
 
         const logger = pino({ level: 'debug' });
         const opciones = {
