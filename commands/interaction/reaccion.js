@@ -1,11 +1,15 @@
 // commands/interaction/reacciones.js — 🎭 Reacciones anime
 // ============================================================
-// Fuentes: Delirius (principal) → otakugifs.xyz (respaldo)
+// Fuentes: Delirius → AlyaCore (key) → otakugifs (respaldo)
 // Caption: solo la frase con emoji (sin título)
 // ============================================================
 
 const DELIRIUS_RX = 'https://api.delirius.online/reactions/';
 const OTAKUGIFS = 'https://api.otakugifs.xyz/gif?reaction=';
+
+// ---------- ALYACORE (API CON KEY) ----------
+const ALYA_BASE = 'https://api.alyacore.xyz/';
+const ALYA_KEY = 'oboe';
 
 // ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
 function bold(texto) {
@@ -15,7 +19,7 @@ function bold(texto) {
     });
 }
 
-// ---------- CATÁLOGO (alias ES + frases + emoji) ----------
+// ---------- CATÁLOGO ----------
 const REACCIONES = {
     kiss:      { alias: ['besar', 'beso'],        con: 'quiere dar muchos besos a',     solo: 'quiere un beso',            emoji: '💋' },
     hug:       { alias: ['abrazar', 'abrazo'],    con: 'quiere abrazar fuerte a',       solo: 'quiere un abrazo',          emoji: '🤗' },
@@ -88,7 +92,6 @@ const REACCIONES = {
     nya:       { alias: ['miau'],                 con: 'le dijo nya~ a',                solo: 'nya~',                      emoji: '🐱' }
 };
 
-// ---------- MAPEO ALIAS → TIPO ----------
 const MAPA = {};
 for (const [tipo, d] of Object.entries(REACCIONES)) {
     MAPA[tipo] = tipo;
@@ -96,50 +99,21 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- MAPEO DE FALLBACK para otakugifs.xyz ----------
-// Si Delirius no tiene la reacción, otakugifs usa la equivalente más cercana
+// ---------- EQUIVALENTES otakugifs (último respaldo) ----------
 const OTAKUGIFS_MAP = {
-    // Delirius tiene todo esto, pero si falla, otakugifs responde con equivalente
-    baka: 'angry',
-    smoke: 'bored',
-    angry: 'angry',
-    kill: 'angry',
-    drunk: 'bored',
-    eat: 'nom',
-    nom: 'nom',
-    coffee: 'sip',
-    sip: 'sip',
-    feed: 'nom',
-    lick: 'kiss',
-    love: 'kiss',
-    bonk: 'angry',
-    kick: 'slap',
-    punch: 'slap',
-    shoot: 'slap',
-    yeet: 'slap',
-    tableflip: 'angry',
-    stare: 'think',
-    smug: 'smile',
-    nod: 'thumbsup',
-    nope: 'shrug',
-    shrug: 'shrug',
-    confused: 'think',
-    shocked: 'cry',
-    scared: 'cry',
-    yawn: 'sleep',
-    sip: 'sip',
-    wag: 'happy',
-    nya: 'happy',
-    kabedon: 'hug',
-    lappillow: 'hug',
-    carry: 'hug',
-    handhold: 'hug',
-    salute: 'thumbsup',
-    spin: 'dance',
-    shake: 'dance',
-    lurk: 'think',
-    peck: 'kiss',
-    blowkiss: 'kiss'
+    baka: 'angry', kill: 'angry', bonk: 'angry', tableflip: 'angry',
+    smoke: 'bored', drunk: 'bored',
+    kick: 'slap', punch: 'slap', shoot: 'slap', yeet: 'slap',
+    lick: 'kiss', love: 'kiss', peck: 'kiss', blowkiss: 'kiss',
+    eat: 'nom', nom: 'nom', feed: 'nom',
+    coffee: 'sip', sip: 'sip',
+    kabedon: 'hug', carry: 'hug', handhold: 'hug', lappillow: 'hug',
+    spin: 'dance', shake: 'dance',
+    shocked: 'cry', scared: 'cry',
+    smug: 'smile', nod: 'thumbsup', salute: 'thumbsup',
+    nope: 'shrug', shrug: 'shrug',
+    confused: 'think', stare: 'think', lurk: 'think',
+    yawn: 'sleep', wag: 'happy', nya: 'happy'
 };
 
 // ---------- MENCION LIMPIA ----------
@@ -156,24 +130,59 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0], jids: [jid] };
 }
 
+// ---------- EXTRAER URL DE CUALQUIER FORMA DE JSON ----------
+function sacarUrl(json) {
+    if (!json || typeof json !== 'object') return null;
+    const d = json.data ?? json.result ?? json.results ?? json.datos ?? json;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d) && d[0]) return d[0].url || d[0].video || d[0].gif || null;
+    if (d && typeof d === 'object') {
+        return d.url || d.video || d.gif || d.image || d.img || d.file || null;
+    }
+    return null;
+}
+
 // ---------- FUENTE 1: DELIRIUS ----------
 async function pedirDelirius(tipo) {
     try {
         const res = await fetch(DELIRIUS_RX + tipo);
         if (!res.ok) return null;
         const json = await res.json();
-        const status = json.status ?? json.estado ?? false;
-        const d = json.data ?? json.datos;
-        if (!status || !d) return null;
-        return { url: d.url, tipo: 'mp4', fuente: 'delirius' };
-    } catch (e) {
-        return null;
-    }
+        const url = sacarUrl(json);
+        return url ? { url, tipo: 'mp4', fuente: 'delirius' } : null;
+    } catch (e) { return null; }
 }
 
-// ---------- FUENTE 2: OTAKUGIFS (gif, respaldo) ----------
+// ---------- FUENTE 2: ALYACORE (con key, varios patrones) ----------
+async function pedirAlyaCore(tipo) {
+    const rutas = [
+        `reactions/${tipo}?apikey=${ALYA_KEY}`,
+        `reactions/${tipo}?key=${ALYA_KEY}`,
+        `reaction/${tipo}?apikey=${ALYA_KEY}`,
+        `api/reactions/${tipo}?apikey=${ALYA_KEY}`,
+        `reactions/${tipo}`
+    ];
+
+    for (const ruta of rutas) {
+        try {
+            const res = await fetch(ALYA_BASE + ruta, {
+                headers: {
+                    'apikey': ALYA_KEY,
+                    'Authorization': 'Bearer ' + ALYA_KEY,
+                    'Accept': 'application/json'
+                }
+            });
+            if (!res.ok) continue;
+            const json = await res.json();
+            const url = sacarUrl(json);
+            if (url) return { url, tipo: url.endsWith('.mp4') ? 'mp4' : 'gif', fuente: 'alyacore' };
+        } catch (e) { continue; }
+    }
+    return null;
+}
+
+// ---------- FUENTE 3: OTAKUGIFS (gif + equivalentes) ----------
 async function pedirOtakugifs(tipo) {
-    // Primero probar el tipo directo
     const candidatos = [tipo, OTAKUGIFS_MAP[tipo]].filter(Boolean);
     const vistos = new Set();
 
@@ -190,11 +199,11 @@ async function pedirOtakugifs(tipo) {
     return null;
 }
 
-// ---------- CADENA: delirius → otakugifs ----------
+// ---------- CADENA: delirius → alyacore → otakugifs ----------
 async function obtenerVideo(tipo) {
-    const d = await pedirDelirius(tipo);
-    if (d) return d;
-    return await pedirOtakugifs(tipo);
+    return (await pedirDelirius(tipo))
+        || (await pedirAlyaCore(tipo))
+        || (await pedirOtakugifs(tipo));
 }
 
 // ---------- EXTRAER COMANDO ----------
@@ -209,7 +218,7 @@ export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...TIPOS, ...Object.values(REACCIONES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime: Delirius + otakugifs respaldo',
+    descripcion: 'Reacciones anime: Delirius + AlyaCore + otakugifs',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -250,13 +259,12 @@ export default {
             if (target) {
                 const t = await datosMencion(sock, target);
                 mentions.push(...t.jids);
-                // SOLO LA FRASE, sin título
                 caption = '`' + senderName + '` ' + bold(d.con) + ' ' + t.token + ' ' + d.emoji;
             } else {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- OBTENER VIDEO (delirius → otakugifs) ----------
+            // ---------- OBTENER VIDEO ----------
             const video = await obtenerVideo(tipo);
 
             if (!video) {
@@ -265,10 +273,9 @@ export default {
 
             // ---------- ENVIAR ----------
             try {
-                const esMp4 = video.tipo === 'mp4';
                 await sock.sendMessage(jid, {
                     video: { url: video.url },
-                    mimetype: esMp4 ? 'video/mp4' : 'video/mp4',
+                    mimetype: 'video/mp4',
                     gifPlayback: true,
                     caption,
                     mentions
