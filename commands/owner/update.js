@@ -19,7 +19,7 @@ export default {
 
     alias: [
         'actualizar',
-        'upd'
+        'fix'
     ],
 
     owner: true,
