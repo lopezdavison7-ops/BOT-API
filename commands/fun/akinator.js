@@ -1,11 +1,11 @@
-// commands/fun/akinator.js — 🧞 Akinator offline (sin APIs externas)
+// commands/fun/akinator.js — 🧞 Akinator offline con selector de idioma
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
     nombre: 'akinator',
     categoria: 'Juegos',
     alias: ['aki', 'genio', 'adivina'],
-    descripcion: 'Akinator: piensa en un personaje y yo lo adivino',
+    descripcion: 'Akinator: piensa en un personaje y yo lo adivino (ES/EN)',
     uso: '.akinator',
     ejecutar: async ({ msg, responder, sock }) => {
         try {
@@ -30,58 +30,102 @@ button:active{transform:scale(.97)}
 .b2{background:linear-gradient(135deg,#ef4444,#dc2626)}
 .b3{background:linear-gradient(135deg,#64748b,#475569)}
 .bstart{background:linear-gradient(135deg,#8b5cf6,#ec4899);font-size:16px;padding:14px;width:100%}
+.blang{background:linear-gradient(135deg,#3b82f6,#2563eb);font-size:15px;padding:14px}
 .hidden{display:none}
-img.face{width:90px;height:90px;object-fit:cover;border-radius:14px;border:2px solid #8b5cf6;display:block;margin:0 auto 10px;background:#1e1b4b}
 .gname{text-align:center;font-size:18px;font-weight:800;color:#f0abfc;margin-bottom:3px}
 .gdesc{text-align:center;color:#94a3b8;font-size:12px;margin-bottom:12px;min-height:16px}
 .foot{text-align:center;color:#475569;font-size:10px;margin-top:10px}
+.flags{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.flag-btn{padding:18px 10px;text-align:center;font-size:15px;font-weight:700;background:rgba(255,255,255,.05);border:1px solid rgba(139,92,246,.3);border-radius:14px;color:#fff;cursor:pointer;transition:transform .1s}
+.flag-btn:active{transform:scale(.97)}
+.flag-emoji{font-size:36px;display:block;margin-bottom:6px}
 </style>
 <div class="card">
 <div class="logo">⚡ BOT-API </div>
-<div id="scr-start">
+
+<div id="scr-lang">
 <div class="genie">🧞</div>
 <h1>Akinator</h1>
-<p class="sub">Piensa en un personaje real o ficticio.<br>Yo te leo la mente 🔮</p>
-<button class="bstart" onclick="G.start()">▶ JUGAR</button>
+<p class="sub" id="langSub">Elige tu idioma / Choose your language</p>
+<div class="flags">
+<div class="flag-btn" onclick="G.setLang('es')"><span class="flag-emoji">🇪🇸</span>Español</div>
+<div class="flag-btn" onclick="G.setLang('en')"><span class="flag-emoji">🇺🇸</span>English</div>
 </div>
+</div>
+
+<div id="scr-start" class="hidden">
+<div class="genie">🧞</div>
+<h1>Akinator</h1>
+<p class="sub" id="t_sub">Piensa en un personaje real o ficticio. Yo te leo la mente 🔮</p>
+<button class="bstart" onclick="G.start()" id="t_play">▶ JUGAR</button>
+</div>
+
 <div id="scr-q" class="hidden">
 <div class="bar"><div id="prog"></div></div>
 <div class="step"><span id="stepN">Pregunta 1</span><span id="progT">0%</span></div>
 <div class="q" id="qText">...</div>
 <div class="btns">
-<button class="b1" onclick="G.answer(1)">Sí</button>
-<button class="b2" onclick="G.answer(0)">No</button>
-<button class="b3" onclick="G.answer(2)">No sé</button>
+<button class="b1" onclick="G.answer(1)" id="t_yes">Sí</button>
+<button class="b2" onclick="G.answer(0)" id="t_no">No</button>
+<button class="b3" onclick="G.answer(2)" id="t_dk">No sé</button>
 </div>
 </div>
+
 <div id="scr-guess" class="hidden">
 <div class="genie">🤔</div>
 <div class="gname" id="gName"></div>
 <div class="gdesc" id="gDesc"></div>
 <div class="btns">
-<button class="b1" onclick="G.verdict(1)">✅ Sí, es él/ella</button>
-<button class="b2" onclick="G.verdict(0)">❌ No, sigue</button>
+<button class="b1" onclick="G.verdict(1)" id="t_yesit">✅ Sí, es él/ella</button>
+<button class="b2" onclick="G.verdict(0)" id="t_noit">❌ No, sigue</button>
 </div>
 </div>
+
 <div id="scr-end" class="hidden">
 <div class="genie" id="endEmoji">🎉</div>
 <h1 id="endTitle"></h1>
 <p class="sub" id="endText"></p>
-<button class="bstart" onclick="G.start()">🔄 Jugar de nuevo</button>
+<button class="bstart" onclick="G.reset()" id="t_again">🔄 Jugar de nuevo</button>
 </div>
+
 <div class="foot">🧞 Akinator offline · 💙 BOT-API</div>
 </div>
+
 <script>
-const G = {
-Q: ['¿Es una persona real?','¿Es hombre?','¿Sigue vivo?','¿Es de anime o manga?','¿Es de película o serie?','¿Es músico o cantante?','¿Es deportista?','¿Es futbolista?','¿Es villano o malvado?','¿Tiene superpoderes o magia?','¿Es de videojuegos?','¿Es de Disney o Pixar?','¿Es de Marvel o DC?','¿Es meme de internet?','¿Es latino o hispano?','¿Es de Estados Unidos?','¿Es de Asia?','¿Es histórico o antiguo?','¿Es millonario?','¿Es niño o joven?'],
-P: [
+const T = {
+es: {
+  sub: 'Piensa en un personaje real o ficticio.<br>Yo te leo la mente 🔮',
+  play: '▶ JUGAR',
+  yes: 'Sí', no: 'No', dk: 'No sé',
+  yesit: '✅ Sí, es él/ella', noit: '❌ No, sigue',
+  again: '🔄 Jugar de nuevo',
+  step: 'Pregunta',
+  win: '¡GANÉ!', winT: 'Leí tu mente: ',
+  lose: 'Me ganaste', loseT: 'No pude adivinarlo. ¡Eres un crack! 🧠',
+  guess: '¿Es tu personaje?',
+  Q: ['¿Es una persona real?','¿Es hombre?','¿Sigue vivo?','¿Es de anime o manga?','¿Es de película o serie?','¿Es músico o cantante?','¿Es deportista?','¿Es futbolista?','¿Es villano o malvado?','¿Tiene superpoderes o magia?','¿Es de videojuegos?','¿Es de Disney o Pixar?','¿Es de Marvel o DC?','¿Es meme de internet?','¿Es latino o hispano?','¿Es de Estados Unidos?','¿Es de Asia?','¿Es histórico o antiguo?','¿Es millonario?','¿Es niño o joven?']
+},
+en: {
+  sub: 'Think of a real or fictional character.<br>I will read your mind 🔮',
+  play: '▶ PLAY',
+  yes: 'Yes', no: 'No', dk: "Don't know",
+  yesit: "✅ Yes, it's him/her", noit: '❌ No, keep going',
+  again: '🔄 Play again',
+  step: 'Question',
+  win: 'I WON!', winT: 'I read your mind: ',
+  lose: 'You beat me', loseT: "Couldn't guess. You're a crack! 🧠",
+  guess: 'Is this your character?',
+  Q: ['Is it a real person?','Is it male?','Is it still alive?','Is it from anime/manga?','Is it from a movie/series?','Is it a musician/singer?','Is it an athlete?','Is it a football/soccer player?','Is it a villain?','Does it have superpowers/magic?','Is it from a video game?','Is it from Disney/Pixar?','Is it from Marvel/DC?','Is it an internet meme?','Is it Latin/Hispanic?','Is it from the USA?','Is it from Asia?','Is it historical/ancient?','Is it a millionaire?','Is it a child/young person?']
+}
+};
+const P = [
 ['Cristiano Ronaldo','11100011000000000010'],
 ['Lionel Messi','11100011000000100010'],
 ['Neymar Jr','11100011000000100010'],
 ['Shakira','10100100000000100010'],
 ['Bad Bunny','11100100000000100010'],
 ['Frida Kahlo','10000000000000100100'],
-['García Márquez','11000000000000100100'],
+['Gabriel García Márquez','11000000000000100100'],
 ['Simón Bolívar','11000000000000100100'],
 ['Obama','11100000000000010010'],
 ['Donald Trump','11100000000000010100'],
@@ -127,68 +171,84 @@ P: [
 ['Pepe the Frog','01100000000001000000'],
 ['Doge','01100000000001000000'],
 ['Grumpy Cat','00100000000001000000']
-],
-cand: [], used: [], n: 0, guessIdx: 0,
+];
+const G = {
+lang: 'es', cand: [], used: [], n: 0, guessIdx: 0, curQ: 0, curName: '',
 $(id) { return document.getElementById(id); },
-show(id) { ['scr-start','scr-q','scr-guess','scr-end'].forEach(s => this.$(s).classList.toggle('hidden', s !== id)); },
-start() {
-this.cand = this.P.map((p, i) => i);
-this.used = []; this.n = 0; this.guessIdx = 0;
-this.nextQ();
+show(id) { ['scr-lang','scr-start','scr-q','scr-guess','scr-end'].forEach(s => this.$(s).classList.toggle('hidden', s !== id)); },
+setLang(l) {
+  this.lang = l;
+  const t = T[l];
+  this.$('t_sub').innerHTML = t.sub;
+  this.$('t_play').textContent = t.play;
+  this.$('t_yes').textContent = t.yes;
+  this.$('t_no').textContent = t.no;
+  this.$('t_dk').textContent = t.dk;
+  this.$('t_yesit').textContent = t.yesit;
+  this.$('t_noit').textContent = t.noit;
+  this.$('t_again').textContent = t.again;
+  this.show('scr-start');
 },
+start() {
+  this.cand = P.map((_, i) => i);
+  this.used = []; this.n = 0; this.guessIdx = 0;
+  this.nextQ();
+},
+reset() { this.show('scr-lang'); },
 bestQ() {
-let best = -1, bestScore = 1e9;
-for (let q = 0; q < this.Q.length; q++) {
-if (this.used.includes(q)) continue;
-let yes = 0;
-for (const i of this.cand) if (this.P[i][1][q] === '1') yes++;
-const score = Math.abs(yes - this.cand.length / 2);
-if (score < bestScore) { bestScore = score; best = q; }
-}
-return best;
+  let best = -1, bestScore = 1e9;
+  for (let q = 0; q < T[this.lang].Q.length; q++) {
+    if (this.used.includes(q)) continue;
+    let yes = 0;
+    for (const i of this.cand) if (P[i][1][q] === '1') yes++;
+    const score = Math.abs(yes - this.cand.length / 2);
+    if (score < bestScore) { bestScore = score; best = q; }
+  }
+  return best;
 },
 nextQ() {
-if (this.cand.length <= 2 || this.used.length >= this.Q.length) return this.guess();
-const q = this.bestQ();
-if (q < 0) return this.guess();
-this.curQ = q; this.used.push(q); this.n++;
-const prog = Math.round(100 * (1 - this.cand.length / this.P.length));
-this.show('scr-q');
-this.$('qText').textContent = this.Q[q];
-this.$('prog').style.width = prog + '%';
-this.$('progT').textContent = prog + '%';
-this.$('stepN').textContent = 'Pregunta ' + this.n;
+  if (this.cand.length <= 2 || this.used.length >= T[this.lang].Q.length) return this.guess();
+  const q = this.bestQ();
+  if (q < 0) return this.guess();
+  this.curQ = q; this.used.push(q); this.n++;
+  const prog = Math.round(100 * (1 - this.cand.length / P.length));
+  this.show('scr-q');
+  this.$('qText').textContent = T[this.lang].Q[q];
+  this.$('prog').style.width = prog + '%';
+  this.$('progT').textContent = prog + '%';
+  this.$('stepN').textContent = T[this.lang].step + ' ' + this.n;
 },
 answer(a) {
-if (a !== 2) {
-this.cand = this.cand.filter(i => this.P[i][1][this.curQ] === String(a));
-if (this.cand.length === 0) this.cand = [0];
-}
-this.nextQ();
+  if (a !== 2) {
+    this.cand = this.cand.filter(i => P[i][1][this.curQ] === String(a));
+    if (this.cand.length === 0) this.cand = [0];
+  }
+  this.nextQ();
 },
 guess() {
-if (this.guessIdx >= this.cand.length) return this.end(false);
-const p = this.P[this.cand[this.guessIdx]];
-this.curName = p[0];
-this.show('scr-guess');
-this.$('gName').textContent = p[0];
-this.$('gDesc').textContent = '¿Es tu personaje?';
+  if (this.guessIdx >= this.cand.length) return this.end(false);
+  const p = P[this.cand[this.guessIdx]];
+  this.curName = p[0];
+  this.show('scr-guess');
+  this.$('gName').textContent = p[0];
+  this.$('gDesc').textContent = T[this.lang].guess;
 },
 verdict(w) {
-if (w) return this.end(true);
-this.guessIdx++;
-if (this.guessIdx >= this.cand.length) {
-if (this.used.length >= this.Q.length) return this.end(false);
-this.guessIdx = 0;
-return this.nextQ();
-}
-this.guess();
+  if (w) return this.end(true);
+  this.guessIdx++;
+  if (this.guessIdx >= this.cand.length) {
+    if (this.used.length >= T[this.lang].Q.length) return this.end(false);
+    this.guessIdx = 0;
+    return this.nextQ();
+  }
+  this.guess();
 },
 end(w) {
-this.show('scr-end');
-this.$('endEmoji').textContent = w ? '🎉' : '🏳️';
-this.$('endTitle').textContent = w ? '¡GANÉ!' : 'Me ganaste';
-this.$('endText').textContent = w ? 'Leí tu mente: ' + this.curName + ' 🧞' : 'No pude adivinarlo. ¡Eres un crack! 🧠';
+  this.show('scr-end');
+  const t = T[this.lang];
+  this.$('endEmoji').textContent = w ? '🎉' : '🏳️';
+  this.$('endTitle').textContent = w ? t.win : t.lose;
+  this.$('endText').textContent = w ? t.winT + this.curName + ' 🧞' : t.loseT;
 }
 };
 window.G = G;
