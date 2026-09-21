@@ -11,7 +11,7 @@ export default {
 
     alias: [
         'depositar',
-        'dep'
+        'd'
     ],
 
     descripcion:
