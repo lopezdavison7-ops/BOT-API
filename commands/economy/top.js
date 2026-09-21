@@ -1,4 +1,4 @@
-// commands/economy/baltop.js — vFINAL3: total de coins con diseño original
+// commands/economy/baltop.js — vFINAL4: nombres guardados en DB
 import fs from 'fs';
 import path from 'path';
 
@@ -20,8 +20,18 @@ function guardarDB(db) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 const fmt = n => '$' + n.toLocaleString('en-US');
 
-// Mención LIMPIA: o el PN real resuelto por Baileys, o el @lid puro. NADA de JIDs inventados.
-async function datosMencion(sock, jid) {
+// Mención LIMPIA: primero nombre guardado, luego PN real, luego @lid puro
+async function datosMencion(sock, jid, nombreGuardado) {
+    // Si tenemos nombre guardado en la DB, usarlo directamente
+    if (nombreGuardado && nombreGuardado.trim()) {
+        return { 
+            token: '*' + nombreGuardado + '*', 
+            jids: [jid],
+            esNombre: true
+        };
+    }
+
+    // Intentar resolver @lid a número real
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
@@ -30,15 +40,22 @@ async function datosMencion(sock, jid) {
                 return { token: '@' + pj.split('@')[0], jids: [pj] };
             }
         }
-    } catch (e) { /* sin mapeo local, usamos el lid puro */ }
-    return { token: '@' + jid.split('@')[0], jids: [jid] };
+    } catch (e) { /* sin mapeo local */ }
+
+    // Si no se pudo resolver, mostrar ID sin el @
+    const idLimpio = jid.split('@')[0];
+    return { 
+        token: '*Usuario ' + idLimpio.slice(-4) + '*', 
+        jids: [jid],
+        esNombre: true
+    };
 }
 
 export default {
     nombre: 'baltop',
     categoria: 'Economy',
-    alias: ['topbanco', 'banktop', 'topbank'],
-    descripcion: 'Ranking de TOTAL de coins con mención real',
+    alias: ['topbanco', 'banktop', 'topbank', 'top'],
+    descripcion: 'Ranking de TOTAL de coins con nombres reales',
     uso: '.baltop',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -65,11 +82,11 @@ export default {
 
             const medallas = ['👑', '', ''];
             const menciones = [];
-            let txt = '╭━━〔 💎 𝐓𝐎𝐏 𝐁𝐀𝐍𝐂𝐎 💎 〕━━⬣\n\n┃  𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐁𝐀𝐍𝐂𝐎\n┃\n';
+            let txt = '╭━━〔 💎 𝐓𝐎𝐏 𝐁𝐀𝐍𝐂𝐎 💎 〕━━⬣\n\n┃  𝐑𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐁𝐀𝐍𝐂𝐎\n┃\n';
 
             for (let i = 0; i < top.length; i++) {
                 const [jid, u] = top[i];
-                const m = await datosMencion(sock, jid);
+                const m = await datosMencion(sock, jid, u.nombre);
                 m.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
 
                 const total = num(u.banco) + num(u.dinero);
@@ -79,7 +96,7 @@ export default {
                 txt += '┃\n';
             }
 
-            txt += '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+            txt += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
             await sock.sendMessage(msg.key.remoteJid, { text: txt, mentions: menciones }, { quoted: msg });
         } catch (error) {
