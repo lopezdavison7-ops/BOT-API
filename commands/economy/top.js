@@ -1,4 +1,4 @@
-// commands/economy/baltop.js — vFINAL2: mención limpia + guardado de nombres
+// commands/economy/baltop.js — vFINAL3: total de coins con diseño original
 import fs from 'fs';
 import path from 'path';
 
@@ -38,7 +38,7 @@ export default {
     nombre: 'baltop',
     categoria: 'Economy',
     alias: ['topbanco', 'banktop', 'topbank'],
-    descripcion: 'Ranking de banco con mención real',
+    descripcion: 'Ranking de TOTAL de coins con mención real',
     uso: '.baltop',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -51,9 +51,10 @@ export default {
                 try { guardarDB(usuarios); } catch (e) {}
             }
 
+            // Ranking por TOTAL (banco + dinero) - incluye a todos los que tengan algo
             const top = Object.entries(usuarios)
-                .filter(([jid, u]) => num(u.banco) > 0)
-                .sort((a, b) => num(b[1].banco) - num(a[1].banco))
+                .filter(([jid, u]) => (num(u.banco) + num(u.dinero)) > 0)
+                .sort((a, b) => (num(b[1].banco) + num(b[1].dinero)) - (num(a[1].banco) + num(a[1].dinero)))
                 .slice(0, 10);
 
             if (!top.length) {
@@ -71,11 +72,10 @@ export default {
                 const m = await datosMencion(sock, jid);
                 m.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
 
-                // Si prefieres nombre guardado en vez de mención, usa esta línea:
-                // txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' *' + (u.nombre || m.token) + '*\n';
+                const total = num(u.banco) + num(u.dinero);
+                
                 txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' ' + m.token + '\n';
-                txt += '┃    🏦 Banco › *' + fmt(num(u.banco)) + '*\n';
-                txt += '┃    💵 En mano › *' + fmt(num(u.dinero)) + '*\n';
+                txt += '┃    💰 Total › *' + fmt(total) + '*\n';
                 txt += '┃\n';
             }
 
