@@ -1,4 +1,4 @@
-// commands/fun/akinator.js — 🧞 Akinator
+// commands/fun/akinator.js — 🧞 Akinator offline (sin APIs externas)
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
@@ -14,7 +14,7 @@ export default {
             const htmlPayload = `<style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:system-ui,sans-serif;background:linear-gradient(160deg,#0b0e1a,#1a1040);color:#fff;padding:10px}
-.card{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(139,92,246,.3);border-radius:16px;padding:14px;backdrop-filter:blur(8px)}
+.card{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(139,92,246,.3);border-radius:16px;padding:14px}
 .logo{text-align:center;font-size:11px;letter-spacing:2px;color:#a78bfa;margin-bottom:8px;font-weight:600}
 .genie{font-size:44px;text-align:center;margin:4px 0}
 h1{text-align:center;font-size:19px;margin-bottom:4px}
@@ -24,23 +24,16 @@ h1{text-align:center;font-size:19px;margin-bottom:4px}
 .step{display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:10px}
 .q{font-size:16px;text-align:center;min-height:40px;margin-bottom:12px;line-height:1.35;font-weight:500}
 .btns{display:grid;gap:7px}
-button{border:0;border-radius:11px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;color:#fff;transition:transform .1s}
+button{border:0;border-radius:11px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;color:#fff;transition:transform .1s}
 button:active{transform:scale(.97)}
-button:disabled{opacity:.5;cursor:wait}
 .b1{background:linear-gradient(135deg,#22c55e,#16a34a)}
 .b2{background:linear-gradient(135deg,#ef4444,#dc2626)}
 .b3{background:linear-gradient(135deg,#64748b,#475569)}
-.b4{background:linear-gradient(135deg,#3b82f6,#2563eb)}
-.b5{background:linear-gradient(135deg,#f97316,#ea580c)}
 .bstart{background:linear-gradient(135deg,#8b5cf6,#ec4899);font-size:16px;padding:14px;width:100%}
-.bback{background:rgba(255,255,255,.08);color:#cbd5e1;font-size:12px;padding:9px;margin-top:2px}
 .hidden{display:none}
 img.face{width:90px;height:90px;object-fit:cover;border-radius:14px;border:2px solid #8b5cf6;display:block;margin:0 auto 10px;background:#1e1b4b}
 .gname{text-align:center;font-size:18px;font-weight:800;color:#f0abfc;margin-bottom:3px}
-.gdesc{text-align:center;color:#94a3b8;font-size:12px;margin-bottom:12px;line-height:1.35;min-height:16px}
-.spin{width:30px;height:30px;border:3px solid rgba(139,92,246,.25);border-top-color:#8b5cf6;border-radius:50%;margin:22px auto;animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.msg{text-align:center;color:#f87171;font-size:12px;margin-top:8px;min-height:14px}
+.gdesc{text-align:center;color:#94a3b8;font-size:12px;margin-bottom:12px;min-height:16px}
 .foot{text-align:center;color:#475569;font-size:10px;margin-top:10px}
 </style>
 <div class="card">
@@ -55,22 +48,19 @@ img.face{width:90px;height:90px;object-fit:cover;border-radius:14px;border:2px s
 <div class="bar"><div id="prog"></div></div>
 <div class="step"><span id="stepN">Pregunta 1</span><span id="progT">0%</span></div>
 <div class="q" id="qText">...</div>
-<div class="btns" id="ansBtns">
-<button class="b1" onclick="G.answer(0)">Sí</button>
-<button class="b2" onclick="G.answer(1)">No</button>
+<div class="btns">
+<button class="b1" onclick="G.answer(1)">Sí</button>
+<button class="b2" onclick="G.answer(0)">No</button>
 <button class="b3" onclick="G.answer(2)">No sé</button>
-<button class="b4" onclick="G.answer(3)">Probablemente sí</button>
-<button class="b5" onclick="G.answer(4)">Probablemente no</button>
-<button class="bback" onclick="G.back()" id="btnBack">↩️ Atrás</button>
 </div>
 </div>
 <div id="scr-guess" class="hidden">
-<img class="face" id="gImg" src="" alt="" onerror="this.style.visibility='hidden'">
+<div class="genie">🤔</div>
 <div class="gname" id="gName"></div>
 <div class="gdesc" id="gDesc"></div>
 <div class="btns">
-<button class="b1" onclick="G.verdict(true)">✅ Sí, es él/ella</button>
-<button class="b2" onclick="G.verdict(false)">❌ No, sigue intentando</button>
+<button class="b1" onclick="G.verdict(1)">✅ Sí, es él/ella</button>
+<button class="b2" onclick="G.verdict(0)">❌ No, sigue</button>
 </div>
 </div>
 <div id="scr-end" class="hidden">
@@ -79,103 +69,126 @@ img.face{width:90px;height:90px;object-fit:cover;border-radius:14px;border:2px s
 <p class="sub" id="endText"></p>
 <button class="bstart" onclick="G.start()">🔄 Jugar de nuevo</button>
 </div>
-<div id="scr-load" class="hidden"><div class="spin"></div></div>
-<div class="msg" id="msg"></div>
-<div class="foot">🧞 Powered by Akinator · 💙 BOT-API</div>
+<div class="foot">🧞 Akinator offline · 💙 BOT-API</div>
 </div>
 <script>
 const G = {
-servers: ['https://api.akinator.org', 'https://server2.akinator.com:9142'],
-server: null, ses: null, sig: null, step: 0, hist: [], guesses: [], busy: false,
+Q: ['¿Es una persona real?','¿Es hombre?','¿Sigue vivo?','¿Es de anime o manga?','¿Es de película o serie?','¿Es músico o cantante?','¿Es deportista?','¿Es futbolista?','¿Es villano o malvado?','¿Tiene superpoderes o magia?','¿Es de videojuegos?','¿Es de Disney o Pixar?','¿Es de Marvel o DC?','¿Es meme de internet?','¿Es latino o hispano?','¿Es de Estados Unidos?','¿Es de Asia?','¿Es histórico o antiguo?','¿Es millonario?','¿Es niño o joven?'],
+P: [
+['Cristiano Ronaldo','11100011000000000010'],
+['Lionel Messi','11100011000000100010'],
+['Neymar Jr','11100011000000100010'],
+['Shakira','10100100000000100010'],
+['Bad Bunny','11100100000000100010'],
+['Frida Kahlo','10000000000000100100'],
+['García Márquez','11000000000000100100'],
+['Simón Bolívar','11000000000000100100'],
+['Obama','11100000000000010010'],
+['Donald Trump','11100000000000010100'],
+['Elon Musk','11100000000000010010'],
+['Albert Einstein','11000000000000000100'],
+['Napoleón','11000000000000000100'],
+['Cleopatra','10000000000000000100'],
+['Michael Jackson','10000100000000010100'],
+['Taylor Swift','10100100000000010010'],
+['Beyoncé','10100100000000010010'],
+['Freddie Mercury','10000100000000000100'],
+['Goku','01110000010000010000'],
+['Naruto','01110000010000010010'],
+['Luffy','01110000010000010010'],
+['Vegeta','01110000010000010000'],
+['Doraemon','01110000010000010000'],
+['Sailor Moon','00110000010000010010'],
+['Light Yagami','01110000110000010010'],
+['L de Death Note','01110000000000010010'],
+['Kakashi','01110000010000010000'],
+['Mickey Mouse','01101000000100000000'],
+['Elsa de Frozen','00101000010100000010'],
+['Buzz Lightyear','01101000000100000000'],
+['Shrek','01101000000000000000'],
+['Bob Esponja','01101000000000000000'],
+['Homero Simpson','01101000000000000000'],
+['Spider-Man','01101000110010010010'],
+['Batman','01101000000010010100'],
+['Iron Man','01101000000010010100'],
+['Thanos','01101000110010000000'],
+['Joker','01101000100010000000'],
+['Deadpool','01101000010010010000'],
+['Superman','01101000110010000000'],
+['Wonder Woman','00101000110010000000'],
+['Harry Potter','01101000010000000010'],
+['Hermione','00101000010000000010'],
+['Mario Bros','01100000001000000000'],
+['Luigi','01100000001000000000'],
+['Pikachu','01100000011000010000'],
+['Link de Zelda','01100000001000000000'],
+['Sonic','01100000001000000000'],
+['Crewmate Among Us','00100000001000100000'],
+['Pepe the Frog','01100000000001000000'],
+['Doge','01100000000001000000'],
+['Grumpy Cat','00100000000001000000']
+],
+cand: [], used: [], n: 0, guessIdx: 0,
 $(id) { return document.getElementById(id); },
-show(id) { ['scr-start','scr-q','scr-guess','scr-end','scr-load'].forEach(s => this.$(s).classList.toggle('hidden', s !== id)); },
-err(t) { this.$('msg').textContent = t; },
-base(extra) { return 'childMod=false&player=website-desktop&partner=1&' + extra; },
-async api(path, params) {
-const bases = this.server ? [this.server] : this.servers;
-for (const sv of bases) {
-const full = sv + '/ws/' + path + '?' + params;
-const rutas = [
-'https://api.allorigins.win/raw?url=' + encodeURIComponent(full),
-'https://corsproxy.io/?url=' + encodeURIComponent(full),
-'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(full),
-full
-];
-for (const u of rutas) {
-try {
-const r = await fetch(u, { signal: AbortSignal.timeout(15000) });
-if (!r.ok) continue;
-const txt = await r.text();
-let j = null;
-try { j = JSON.parse(txt); } catch (e) { continue; }
-if (j && j.completion === 'OK') { this.server = sv; return j.parameters; }
-} catch (e) {}
-}
-}
-return null;
+show(id) { ['scr-start','scr-q','scr-guess','scr-end'].forEach(s => this.$(s).classList.toggle('hidden', s !== id)); },
+start() {
+this.cand = this.P.map((p, i) => i);
+this.used = []; this.n = 0; this.guessIdx = 0;
+this.nextQ();
 },
-async start() {
-this.err(''); this.show('scr-load');
-const uid = 'botapi-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
-const p = await this.api('new_session.php', this.base('uid_ext_session=' + uid + '&turkMode=undefined&softConstraint=undefined&language=es&_=' + Date.now()));
-if (!p) { this.show('scr-start'); return this.err('❌ No pude conectar con Akinator. Toca JUGAR de nuevo.'); }
-this.ses = p.session; this.sig = p.signature; this.step = 0; this.hist = []; this.guesses = [];
-this.showQ(p);
+bestQ() {
+let best = -1, bestScore = 1e9;
+for (let q = 0; q < this.Q.length; q++) {
+if (this.used.includes(q)) continue;
+let yes = 0;
+for (const i of this.cand) if (this.P[i][1][q] === '1') yes++;
+const score = Math.abs(yes - this.cand.length / 2);
+if (score < bestScore) { bestScore = score; best = q; }
+}
+return best;
 },
-showQ(p) {
-this.step = parseInt(p.step ?? this.step);
+nextQ() {
+if (this.cand.length <= 2 || this.used.length >= this.Q.length) return this.guess();
+const q = this.bestQ();
+if (q < 0) return this.guess();
+this.curQ = q; this.used.push(q); this.n++;
+const prog = Math.round(100 * (1 - this.cand.length / this.P.length));
 this.show('scr-q');
-this.$('qText').textContent = p.question || '...';
-const prog = parseInt(String(p.progression || '0').replace('%', '')) || 0;
+this.$('qText').textContent = this.Q[q];
 this.$('prog').style.width = prog + '%';
 this.$('progT').textContent = prog + '%';
-this.$('stepN').textContent = 'Pregunta ' + (this.step + 1);
-this.$('btnBack').style.display = this.hist.length ? '' : 'none';
-this.setBtns(true);
+this.$('stepN').textContent = 'Pregunta ' + this.n;
 },
-setBtns(on) { this.$('ansBtns').querySelectorAll('button').forEach(b => b.disabled = !on); },
-async answer(a) {
-if (this.busy) return; this.busy = true; this.setBtns(false); this.err('');
-this.hist.push(a);
-const p = await this.api('answer_api.php', this.base('session=' + this.ses + '&signature=' + this.sig + '&step=' + this.step + '&answer=' + a + '&_=' + Date.now()));
-this.busy = false;
-if (!p) { this.setBtns(true); return this.err('⚠️ Error de conexión, reintenta.'); }
-if (p.elements && p.elements.length) return this.showGuess(p.elements);
-this.showQ(p);
-},
-async back() {
-if (!this.hist.length || this.busy) return;
-this.busy = true; this.setBtns(false); this.err('');
-const p = await this.api('list_answers.php', this.base('session=' + this.ses + '&signature=' + this.sig + '&step=' + this.step + '&_=' + Date.now()));
-this.busy = false;
-if (!p) { this.setBtns(true); return this.err('⚠️ No pude retroceder.'); }
-this.hist.pop(); this.step = Math.max(0, this.step - 1);
-this.showQ(Object.assign({}, p, { step: this.step }));
-},
-showGuess(els) {
-const el = (els.find(e => !this.guesses.includes(e.element.name)) || els[0]).element;
-this.curGuess = el; this.show('scr-guess');
-let img = el.photo || '';
-if (img && img.indexOf('http') !== 0) img = 'https://media.akinator.com' + img;
-this.$('gImg').src = img; this.$('gImg').style.visibility = img ? 'visible' : 'hidden';
-this.$('gName').textContent = el.name + (el.pseudo ? ' (' + el.pseudo + ')' : '');
-this.$('gDesc').textContent = el.description || '';
-},
-async verdict(win) {
-if (win) {
-this.show('scr-end'); this.$('endEmoji').textContent = '🎉';
-this.$('endTitle').textContent = '¡GANÉ!';
-this.$('endText').textContent = 'Leí tu mente: ' + this.curGuess.name + ' 🧞';
-return;
+answer(a) {
+if (a !== 2) {
+this.cand = this.cand.filter(i => this.P[i][1][this.curQ] === String(a));
+if (this.cand.length === 0) this.cand = [0];
 }
-this.guesses.push(this.curGuess.name); this.err(''); this.show('scr-load');
-const p = await this.api('choice_selection.php', this.base('session=' + this.ses + '&signature=' + this.sig + '&step=' + this.step + '&_=' + Date.now()));
-if (p && p.elements && p.elements.length > this.guesses.length) return this.showGuess(p.elements);
-const q = await this.api('question.php', this.base('session=' + this.ses + '&signature=' + this.sig + '&step=' + this.step + '&_=' + Date.now()));
-if (q) return this.showQ(q);
-this.show('scr-end'); this.$('endEmoji').textContent = '🏳️';
-this.$('endTitle').textContent = 'Me ganaste';
-this.$('endText').textContent = 'No pude adivinar tu personaje. 🧠';
+this.nextQ();
+},
+guess() {
+if (this.guessIdx >= this.cand.length) return this.end(false);
+const p = this.P[this.cand[this.guessIdx]];
+this.curName = p[0];
+this.show('scr-guess');
+this.$('gName').textContent = p[0];
+this.$('gDesc').textContent = '¿Es tu personaje?';
+},
+verdict(w) {
+if (w) return this.end(true);
+this.guessIdx++;
+if (this.guessIdx >= this.cand.length) {
+if (this.used.length >= this.Q.length) return this.end(false);
+this.guessIdx = 0;
+return this.nextQ();
+}
+this.guess();
+},
+end(w) {
+this.show('scr-end');
+this.$('endEmoji').textContent = w ? '🎉' : '🏳️';
+this.$('endTitle').textContent = w ? '¡GANÉ!' : 'Me ganaste';
+this.$('endText').textContent = w ? 'Leí tu mente: ' + this.curName + ' 🧞' : 'No pude adivinarlo. ¡Eres un crack! 🧠';
 }
 };
 window.G = G;
