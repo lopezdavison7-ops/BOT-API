@@ -5,7 +5,7 @@ import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
-import { manejarMemoriaIA } from './lib/memoria.js'; // ← NUEVA LÍNEA
+import { manejarMemoriaIA } from './lib/memoria.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -127,6 +127,14 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             const bloqueado = await revisarAntilink(sock, msg, esAdmin);
 
             if (bloqueado) return;
+        }
+
+        // ============================================
+        // 🔞 DETECTOR NSFW DE IMÁGENES (nuevo)
+        // Analiza imágenes en grupos con detector activo
+        // ============================================
+        if (!fromMe) {
+            await manejarDeteccion(sock, msg);
         }
 
         // ============================================
