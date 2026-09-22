@@ -1,5 +1,6 @@
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
+import { manejarDeteccion } from './lib/nsfwDetect.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
