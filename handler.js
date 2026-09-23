@@ -1,6 +1,5 @@
 import { loadCommands } from './controllers/cmdManager.js';
 import { revisarAntilink } from './lib/antilink.js';
-import { manejarDeteccion } from './lib/nsfwDetect.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
@@ -86,7 +85,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                         } catch (e) {}
 
                         if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
-                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰@\n\r]/g, '').trim().slice(0, 25);
+                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
                             if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
                         }
 
@@ -112,7 +111,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // ANTILINK
+        // ANTILINK — SOLO ENLACES DE WHATSAPP
         // ============================================
         if (isGroup && !fromMe) {
             let esAdmin = false;
@@ -130,14 +129,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🔞 DETECTOR NSFW (logs por WhatsApp)
-        // ============================================
-        if (!fromMe) {
-            await manejarDeteccion(sock, msg);
-        }
-
-        // ============================================
-        // 🎮 JUEGOS ACTIVADOS
+        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza)
         // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
