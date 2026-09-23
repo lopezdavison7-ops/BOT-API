@@ -18,6 +18,7 @@ import readline from 'readline';
 import { handleMessage } from './handler.js';
 import { loadCommands } from './controllers/cmdManager.js';
 import { manejarDespedida } from './commands/group/despedida.js';
+import './lib/logs.js';
 
 const baileys = baileysNS.default ?? baileysNS;
 const makeWASocket = typeof baileys === 'function' ? baileys : baileys.makeWASocket;
