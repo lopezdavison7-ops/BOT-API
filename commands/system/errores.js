@@ -1,5 +1,5 @@
 // commands/system/errores.js — 📋 Ver últimos errores del bot
-import { getLogs, clearLogs, getTotalLogs } from '../../lib/logs.js';
+import { getLogs, getLogsErrores, clearLogs, getTotalLogs } from '../../lib/logs.js';
 
 function bold(t) {
     return String(t).replace(/[A-Za-z]/g, c =>
@@ -18,7 +18,6 @@ export default {
 
         // Filtro de owner
         if (!fromMe && !isOwner) {
-            // Intentar verificar si es owner por env
             const senderNum = senderJid.split('@')[0].replace(/\D/g, '');
             const owners = (process.env.OWNER || '').split(',').map(n => n.replace(/\D/g, ''));
             if (!owners.includes(senderNum)) {
@@ -53,11 +52,11 @@ export default {
         cantidad = Math.min(Math.max(cantidad, 1), 50);
 
         // FILTRO: UNCAUGHT/REJECTION se incluyen en 'error'
-        let filtrados = getLogs(cantidad, filtro);
+        let filtrados;
         if (filtro === 'error') {
-            filtrados = logs.filter(l => 
-                l.tipo === 'ERROR' || l.tipo === 'UNCAUGHT' || l.tipo === 'REJECTION'
-            ).slice(-cantidad);
+            filtrados = getLogsErrores(cantidad);
+        } else {
+            filtrados = getLogs(cantidad, filtro);
         }
 
         const stats = getTotalLogs();
