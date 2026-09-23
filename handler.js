@@ -4,6 +4,7 @@ import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
+import { manejarMensajeTTT } from './lib/ttt.js';
 import { manejarMemoriaIA } from './lib/memoria.js';
 import fs from 'fs';
 import path from 'path';
@@ -129,7 +130,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza)
+        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza, ttt)
+        // Procesar mensajes SIN prefijo para juegos activos
         // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
@@ -140,6 +142,10 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
             const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
             if (fueAdivinanza) return;
+
+            // TRES EN RAYA (TTT)
+            const fueTTT = await manejarMensajeTTT(sock, msg);
+            if (fueTTT) return;
         }
 
         // ============================================
