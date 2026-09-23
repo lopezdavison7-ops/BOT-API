@@ -55,7 +55,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const isGroup = jid?.endsWith('@g.us');
 
         // ============================================
-        // 🔥 DETECTOR AFK AUTÓNOMO (con mención fija)
+        // 🔥 DETECTOR AFK AUTÓNOMO
         // ============================================
         if (!fromMe) {
             try {
@@ -83,10 +83,10 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                                     mentions = [pj];
                                 }
                             }
-                        } catch (e) { /* sin mapeo */ }
+                        } catch (e) {}
 
                         if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
-                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
+                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰@\n\r]/g, '').trim().slice(0, 25);
                             if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
                         }
 
@@ -112,7 +112,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // ANTILINK — SOLO ENLACES DE WHATSAPP
+        // ANTILINK
         // ============================================
         if (isGroup && !fromMe) {
             let esAdmin = false;
@@ -130,16 +130,14 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🔞 DETECTOR NSFW DE IMÁGENES (nuevo)
-        // Analiza imágenes en grupos con detector activo
+        // 🔞 DETECTOR NSFW (logs por WhatsApp)
         // ============================================
         if (!fromMe) {
             await manejarDeteccion(sock, msg);
         }
 
         // ============================================
-        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza)
-        // Procesar mensajes SIN prefijo para juegos activos
+        // 🎮 JUEGOS ACTIVADOS
         // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
@@ -153,9 +151,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🧠 MEMORIA IA (nuevo)
-        // Responde cuando mencionan al bot por nombre
-        // SIN prefijo, antes de procesar comandos
+        // 🧠 MEMORIA IA
         // ============================================
         if (!fromMe) {
             const fueMemoria = await manejarMemoriaIA(sock, msg);
