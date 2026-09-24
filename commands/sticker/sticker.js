@@ -4,7 +4,7 @@
 // COMANDO: STICKER / S / STIKER
 // ============================================================
 // Convierte imágenes y videos en stickers de alta calidad.
-// Compatible con la estructura actual del BOT-API.
+// Con metadatos personalizados del usuario (.setmeta).
 // ============================================================
 
 import fs from 'fs';
@@ -23,9 +23,8 @@ const execFileAsync = promisify(execFile);
 
 const MAX_GIF_SECONDS = 3;
 const MAX_STICKER_SIZE = 500 * 1024;
+const RUTA_META = path.join(process.cwd(), 'database', 'stickerMeta.json');
 
-// Calidad estática: se intenta la máxima posible y se reduce
-// solamente si el sticker supera el límite de WhatsApp.
 const STATIC_QUALITIES = [100, 95, 90, 85, 80, 75, 70];
 
 // ============================================================
@@ -48,13 +47,47 @@ function obtenerUsuario(msg) {
         : '@usuario';
 }
 
+// ============================================================
+// METADATOS PERSONALIZADOS (nuevo - integrado con .setmeta)
+// ============================================================
+
+function obtenerMetaPersonalizada(jid) {
+    try {
+        if (!fs.existsSync(RUTA_META)) return null;
+        const db = JSON.parse(fs.readFileSync(RUTA_META, 'utf8'));
+        const user = db[jid] || null;
+        if (!user) return null;
+        return {
+            packname: user.stickerPackName || null,
+            author: user.stickerPackAuthor || null
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 function obtenerMetadatos(msg) {
+    const jid = msg?.key?.participant || msg?.key?.remoteJid || '';
     const usuario = obtenerUsuario(msg);
 
+    // 1. Intentar metadatos personalizados del usuario
+    const personalizada = obtenerMetaPersonalizada(jid);
+    
+    if (personalizada && personalizada.packname && personalizada.author) {
+        return {
+            packname: personalizada.packname,
+            author: personalizada.author,
+            categories: ['🤖'],
+            personalizado: true
+        };
+    }
+
+    // 2. Fallback: metadatos por defecto
     return {
         packname: 'BOT-API',
         author: `POR USUARIO ${usuario}`,
-        categories: ['🤖']
+        categories: ['🤖'],
+        personalizado: false
     };
 }
 
@@ -114,14 +147,9 @@ async function ejecutarFFmpeg(
     duracion = MAX_GIF_SECONDS
 ) {
     const filtro = [
-        // Mantiene la proporción original.
         'scale=512:512:force_original_aspect_ratio=decrease',
-
-        // Centra sin deformar y conserva transparencia.
         'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
-
         `fps=${fps}`,
-
         'format=yuva420p'
     ].join(',');
 
@@ -129,35 +157,15 @@ async function ejecutarFFmpeg(
         'ffmpeg',
         [
             '-y',
-
-            '-i',
-            entrada,
-
-            '-t',
-            String(duracion),
-
-            '-vf',
-            filtro,
-
+            '-i', entrada,
+            '-t', String(duracion),
+            '-vf', filtro,
             '-an',
-
-            '-c:v',
-            'libwebp',
-
-            // Compresión eficiente manteniendo buena calidad.
-            '-lossless',
-            '0',
-
-            '-q:v',
-            String(calidad),
-
-            '-compression_level',
-            '6',
-
-            // Evita problemas de compatibilidad.
-            '-loop',
-            '0',
-
+            '-c:v', 'libwebp',
+            '-lossless', '0',
+            '-q:v', String(calidad),
+            '-compression_level', '6',
+            '-loop', '0',
             salida
         ],
         {
@@ -171,95 +179,47 @@ async function crearStickerAnimado(buffer) {
         path.join(os.tmpdir(), 'bot-api-sticker-')
     );
 
-    const entrada = path.join(
-        carpeta,
-        'entrada.mp4'
-    );
-
-    const salida = path.join(
-        carpeta,
-        'sticker.webp'
-    );
+    const entrada = path.join(carpeta, 'entrada.mp4');
+    const salida = path.join(carpeta, 'sticker.webp');
 
     try {
-        await fs.promises.writeFile(
-            entrada,
-            buffer
-        );
+        await fs.promises.writeFile(entrada, buffer);
 
-        // Primera opción: máxima calidad.
-        await ejecutarFFmpeg(
-            entrada,
-            salida,
-            15,
-            65
-        );
+        await ejecutarFFmpeg(entrada, salida, 15, 65);
+        let resultado = await fs.promises.readFile(salida);
 
-        let resultado =
-            await fs.promises.readFile(salida);
-
-        // Si pesa demasiado, reducimos progresivamente.
         if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(
-                entrada,
-                salida,
-                12,
-                60
-            );
-
-            resultado =
-                await fs.promises.readFile(salida);
+            await ejecutarFFmpeg(entrada, salida, 12, 60);
+            resultado = await fs.promises.readFile(salida);
         }
 
         if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(
-                entrada,
-                salida,
-                10,
-                55
-            );
-
-            resultado =
-                await fs.promises.readFile(salida);
+            await ejecutarFFmpeg(entrada, salida, 10, 55);
+            resultado = await fs.promises.readFile(salida);
         }
 
         if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(
-                entrada,
-                salida,
-                8,
-                45,
-                2.5
-            );
-
-            resultado =
-                await fs.promises.readFile(salida);
+            await ejecutarFFmpeg(entrada, salida, 8, 45, 2.5);
+            resultado = await fs.promises.readFile(salida);
         }
 
         if (!resultado.length) {
-            throw new Error(
-                'El sticker animado quedó vacío.'
-            );
+            throw new Error('El sticker animado quedó vacío.');
         }
 
         if (resultado.length > MAX_STICKER_SIZE) {
             throw new Error(
-                `El sticker animado pesa ${Math.round(
-                    resultado.length / 1024
-                )} KB.`
+                `El sticker animado pesa ${Math.round(resultado.length / 1024)} KB.`
             );
         }
 
         return resultado;
 
     } finally {
-        await fs.promises.rm(
-            carpeta,
-            {
-                recursive: true,
-                force: true
-            }
-        ).catch(() => {});
+        await fs.promises.rm(carpeta, {
+            recursive: true,
+            force: true
+        }).catch(() => {});
     }
 }
 
@@ -273,54 +233,35 @@ async function crearStickerImagen(buffer) {
     for (const quality of STATIC_QUALITIES) {
         resultado = await sharp(buffer)
             .rotate()
-
-            // 512x512 es el tamaño recomendado para stickers.
-            // contain evita cortar o deformar la imagen.
             .resize(
                 512,
                 512,
                 {
                     fit: 'contain',
-                    background: {
-                        r: 0,
-                        g: 0,
-                        b: 0,
-                        alpha: 0
-                    },
+                    background: { r: 0, g: 0, b: 0, alpha: 0 },
                     withoutEnlargement: false
                 }
             )
-
             .webp({
                 quality,
                 effort: 6,
                 smartSubsample: true
             })
-
             .toBuffer();
 
         console.log(
-            `[STICKER] Calidad ${quality}: ${Math.round(
-                resultado.length / 1024
-            )} KB`
+            `[STICKER] Calidad ${quality}: ${Math.round(resultado.length / 1024)} KB`
         );
 
-        if (
-            resultado.length <=
-            MAX_STICKER_SIZE
-        ) {
+        if (resultado.length <= MAX_STICKER_SIZE) {
             return resultado;
         }
     }
 
     if (!resultado || !resultado.length) {
-        throw new Error(
-            'No se pudo crear el sticker.'
-        );
+        throw new Error('No se pudo crear el sticker.');
     }
 
-    // Si incluso la calidad mínima supera el límite,
-    // hacemos una última compresión.
     resultado = await sharp(buffer)
         .rotate()
         .resize(
@@ -328,12 +269,7 @@ async function crearStickerImagen(buffer) {
             512,
             {
                 fit: 'contain',
-                background: {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    alpha: 0
-                }
+                background: { r: 0, g: 0, b: 0, alpha: 0 }
             }
         )
         .webp({
@@ -344,9 +280,7 @@ async function crearStickerImagen(buffer) {
 
     if (resultado.length > MAX_STICKER_SIZE) {
         throw new Error(
-            `La imagen es demasiado pesada (${Math.round(
-                resultado.length / 1024
-            )} KB).`
+            `La imagen es demasiado pesada (${Math.round(resultado.length / 1024)} KB).`
         );
     }
 
@@ -364,40 +298,27 @@ async function enviarSticker(
     msg,
     animado
 ) {
-    const metadatos =
-        obtenerMetadatos(msg);
+    const metadatos = obtenerMetadatos(msg);
 
     const contenido = {
         sticker: buffer,
-
-        packname:
-            metadatos.packname,
-
-        author:
-            metadatos.author,
-
-        categories:
-            metadatos.categories
+        packname: metadatos.packname,
+        author: metadatos.author,
+        categories: metadatos.categories
     };
 
     if (animado) {
         contenido.isAnimated = true;
     }
 
-    console.log(
-        '[STICKER] Creador: BOT-API'
-    );
-
-    console.log(
-        `[STICKER] ${metadatos.author}`
-    );
+    console.log(`[STICKER] Pack: ${metadatos.packname}`);
+    console.log(`[STICKER] Author: ${metadatos.author}`);
+    console.log(`[STICKER] Personalizado: ${metadatos.personalizado ? '✅' : '❌ (default)'}`);
 
     await sock.sendMessage(
         jid,
         contenido,
-        {
-            quoted: msg
-        }
+        { quoted: msg }
     );
 }
 
@@ -407,17 +328,11 @@ async function enviarSticker(
 
 export default {
     nombre: 'sticker',
-
     categoria: 'Multimedia',
-
-    alias: [
-        's',
-        'stiker'
-    ],
-
-    descripcion:
-        'Convierte imágenes y videos en stickers de alta calidad.',
-
+    alias: ['s', 'stiker'],
+    descripcion: 'Convierte imágenes y videos en stickers de alta calidad.',
+    uso: '.s (responde a imagen/video) | .setmeta para configurar pack/autor',
+    
     ejecutar: async ({
         sock,
         msg,
@@ -425,8 +340,7 @@ export default {
     }) => {
 
         try {
-            const mensajeCitado =
-                obtenerMensajeCitado(msg);
+            const mensajeCitado = obtenerMensajeCitado(msg);
 
             if (!mensajeCitado) {
                 await responder.texto(
@@ -438,25 +352,21 @@ export default {
                     '┃ 📷 Imagen → sticker HD\n' +
                     '┃ 🎞️ Video → sticker animado\n' +
                     '┃\n' +
+                    '┃ 🏷️ Configura pack y autor:\n' +
+                    '┃ ➪ *.setmeta Pack | Autor*\n' +
+                    '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
-
                 return;
             }
 
-            const jid =
-                msg?.key?.remoteJid;
+            const jid = msg?.key?.remoteJid;
 
             if (!jid) {
-                throw new Error(
-                    'No se pudo obtener el chat.'
-                );
+                throw new Error('No se pudo obtener el chat.');
             }
 
-            const tipo =
-                detectarTipo(
-                    mensajeCitado
-                );
+            const tipo = detectarTipo(mensajeCitado);
 
             if (!tipo) {
                 await responder.texto(
@@ -467,123 +377,57 @@ export default {
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
-
                 return;
             }
 
-            console.log(
-                '================================================'
+            console.log('================================================');
+            console.log(`[STICKER] Tipo: ${tipo}`);
+            console.log(`[STICKER] Usuario: ${obtenerUsuario(msg)}`);
+
+            const mensajeCompleto = construirMensajeCompleto(msg, mensajeCitado);
+
+            console.log('[STICKER] ⬇️ Descargando multimedia...');
+
+            const buffer = await downloadMediaMessage(
+                mensajeCompleto,
+                'buffer',
+                {},
+                { logger: undefined }
             );
 
-            console.log(
-                `[STICKER] Tipo: ${tipo}`
-            );
-
-            console.log(
-                `[STICKER] Usuario: ${obtenerUsuario(msg)}`
-            );
-
-            const mensajeCompleto =
-                construirMensajeCompleto(
-                    msg,
-                    mensajeCitado
-                );
-
-            console.log(
-                '[STICKER] ⬇️ Descargando multimedia...'
-            );
-
-            const buffer =
-                await downloadMediaMessage(
-                    mensajeCompleto,
-                    'buffer',
-                    {},
-                    {
-                        logger: undefined
-                    }
-                );
-
-            if (
-                !buffer ||
-                !Buffer.isBuffer(buffer) ||
-                !buffer.length
-            ) {
-                throw new Error(
-                    'No se pudo descargar la multimedia.'
-                );
+            if (!buffer || !Buffer.isBuffer(buffer) || !buffer.length) {
+                throw new Error('No se pudo descargar la multimedia.');
             }
 
-            console.log(
-                `[STICKER] Multimedia: ${Math.round(
-                    buffer.length / 1024
-                )} KB`
-            );
+            console.log(`[STICKER] Multimedia: ${Math.round(buffer.length / 1024)} KB`);
 
             let sticker;
             let animado = false;
 
             if (tipo === 'video') {
                 animado = true;
-
-                console.log(
-                    '[STICKER] 🎞️ Creando sticker animado HD...'
-                );
-
-                sticker =
-                    await crearStickerAnimado(
-                        buffer
-                    );
-
+                console.log('[STICKER] 🎞️ Creando sticker animado HD...');
+                sticker = await crearStickerAnimado(buffer);
             } else {
-                console.log(
-                    '[STICKER] 🖼️ Creando sticker HD...'
-                );
-
-                sticker =
-                    await crearStickerImagen(
-                        buffer
-                    );
+                console.log('[STICKER] 🖼️ Creando sticker HD...');
+                sticker = await crearStickerImagen(buffer);
             }
 
-            if (
-                !sticker ||
-                !Buffer.isBuffer(sticker) ||
-                !sticker.length
-            ) {
-                throw new Error(
-                    'El sticker generado está vacío.'
-                );
+            if (!sticker || !Buffer.isBuffer(sticker) || !sticker.length) {
+                throw new Error('El sticker generado está vacío.');
             }
 
-            console.log(
-                `[STICKER] Tamaño final: ${Math.round(
-                    sticker.length / 1024
-                )} KB`
-            );
+            console.log(`[STICKER] Tamaño final: ${Math.round(sticker.length / 1024)} KB`);
 
-            await enviarSticker(
-                sock,
-                jid,
-                sticker,
-                msg,
-                animado
-            );
+            await enviarSticker(sock, jid, sticker, msg, animado);
 
-            console.log(
-                '[STICKER] ✅ Sticker enviado correctamente.'
-            );
-
-            console.log(
-                '================================================'
-            );
+            console.log('[STICKER] ✅ Sticker enviado correctamente.');
+            console.log('================================================');
 
         } catch (error) {
-
             console.error(
                 '[STICKER] ❌ Error:',
-                error?.stack ||
-                error?.message ||
-                error
+                error?.stack || error?.message || error
             );
 
             try {
@@ -592,10 +436,7 @@ export default {
                     '┃\n' +
                     '┃ No pude crear el sticker.\n' +
                     '┃\n' +
-                    `┃ ⚠️ ${
-                        error?.message ||
-                        'Error desconocido.'
-                    }\n` +
+                    `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
