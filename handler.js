@@ -6,6 +6,7 @@ import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import { manejarMensajeTTT } from './lib/ttt.js';
 import { manejarMemoriaIA } from './lib/memoria.js';
+import { categoriaActiva } from './lib/categoriaConfig.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -231,6 +232,34 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             );
         }
         if (!cmd) return;
+
+        // ============================================
+        // 📂 BLOQUEO DE CATEGORÍAS (por chat)
+        // ============================================
+        try {
+            const catCmd = String(cmd.categoria || '').toLowerCase().trim();
+
+            // system/owner nunca se bloquean (para poder reactivar)
+            if (catCmd && catCmd !== 'system' && catCmd !== 'owner') {
+                if (!categoriaActiva(jid, catCmd)) {
+                    await sock.sendMessage(jid, {
+                        text:
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '┃\n' +
+                            '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
+                            '┃ 🚫 Comando: .' + nombreComando + '\n' +
+                            '┃\n' +
+                            '┃ 🟢 Reactiva con:\n' +
+                            '┃ ➪ .activar ' + catCmd + '\n' +
+                            '┃\n' +
+                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    }, { quoted: msg });
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error('[CATEGORIAS] Error en bloqueo:', e?.message || e);
+        }
 
         await cmd.ejecutar({
             sock,
