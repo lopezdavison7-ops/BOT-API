@@ -11,7 +11,7 @@ export default {
         const consulta = argumento?.trim();
 
         if (!consulta) {
-            return await responder.texto('❌ Uso: .tiktok link_o_busqueda');
+            return await responder.texto('❌ Uso: .tiktok link primero usa .tiktoksearch para odtener los link');
         }
 
         try {
