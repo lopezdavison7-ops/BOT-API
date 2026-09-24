@@ -3,8 +3,9 @@
 // BOT-API
 // COMANDO: STICKER / S / STIKER
 // ============================================================
-// Stickers HD con metadatos EXIF visibles en WhatsApp:
-// "Pack [ID] • Autor" (igual que Sticker.ly)
+// Stickers HD con firma visible (Pack • Autor) vía EXIF.
+// FIX: Buffer real + mimetype explícito para que Baileys
+// no corrompa la media al subir el WebP con EXIF.
 // ============================================================
 
 import fs from 'fs';
@@ -55,8 +56,7 @@ function obtenerMetaPersonalizada(jid) {
         if (!user) return null;
         return {
             packname: user.stickerPackName || null,
-            author: user.stickerPackAuthor || null,
-            packId: user.packId || null
+            author: user.stickerPackAuthor || null
         };
     } catch (e) {
         return null;
@@ -74,7 +74,6 @@ function obtenerMetadatos(msg) {
         return {
             packname: personalizada.packname,
             author: personalizada.author,
-            packId: personalizada.packId,
             categories: ['🤖'],
             personalizado: true
         };
@@ -84,7 +83,6 @@ function obtenerMetadatos(msg) {
     return {
         packname: 'BOT-API',
         author: `POR USUARIO ${usuario}`,
-        packId: null,
         categories: ['🤖'],
         personalizado: false
     };
@@ -231,20 +229,25 @@ async function crearStickerImagen(buffer) {
 }
 
 // ============================================================
-// ENVÍO DEL STICKER (con EXIF incrustado)
+// ENVÍO DEL STICKER (con EXIF + Buffer real + mimetype)
 // ============================================================
 
 async function enviarSticker(sock, jid, buffer, msg, animado) {
     const metadatos = obtenerMetadatos(msg);
 
-    // 🔑 AQUÍ ESTÁ LA MAGIA: incrusta packname/author
-    // dentro del WebP para que WhatsApp los muestre
+    // Incrusta la firma (pack/author) dentro del WebP
     const stickerConExif = await writeExifWebp(buffer, metadatos);
 
-    console.log(`[STICKER] 🏷️ EXIF incrustado: ${metadatos.packname} [${metadatos.packId || 'auto'}] • ${metadatos.author}`);
+    // 🔑 FIX: garantizar Buffer real de Node (no Uint8Array)
+    const stickerFinal = Buffer.isBuffer(stickerConExif)
+        ? stickerConExif
+        : Buffer.from(stickerConExif);
+
+    console.log(`[STICKER] 🏷️ Enviando: ${metadatos.packname} • ${metadatos.author} | Buffer: ${Buffer.isBuffer(stickerFinal)} | ${stickerFinal.length} bytes`);
 
     const contenido = {
-        sticker: stickerConExif,
+        sticker: stickerFinal,
+        mimetype: 'image/webp',
         packname: metadatos.packname,
         author: metadatos.author,
         categories: metadatos.categories
@@ -295,7 +298,7 @@ export default {
 
             if (!tipo) {
                 await responder.texto(
-                    '╭━━〔 ❌ 𝐒𝐓𝐈𝐂𝐊𝐄𝐑 〕━━⬣\n' +
+                    '╭━━〔 ❌ 𝐒𝐓𝐈𝐊𝐄𝐑 〕━━⬣\n' +
                     '┃\n' +
                     '┃ Responde a una imagen o video\n' +
                     '┃ válido usando *.s*\n' +
