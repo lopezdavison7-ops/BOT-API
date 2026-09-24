@@ -150,7 +150,7 @@ export default {
             const captionOriginal = mediaMessage.caption || '';
             const caption = captionOriginal
                 ? '👁️ *ViewOnce extraído:*\n\n' + captionOriginal
-                : '👁️ *Contenido ViewOnce extraído*';
+                : '👁️ *Contenido extraído ten chismoso*';
 
             // Enviar según el tipo
             if (/video/i.test(tipoMensaje)) {
