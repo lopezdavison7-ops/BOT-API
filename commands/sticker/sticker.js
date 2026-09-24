@@ -31,31 +31,26 @@ const STATIC_QUALITIES = [100, 95, 90, 85, 80, 75, 70];
 // UTILIDADES
 // ============================================================
 
+function jidANumero(jid) {
+    return String(jid || '').split('@')[0].replace(/\D/g, '');
+}
+
 function obtenerUsuario(msg) {
-    const jid =
-        msg?.key?.participant ||
-        msg?.key?.remoteJid ||
-        '';
-
-    const numero = String(jid)
-        .split('@')[0]
-        .split(':')[0]
-        .replace(/\D/g, '');
-
-    return numero
-        ? `@${numero}`
-        : '@usuario';
+    const jid = msg?.key?.participant || msg?.key?.remoteJid || '';
+    const numero = jidANumero(jid);
+    return numero ? `@${numero}` : '@usuario';
 }
 
 // ============================================================
-// METADATOS PERSONALIZADOS (nuevo - integrado con .setmeta)
+// METADATOS PERSONALIZADOS (integrado con .setmeta)
 // ============================================================
 
 function obtenerMetaPersonalizada(jid) {
     try {
         if (!fs.existsSync(RUTA_META)) return null;
         const db = JSON.parse(fs.readFileSync(RUTA_META, 'utf8'));
-        const user = db[jid] || null;
+        const numero = jidANumero(jid);
+        const user = db[numero] || null;
         if (!user) return null;
         return {
             packname: user.stickerPackName || null,
@@ -74,6 +69,7 @@ function obtenerMetadatos(msg) {
     const personalizada = obtenerMetaPersonalizada(jid);
     
     if (personalizada && personalizada.packname && personalizada.author) {
+        console.log(`[STICKER] 🏷️ Metadatos personalizados: ${personalizada.packname} / ${personalizada.author}`);
         return {
             packname: personalizada.packname,
             author: personalizada.author,
@@ -83,6 +79,7 @@ function obtenerMetadatos(msg) {
     }
 
     // 2. Fallback: metadatos por defecto
+    console.log('[STICKER] 🏷️ Metadatos por defecto');
     return {
         packname: 'BOT-API',
         author: `POR USUARIO ${usuario}`,
@@ -92,10 +89,7 @@ function obtenerMetadatos(msg) {
 }
 
 function obtenerMensajeCitado(msg) {
-    return msg?.message
-        ?.extendedTextMessage
-        ?.contextInfo
-        ?.quotedMessage;
+    return msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 }
 
 function construirMensajeCompleto(msg, mensajeCitado) {
@@ -120,8 +114,7 @@ function detectarTipo(mensaje) {
     }
 
     if (mensaje?.documentMessage) {
-        const mimetype =
-            mensaje.documentMessage?.mimetype || '';
+        const mimetype = mensaje.documentMessage?.mimetype || '';
 
         if (mimetype.startsWith('image/')) {
             return 'imagen';
@@ -311,10 +304,6 @@ async function enviarSticker(
         contenido.isAnimated = true;
     }
 
-    console.log(`[STICKER] Pack: ${metadatos.packname}`);
-    console.log(`[STICKER] Author: ${metadatos.author}`);
-    console.log(`[STICKER] Personalizado: ${metadatos.personalizado ? '✅' : '❌ (default)'}`);
-
     await sock.sendMessage(
         jid,
         contenido,
@@ -330,7 +319,7 @@ export default {
     nombre: 'sticker',
     categoria: 'Multimedia',
     alias: ['s', 'stiker'],
-    descripcion: 'Convierte imágenes y videos en stickers de alta calidad.',
+    descripcion: 'Convierte imágenes y videos en stickers de alta calidad con metadatos personalizados.',
     uso: '.s (responde a imagen/video) | .setmeta para configurar pack/autor',
     
     ejecutar: async ({
