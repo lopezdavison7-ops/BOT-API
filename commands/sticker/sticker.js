@@ -3,9 +3,9 @@
 // BOT-API
 // COMANDO: STICKER / S / STIKER
 // ============================================================
-// Stickers HD con firma visible (Pack • Autor) vía EXIF.
-// FIX: Buffer real + mimetype explícito para que Baileys
-// no corrompa la media al subir el WebP con EXIF.
+// Stickers HD con firma visible (Pack • Autor).
+// Compatible con baileys-beta: sube el sticker a WhatsApp
+// primero y lo envía como { url } para evitar el "gris".
 // ============================================================
 
 import fs from 'fs';
@@ -229,25 +229,74 @@ async function crearStickerImagen(buffer) {
 }
 
 // ============================================================
-// ENVÍO DEL STICKER (con EXIF + Buffer real + mimetype)
+// 🔑 SUBIR STICKER A WHATSAPP (método baileys-beta)
+// ============================================================
+
+async function subirStickerAWhatsApp(sock, bufferConExif) {
+    // Intento 1: con Toolkit de yo-soy-yo-baileys (fork)
+    try {
+        const mod = await import('yo-soy-yo-baileys');
+        const Toolkit = mod.Toolkit || mod.default?.Toolkit;
+        if (Toolkit && typeof Toolkit.toUrl === 'function') {
+            const url = await Toolkit.toUrl(sock, bufferConExif, 'sticker');
+            console.log('[STICKER] ✅ Subido con Toolkit.toUrl');
+            return { url };
+        }
+    } catch (e) {
+        console.log('[STICKER] Toolkit no disponible:', e.message);
+    }
+
+    // Intento 2: con waUploadToServer (método estándar baileys)
+    try {
+        if (typeof sock.waUploadToServer === 'function') {
+            const uploadResult = await sock.waUploadToServer(bufferConExif, { 
+                mediaType: 4, // sticker
+                quality: 1 
+            });
+            if (uploadResult?.directPath) {
+                const url = 'https://mmg.whatsapp.net' + uploadResult.directPath;
+                console.log('[STICKER] ✅ Subido con waUploadToServer');
+                return { url, uploadResult };
+            }
+        }
+    } catch (e) {
+        console.log('[STICKER] waUploadToServer falló:', e.message);
+    }
+
+    // Intento 3: guardar en archivo y pasar { url: path } (baileys-beta soporta)
+    try {
+        const tmpDir = os.tmpdir();
+        const tmpPath = path.join(tmpDir, `sticker-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`);
+        await fs.promises.writeFile(tmpPath, bufferConExif);
+        console.log('[STICKER] ⚠️ Guardado en archivo temporal:', tmpPath);
+        return { url: tmpPath, tmpPath };
+    } catch (e) {
+        console.log('[STICKER] Archivo temporal falló:', e.message);
+    }
+
+    return null;
+}
+
+// ============================================================
+// ENVÍO DEL STICKER (compatible con baileys-beta)
 // ============================================================
 
 async function enviarSticker(sock, jid, buffer, msg, animado) {
     const metadatos = obtenerMetadatos(msg);
 
-    // Incrusta la firma (pack/author) dentro del WebP
+    // 1. Incrustar firma EXIF dentro del WebP
     const stickerConExif = await writeExifWebp(buffer, metadatos);
 
-    // 🔑 FIX: garantizar Buffer real de Node (no Uint8Array)
     const stickerFinal = Buffer.isBuffer(stickerConExif)
         ? stickerConExif
         : Buffer.from(stickerConExif);
 
-    console.log(`[STICKER] 🏷️ Enviando: ${metadatos.packname} • ${metadatos.author} | Buffer: ${Buffer.isBuffer(stickerFinal)} | ${stickerFinal.length} bytes`);
+    console.log(`[STICKER] 🏷️ Preparando: ${metadatos.packname} • ${metadatos.author} | ${stickerFinal.length} bytes`);
+
+    // 2. 🔑 SUBIR primero (método baileys-beta)
+    const subida = await subirStickerAWhatsApp(sock, stickerFinal);
 
     const contenido = {
-        sticker: stickerFinal,
-        mimetype: 'image/webp',
         packname: metadatos.packname,
         author: metadatos.author,
         categories: metadatos.categories
@@ -255,7 +304,25 @@ async function enviarSticker(sock, jid, buffer, msg, animado) {
 
     if (animado) contenido.isAnimated = true;
 
+    if (subida && subida.url) {
+        // ✅ MÉTODO CORRECTO: pasar como { url }
+        contenido.sticker = { url: subida.url };
+        console.log('[STICKER] ✅ Enviando como URL (método baileys-beta)');
+    } else {
+        // Fallback: enviar buffer directo (puede salir gris pero funciona)
+        contenido.sticker = stickerFinal;
+        contenido.mimetype = 'image/webp';
+        console.log('[STICKER] ⚠️ Enviando como buffer (fallback)');
+    }
+
     await sock.sendMessage(jid, contenido, { quoted: msg });
+
+    // Limpiar archivo temporal si existe
+    if (subida?.tmpPath) {
+        try {
+            setTimeout(() => fs.promises.unlink(subida.tmpPath).catch(() => {}), 5000);
+        } catch (e) {}
+    }
 }
 
 // ============================================================
@@ -298,12 +365,12 @@ export default {
 
             if (!tipo) {
                 await responder.texto(
-                    '╭━━〔 ❌ 𝐒𝐓𝐈𝐊𝐄𝐑 〕━━⬣\n' +
+                    '╭━━〔 ❌ 𝐒𝐓𝐈𝐂𝐊𝐄𝐑 〕━━⬣\n' +
                     '┃\n' +
                     '┃ Responde a una imagen o video\n' +
                     '┃ válido usando *.s*\n' +
                     '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━'
+                    '╰━━━━━━━━━━━━━━━━⬣'
                 );
                 return;
             }
