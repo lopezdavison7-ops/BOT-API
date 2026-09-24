@@ -1,11 +1,9 @@
 // commands/sticker/sticker.js
 // ============================================================
-// BOT-API
-// COMANDO: STICKER / S / STIKER
+// BOT-API - COMANDO: STICKER / S / STIKER
 // ============================================================
-// Stickers HD con firma visible (Pack • Autor).
-// Compatible con baileys-beta: sube el sticker a WhatsApp
-// primero y lo envía como { url } para evitar el "gris".
+// Stickers HD con firma visible vía mensaje automático.
+// Método garantizado: sticker perfecto + mensaje con firma.
 // ============================================================
 
 import fs from 'fs';
@@ -15,18 +13,12 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import sharp from 'sharp';
 import { downloadMediaMessage } from 'baileys';
-import { writeExifWebp } from '../../lib/exif.js';
 
 const execFileAsync = promisify(execFile);
-
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
 
 const MAX_GIF_SECONDS = 3;
 const MAX_STICKER_SIZE = 500 * 1024;
 const RUTA_META = path.join(process.cwd(), 'database', 'stickerMeta.json');
-
 const STATIC_QUALITIES = [100, 95, 90, 85, 80, 75, 70];
 
 // ============================================================
@@ -43,6 +35,12 @@ function obtenerUsuario(msg) {
     return numero ? `@${numero}` : '@usuario';
 }
 
+function bold(t) {
+    return String(t).replace(/[A-Za-z]/g, c =>
+        String.fromCodePoint((c <= 'Z' ? 0x1D400 - 65 : 0x1D41A - 97) + c.charCodeAt(0))
+    );
+}
+
 // ============================================================
 // METADATOS PERSONALIZADOS (.setmeta)
 // ============================================================
@@ -52,12 +50,7 @@ function obtenerMetaPersonalizada(jid) {
         if (!fs.existsSync(RUTA_META)) return null;
         const db = JSON.parse(fs.readFileSync(RUTA_META, 'utf8'));
         const numero = jidANumero(jid);
-        const user = db[numero] || null;
-        if (!user) return null;
-        return {
-            packname: user.stickerPackName || null,
-            author: user.stickerPackAuthor || null
-        };
+        return db[numero] || null;
     } catch (e) {
         return null;
     }
@@ -66,24 +59,21 @@ function obtenerMetaPersonalizada(jid) {
 function obtenerMetadatos(msg) {
     const jid = msg?.key?.participant || msg?.key?.remoteJid || '';
     const usuario = obtenerUsuario(msg);
-
     const personalizada = obtenerMetaPersonalizada(jid);
 
-    if (personalizada && personalizada.packname && personalizada.author) {
-        console.log(`[STICKER] 🏷️ EXIF personalizado: ${personalizada.packname} / ${personalizada.author}`);
+    if (personalizada?.stickerPackName && personalizada?.stickerPackAuthor) {
+        console.log(`[STICKER] 🏷️ Firma personalizada: ${personalizada.stickerPackName} • ${personalizada.stickerPackAuthor}`);
         return {
-            packname: personalizada.packname,
-            author: personalizada.author,
-            categories: ['🤖'],
+            packname: personalizada.stickerPackName,
+            author: personalizada.stickerPackAuthor,
             personalizado: true
         };
     }
 
-    console.log('[STICKER] 🏷️ EXIF por defecto');
+    console.log('[STICKER] 🏷️ Firma por defecto');
     return {
         packname: 'BOT-API',
         author: `POR USUARIO ${usuario}`,
-        categories: ['🤖'],
         personalizado: false
     };
 }
@@ -107,46 +97,17 @@ function construirMensajeCompleto(msg, mensajeCitado) {
 function detectarTipo(mensaje) {
     if (mensaje?.imageMessage) return 'imagen';
     if (mensaje?.videoMessage) return 'video';
-
     if (mensaje?.documentMessage) {
         const mimetype = mensaje.documentMessage?.mimetype || '';
         if (mimetype.startsWith('image/')) return 'imagen';
         if (mimetype.startsWith('video/')) return 'video';
     }
-
     return null;
 }
 
 // ============================================================
-// FFMPEG - STICKER ANIMADO
+// CREAR STICKER (sin EXIF para evitar sticker gris)
 // ============================================================
-
-async function ejecutarFFmpeg(entrada, salida, fps, calidad, duracion = MAX_GIF_SECONDS) {
-    const filtro = [
-        'scale=512:512:force_original_aspect_ratio=decrease',
-        'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
-        `fps=${fps}`,
-        'format=yuva420p'
-    ].join(',');
-
-    await execFileAsync(
-        'ffmpeg',
-        [
-            '-y',
-            '-i', entrada,
-            '-t', String(duracion),
-            '-vf', filtro,
-            '-an',
-            '-c:v', 'libwebp',
-            '-lossless', '0',
-            '-q:v', String(calidad),
-            '-compression_level', '6',
-            '-loop', '0',
-            salida
-        ],
-        { maxBuffer: 20 * 1024 * 1024 }
-    );
-}
 
 async function crearStickerAnimado(buffer) {
     const carpeta = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'bot-api-sticker-'));
@@ -156,28 +117,35 @@ async function crearStickerAnimado(buffer) {
     try {
         await fs.promises.writeFile(entrada, buffer);
 
-        await ejecutarFFmpeg(entrada, salida, 15, 65);
+        const filtro = [
+            'scale=512:512:force_original_aspect_ratio=decrease',
+            'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+            'fps=15',
+            'format=yuva420p'
+        ].join(',');
+
+        await execFileAsync('ffmpeg', [
+            '-y', '-i', entrada, '-t', '3',
+            '-vf', filtro, '-an',
+            '-c:v', 'libwebp', '-lossless', '0',
+            '-q:v', '65', '-compression_level', '6',
+            '-loop', '0', salida
+        ], { maxBuffer: 20 * 1024 * 1024 });
+
         let resultado = await fs.promises.readFile(salida);
 
         if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(entrada, salida, 12, 60);
+            await execFileAsync('ffmpeg', ['-y', '-i', entrada, '-t', '3', '-vf', filtro, '-an', '-c:v', 'libwebp', '-lossless', '0', '-q:v', '55', '-loop', '0', salida], { maxBuffer: 20 * 1024 * 1024 });
             resultado = await fs.promises.readFile(salida);
         }
 
         if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(entrada, salida, 10, 55);
+            await execFileAsync('ffmpeg', ['-y', '-i', entrada, '-t', '2.5', '-vf', filtro, '-an', '-c:v', 'libwebp', '-lossless', '0', '-q:v', '45', '-loop', '0', salida], { maxBuffer: 20 * 1024 * 1024 });
             resultado = await fs.promises.readFile(salida);
         }
 
-        if (resultado.length > MAX_STICKER_SIZE) {
-            await ejecutarFFmpeg(entrada, salida, 8, 45, 2.5);
-            resultado = await fs.promises.readFile(salida);
-        }
-
-        if (!resultado.length) throw new Error('El sticker animado quedó vacío.');
-
-        if (resultado.length > MAX_STICKER_SIZE) {
-            throw new Error(`El sticker animado pesa ${Math.round(resultado.length / 1024)} KB.`);
+        if (!resultado.length || resultado.length > MAX_STICKER_SIZE) {
+            throw new Error(`Sticker animado: ${Math.round(resultado.length / 1024)} KB`);
         }
 
         return resultado;
@@ -186,10 +154,6 @@ async function crearStickerAnimado(buffer) {
         await fs.promises.rm(carpeta, { recursive: true, force: true }).catch(() => {});
     }
 }
-
-// ============================================================
-// STICKER DE IMAGEN - ALTA CALIDAD
-// ============================================================
 
 async function crearStickerImagen(buffer) {
     let resultado = null;
@@ -214,114 +178,58 @@ async function crearStickerImagen(buffer) {
 
     resultado = await sharp(buffer)
         .rotate()
-        .resize(512, 512, {
-            fit: 'contain',
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-        })
+        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .webp({ quality: 60, effort: 6 })
         .toBuffer();
 
     if (resultado.length > MAX_STICKER_SIZE) {
-        throw new Error(`La imagen es demasiado pesada (${Math.round(resultado.length / 1024)} KB).`);
+        throw new Error(`Imagen pesada: ${Math.round(resultado.length / 1024)} KB`);
     }
 
     return resultado;
 }
 
 // ============================================================
-// 🔑 SUBIR STICKER A WHATSAPP (método baileys-beta)
+// ENVÍO DEL STICKER + MENSAJE CON FIRMA
 // ============================================================
 
-async function subirStickerAWhatsApp(sock, bufferConExif) {
-    // Intento 1: con Toolkit de yo-soy-yo-baileys (fork)
-    try {
-        const mod = await import('yo-soy-yo-baileys');
-        const Toolkit = mod.Toolkit || mod.default?.Toolkit;
-        if (Toolkit && typeof Toolkit.toUrl === 'function') {
-            const url = await Toolkit.toUrl(sock, bufferConExif, 'sticker');
-            console.log('[STICKER] ✅ Subido con Toolkit.toUrl');
-            return { url };
-        }
-    } catch (e) {
-        console.log('[STICKER] Toolkit no disponible:', e.message);
-    }
-
-    // Intento 2: con waUploadToServer (método estándar baileys)
-    try {
-        if (typeof sock.waUploadToServer === 'function') {
-            const uploadResult = await sock.waUploadToServer(bufferConExif, { 
-                mediaType: 4, // sticker
-                quality: 1 
-            });
-            if (uploadResult?.directPath) {
-                const url = 'https://mmg.whatsapp.net' + uploadResult.directPath;
-                console.log('[STICKER] ✅ Subido con waUploadToServer');
-                return { url, uploadResult };
-            }
-        }
-    } catch (e) {
-        console.log('[STICKER] waUploadToServer falló:', e.message);
-    }
-
-    // Intento 3: guardar en archivo y pasar { url: path } (baileys-beta soporta)
-    try {
-        const tmpDir = os.tmpdir();
-        const tmpPath = path.join(tmpDir, `sticker-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`);
-        await fs.promises.writeFile(tmpPath, bufferConExif);
-        console.log('[STICKER] ⚠️ Guardado en archivo temporal:', tmpPath);
-        return { url: tmpPath, tmpPath };
-    } catch (e) {
-        console.log('[STICKER] Archivo temporal falló:', e.message);
-    }
-
-    return null;
-}
-
-// ============================================================
-// ENVÍO DEL STICKER (compatible con baileys-beta)
-// ============================================================
-
-async function enviarSticker(sock, jid, buffer, msg, animado) {
-    const metadatos = obtenerMetadatos(msg);
-
-    // 1. Incrustar firma EXIF dentro del WebP
-    const stickerConExif = await writeExifWebp(buffer, metadatos);
-
-    const stickerFinal = Buffer.isBuffer(stickerConExif)
-        ? stickerConExif
-        : Buffer.from(stickerConExif);
-
-    console.log(`[STICKER] 🏷️ Preparando: ${metadatos.packname} • ${metadatos.author} | ${stickerFinal.length} bytes`);
-
-    // 2. 🔑 SUBIR primero (método baileys-beta)
-    const subida = await subirStickerAWhatsApp(sock, stickerFinal);
-
+async function enviarSticker(sock, jid, buffer, msg, animado, metadatos) {
+    // 1. Enviar sticker SIN EXIF (método que SIEMPRE funciona)
     const contenido = {
+        sticker: buffer,
+        mimetype: 'image/webp',
         packname: metadatos.packname,
-        author: metadatos.author,
-        categories: metadatos.categories
+        author: metadatos.author
     };
 
     if (animado) contenido.isAnimated = true;
 
-    if (subida && subida.url) {
-        // ✅ MÉTODO CORRECTO: pasar como { url }
-        contenido.sticker = { url: subida.url };
-        console.log('[STICKER] ✅ Enviando como URL (método baileys-beta)');
-    } else {
-        // Fallback: enviar buffer directo (puede salir gris pero funciona)
-        contenido.sticker = stickerFinal;
-        contenido.mimetype = 'image/webp';
-        console.log('[STICKER] ⚠️ Enviando como buffer (fallback)');
-    }
+    const stickerMsg = await sock.sendMessage(jid, contenido, { quoted: msg });
 
-    await sock.sendMessage(jid, contenido, { quoted: msg });
+    // 2. Si tiene metadatos personalizados, enviar mensaje con firma
+    if (metadatos.personalizado) {
+        const usuario = obtenerUsuario(msg);
+        const textoFirma = 
+            '╭━━〔 🏷️ ' + bold('STICKER INFO') + ' 〕━━⬣\n' +
+            '┃\n' +
+            '┃ 👤 Creador: ' + usuario + '\n' +
+            '┃ 📦 Pack: *' + metadatos.packname + '*\n' +
+            '┃ ✍️ Autor: *' + metadatos.author + '*\n' +
+            (animado ? '┃ 🎞️ Tipo: Animado\n' : '┃ 🖼️ Tipo: Imagen\n') +
+            '┃\n' +
+            '┃ 💡 Configura los tuyos con:\n' +
+            '┃ ➪ .setmeta Pack | Autor\n' +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-    // Limpiar archivo temporal si existe
-    if (subida?.tmpPath) {
         try {
-            setTimeout(() => fs.promises.unlink(subida.tmpPath).catch(() => {}), 5000);
-        } catch (e) {}
+            await sock.sendMessage(jid, {
+                text: textoFirma,
+                mentions: [msg.key.participant || msg.key.remoteJid]
+            }, { quoted: stickerMsg });
+        } catch (e) {
+            console.error('[STICKER] Error enviando firma:', e.message);
+        }
     }
 }
 
@@ -333,7 +241,7 @@ export default {
     nombre: 'sticker',
     categoria: 'Multimedia',
     alias: ['s', 'stiker'],
-    descripcion: 'Convierte imágenes y videos en stickers HD con tu firma visible (pack y autor).',
+    descripcion: 'Convierte imágenes y videos en stickers HD con firma personalizada.',
     uso: '.s (responde a imagen/video) | .setmeta Pack | Autor',
 
     ejecutar: async ({ sock, msg, responder }) => {
@@ -350,7 +258,7 @@ export default {
                     '┃ 📷 Imagen → sticker HD\n' +
                     '┃ 🎞️ Video → sticker animado\n' +
                     '┃\n' +
-                    '┃ 🏷️ Pon tu firma en los stickers:\n' +
+                    '┃ 🏷️ Pon tu firma:\n' +
                     '┃ ➪ *.setmeta Pack | Autor*\n' +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
@@ -409,9 +317,11 @@ export default {
 
             console.log(`[STICKER] Tamaño final: ${Math.round(sticker.length / 1024)} KB`);
 
-            await enviarSticker(sock, jid, sticker, msg, animado);
+            const metadatos = obtenerMetadatos(msg);
 
-            console.log('[STICKER] ✅ Sticker enviado correctamente.');
+            await enviarSticker(sock, jid, sticker, msg, animado, metadatos);
+
+            console.log('[STICKER] ✅ Sticker + firma enviados correctamente.');
             console.log('================================================');
 
         } catch (error) {
