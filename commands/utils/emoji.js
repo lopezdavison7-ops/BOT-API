@@ -1,14 +1,7 @@
-// commands/utils/emoji.js
-// ============================================================
-// BOT-API — EMOJI (Delirius API / Emojigraph)
-// ============================================================
-// .emoji <emoji>              → álbum con TODAS las plataformas
-// .emoji <emoji> <plataforma> → imagen de una plataforma
-// ============================================================
+
 
 const API = 'https://api.delirius.online/tools/emoji?text=';
 
-// ---------- PLATAFORMAS DISPONIBLES ----------
 const PLATAFORMAS = [
     'apple', 'google', 'whatsapp', 'facebook', 'twitter',
     'samsung', 'microsoft', 'mensajero', 'joypixels',
@@ -16,7 +9,6 @@ const PLATAFORMAS = [
     'softbank', 'au_kddi'
 ];
 
-// ---------- ALIAS DE PLATAFORMAS ----------
 const ALIAS = {
     'messenger': 'mensajero',
     'x': 'twitter',
@@ -31,7 +23,6 @@ function normalizarPlataforma(txt) {
     return ALIAS[t] || t;
 }
 
-// ---------- DESCARGAR IMAGEN ----------
 async function descargarImagen(url) {
     const res = await fetch(url, {
         headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
@@ -70,7 +61,6 @@ export default {
             );
         }
 
-        // Separar emoji y plataforma opcional
         const partes = args.split(/\s+/);
         const emoji = partes[0];
         const plataforma = partes[1] ? normalizarPlataforma(partes[1]) : null;
@@ -85,9 +75,6 @@ export default {
                 return await responder.texto('❌ No encontré ese emoji: *' + emoji + '*');
             }
 
-            // ============================================
-            // CASO 1: PLATAFORMA ESPECÍFICA
-            // ============================================
             if (plataforma) {
                 const url = datos[plataforma];
 
@@ -108,9 +95,6 @@ export default {
                 );
             }
 
-            // ============================================
-            // CASO 2: ÁLBUM CON TODAS LAS PLATAFORMAS
-            // ============================================
             const entradas = PLATAFORMAS
                 .filter(p => datos[p])
                 .map(p => ({ nombre: p, url: datos[p] }));
@@ -119,7 +103,6 @@ export default {
                 return await responder.texto('❌ Ese emoji no tiene imágenes disponibles.');
             }
 
-            // Descargar todas en paralelo
             const resultados = await Promise.allSettled(
                 entradas.map(e => descargarImagen(e.url))
             );
@@ -135,7 +118,6 @@ export default {
                 return await responder.texto('❌ No pude descargar las imágenes del emoji.');
             }
 
-            // Enviar como álbum (igual que pinterest)
             const album = imagenes.map((img, i) => ({
                 image: img.buffer,
                 caption: i === imagenes.length - 1
@@ -147,7 +129,7 @@ export default {
                 await s.sendMessage(chatJid, { album }, { quoted: msg });
             } catch (errorAlbum) {
                 console.error('[EMOJI] Álbum falló:', errorAlbum?.message || errorAlbum);
-                // Respaldo: una por una
+
                 for (const img of imagenes) {
                     try {
                         await s.sendMessage(
