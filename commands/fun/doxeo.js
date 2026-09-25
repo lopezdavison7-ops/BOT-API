@@ -1,4 +1,4 @@
-// commands/fun/doxeo.js
+
 export default {
     nombre: 'doxeo',
     categoria: 'Diversión',
@@ -9,14 +9,12 @@ export default {
             let target = null;
             let numeroBase = '';
 
-            // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
                 numeroBase = target.split('@')[0];
             }
 
-            // FORMA 2: Mención (@usuario)
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
@@ -27,17 +25,13 @@ export default {
                 }
             }
 
-            // Si no hay mención ni respuesta, usar al que ejecuta
             if (!target) {
                 target = msg.key.participant || msg.key.remoteJid;
                 numeroBase = target.split('@')[0];
             }
 
-            // 🔥 GENERAR DATOS ÚNICOS BASADOS EN EL NÚMERO COMPLETO
-            // Usamos el número como semilla para que siempre dé el mismo resultado
             const seed = parseInt(numeroBase.slice(-4)) || 1234;
 
-            // Listas ampliadas y realistas
             const nombresReales = [
                 'Carlos Andrés Martínez', 'María Fernanda García', 'Jorge Luis Pérez',
                 'Ana Sofía López', 'Luis Enrique Rodríguez', 'Laura Valentina Fernández',
@@ -80,8 +74,6 @@ export default {
 
             const estadosCiviles = ['Soltero/a', 'Casado/a', 'Union Libre', 'Viudo/a', 'En pareja'];
 
-            // 🔥 SELECCIONAR DATOS SEGÚN EL NÚMERO
-            // Usamos operaciones matemáticas simples con el seed
             const nombre = nombresReales[seed % nombresReales.length];
             const edad = edades[seed % edades.length];
             const ciudad = ciudades[seed % ciudades.length];
@@ -93,16 +85,13 @@ export default {
             const gusto = gustosReales[seed % gustosReales.length];
             const estadoCivil = estadosCiviles[seed % estadosCiviles.length];
 
-            // 🔥 GENERAR FECHA DE NACIMIENTO REALISTA
             const dia = (seed % 28) + 1;
             const mes = (seed % 12) + 1;
             const año = new Date().getFullYear() - parseInt(edad);
             const fechaNacimiento = `${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}/${año}`;
 
-            // 🔥 GENERAR CÉDULA (número de identificación)
             const cedula = `1.${seed.toString().padStart(8, '0')}`;
 
-            // Mensaje final con formato ultra realista
             const respuesta = `
 ╭〔 🔒 𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐂𝐈𝐎𝐍 𝐂𝐎𝐍𝐅𝐈𝐃𝐄𝐍𝐂𝐈𝐀𝐋 〕⬣
 ┃
