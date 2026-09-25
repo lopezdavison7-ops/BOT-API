@@ -1,4 +1,4 @@
-// commands/fun/say.js
+
 export default {
     nombre: 'say',
     categoria: 'Utilidades',
@@ -6,13 +6,12 @@ export default {
     descripcion: 'Reenvía cualquier mensaje (foto, video, sticker, audio) con texto extra',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // Obtener información del mensaje citado
+
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
             const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
             const textoEscrito = String(argumento || '').trim();
 
-            // 1. Si NO respondió a nada y solo escribió texto
             if (!quotedMsg && textoEscrito) {
                 await sock.sendMessage(msg.key.remoteJid, {
                     text: textoEscrito
@@ -21,15 +20,13 @@ export default {
                 return;
             }
 
-            // 2. Si respondió pero no hay ID (error de seguridad)
             if (!quotedId) {
                 await responder.texto('❌ No se pudo obtener el mensaje citado. Intenta responder directamente al mensaje.');
                 return;
             }
 
-            // 3. Si respondió a un archivo, reenviarlo completo con texto opcional
             if (quotedMsg) {
-                // Detectar menciones en el texto escrito
+
                 let mentions = [];
                 if (textoEscrito) {
                     const mentionPattern = /@(\d+)/g;
@@ -39,7 +36,6 @@ export default {
                     }
                 }
 
-                // 🔥 REENVÍO DIRECTO DEL MENSAJE COMPLETO
                 await sock.sendMessage(msg.key.remoteJid, {
                     forward: {
                         key: {
@@ -50,7 +46,7 @@ export default {
                         },
                         message: quotedMsg
                     },
-                    // Si escribiste texto, se agrega como caption (si es imagen/video) o como mensaje aparte
+
                     text: textoEscrito || undefined,
                     mentions: mentions
                 }, { quoted: msg });
@@ -59,7 +55,6 @@ export default {
                 return;
             }
 
-            // 4. Si no se pudo hacer nada
             await responder.texto('❌ No se pudo reenviar el mensaje.');
 
         } catch (error) {
