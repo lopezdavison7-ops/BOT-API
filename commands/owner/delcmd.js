@@ -1,14 +1,5 @@
-// commands/owner/delcmd.js
-// ============================================================
-// COMANDO: DELCMD (solo owner)
-// ============================================================
-// Elimina comandos creados desde el chat.
-//
-// Ejemplos:
-// .delcmd fun/hola
-// .delcmd economy/dar
-// .delcmd NSFW/r34
-// ============================================================
+
+
 import fs from 'fs';
 import path from 'path';
 import { esOwner } from '../../lib/owner.js';
@@ -24,9 +15,6 @@ export default {
     uso: '.delcmd carpeta/nombre',
     ejecutar: async ({ msg, argumento, responder }) => {
 
-        // ----------------------------------------------------
-        // SOLO OWNER
-        // ----------------------------------------------------
         if (!esOwner(msg)) {
             await responder.texto('❌ Este comando es solo para el Owner.');
             return;
@@ -87,7 +75,6 @@ export default {
                 );
             }
 
-            // Protección: no dejar borrar comandos del sistema
             const comandosProtegidos = ['update', 'owner', 'addcmd', 'delcmd', 'setowner', 'delowner'];
             if (carpeta === 'owner' && comandosProtegidos.includes(nombre)) {
                 return await responder.texto(
