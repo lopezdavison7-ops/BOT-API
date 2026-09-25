@@ -1,7 +1,4 @@
-// database/perfiles.js
-// ============================================================
-// PERFILES DE USUARIO
-// ============================================================
+
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ARCHIVO = path.join(__dirname, 'perfiles.json');
 
-// CAMBIO: ahora exportada para usarla en /marry
 export function datos() {
     return obtenerStore(ARCHIVO, {});
 }
@@ -20,19 +16,11 @@ function guardar() {
     guardarStore(ARCHIVO);
 }
 
-// ============================================================
-// GÉNEROS VÁLIDOS
-// ============================================================
-
 export const GENEROS = {
     masculino: { etiqueta: 'Masculino', emoji: '♂️' },
     femenino: { etiqueta: 'Femenino', emoji: '♀️' },
     otro: { etiqueta: 'Otro', emoji: '⚧️' }
 };
-
-// ============================================================
-// CREAR PERFIL VACÍO
-// ============================================================
 
 function crearPerfil() {
     return {
@@ -40,14 +28,10 @@ function crearPerfil() {
         genero: null,
         pareja: null,
         casadoDesde: null,
-        propuestaDe: null, // quien le propuso
-        propuestaFecha: null // timestamp de la propuesta
+        propuestaDe: null,
+        propuestaFecha: null
     };
 }
-
-// ============================================================
-// OBTENER / GUARDAR PERFIL
-// ============================================================
 
 export function obtenerPerfil(id) {
     const db = datos();
@@ -64,10 +48,6 @@ export function guardarPerfil(id, perfil) {
     guardar();
     return perfil;
 }
-
-// ============================================================
-// EDAD / FECHA DE NACIMIENTO
-// ============================================================
 
 export function validarFechaNacimiento(texto) {
     const match = String(texto).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -108,20 +88,12 @@ export function setFechaNacimiento(id, fechaISO) {
     return perfil;
 }
 
-// ============================================================
-// GÉNERO
-// ============================================================
-
 export function setGenero(id, claveGenero) {
     const perfil = obtenerPerfil(id);
     perfil.genero = claveGenero;
     guardar();
     return perfil;
 }
-
-// ============================================================
-// MATRIMONIO
-// ============================================================
 
 export function estaCasado(id) {
     return Boolean(obtenerPerfil(id).pareja);
@@ -138,7 +110,6 @@ export function crearPropuesta(deId, paraId) {
     guardar();
 }
 
-// Retorna {emisor, timestamp} o null
 export function obtenerPropuestaPendiente(paraId) {
     const perfil = obtenerPerfil(paraId);
     if (!perfil.propuestaDe ||!perfil.propuestaFecha) return null;
@@ -155,14 +126,13 @@ export function eliminarPropuesta(paraId) {
     guardar();
 }
 
-// Acepta la propuesta pendiente dirigida a `paraId`.
 export function aceptarPropuesta(paraId) {
     const perfilPara = obtenerPerfil(paraId);
     const deId = perfilPara.propuestaDe;
     if (!deId) return null;
 
     const DOS_MINUTOS = 2 * 60 * 1000;
-    // Checar si expiró al aceptar
+
     if (Date.now() - perfilPara.propuestaFecha > DOS_MINUTOS) {
         eliminarPropuesta(paraId);
         return 'expirado';
@@ -182,10 +152,6 @@ export function aceptarPropuesta(paraId) {
     guardar();
     return deId;
 }
-
-// ============================================================
-// DIVORCIO
-// ============================================================
 
 export function divorciar(id) {
     const perfil = obtenerPerfil(id);
