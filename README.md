@@ -1,78 +1,69 @@
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:25D366,100:0B7A3E&height=200&section=header&text=🤖%20BOT-API&fontSize=70&fontColor=ffffff&fontAlignY=38&desc=⚡%20Bot%20de%20WhatsApp%20avanzado%20con%20Baileys&descAlignY=62&descSize=20&animation=fadeIn"/>
+
 <div align="center">
 
-<img src="https://i.imgur.com/q7RQZ8L.gif" alt="BOT-API Animation" width="400"/>
-
-# 🤖 BOT-API
-
-### ⚡ Bot de WhatsApp avanzado con Baileys
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=26&duration=2500&pause=900&color=25D366&center=true&vCenter=true&width=720&lines=🤖+BOT-API+v2.0.0;🎮+Juegos+•+💰+Economía+•+🎨+Stickers;🛡️+Moderación+•+🧠+Memoria+IA;🚀+Powered+by+Alex"/>
 
 <br>
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge&logo=semver)
-![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)
-![WhatsApp](https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
-![Status](https://img.shields.io/badge/status-active-success?style=for-the-badge)
+![Version](https://img.shields.io/badge/versión-2.0.0-25D366?style=for-the-badge&logo=semver&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![WhatsApp](https://img.shields.io/badge/WhatsApp-Baileys-075E54?style=for-the-badge&logo=whatsapp&logoColor=white)
+![JS](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Visitas](https://komarev.com/ghpvc/?username=lopezdavison7-ops&color=25D366&style=for-the-badge&label=visitas)
 
 <br>
 
-[![WhatsApp Channel](https://img.shields.io/badge/📢_Canal_Oficial-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q)
-[![WhatsApp Group](https://img.shields.io/badge/💬_Grupo_Oficial-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ)
-[![Creator](https://img.shields.io/badge/👤_Creador-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/50578391933)
+<a href="https://wa.me/50578391933"><img src="https://img.shields.io/badge/👤_CREADOR-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
+<a href="https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q"><img src="https://img.shields.io/badge/📢_CANAL_OFICIAL-Síguenos-075E54?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
+<a href="https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ"><img src="https://img.shields.io/badge/💬_GRUPO_OFICIAL-Únete-128C7E?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
 
 </div>
 
----
-
-<div align="center">
+<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%"/>
 
 ## 🌟 ¿Qué es BOT-API?
 
-**BOT-API** es un bot de WhatsApp completo y moderno desarrollado con **Node.js** y **Baileys**.  
-Incluye juegos interactivos, sistema económico, stickers personalizados, IA y mucho más.
+> **BOT-API** es un bot de WhatsApp completo y moderno desarrollado con **Node.js** y **Baileys**.
+> Incluye juegos interactivos, sistema económico, stickers con formas y efectos,
+> memoria IA, moderación por chat y mucho más.
 
-</div>
-
----
-
-## ✨ Características principales
-
-<table>
+<table align="center">
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🎮 **Juegos**
-- Trivia multijugador
-- Tres en raya (TTT)
-- Tetris
-- Adivinanzas
+### 🎮 Juegos
+- ❓ Trivia multijugador
+- ⚔️ Tres en raya (TTT)
+- 🧱 Tetris
+- 💭 Adivinanzas
 
-### 💰 **Economía**
-- Balance y banco
-- Daily rewards
-- Transferencias
-- Rankings
+### 💰 Economía
+- 💵 Balance y banco
+- 🎁 Daily rewards
+- 🔝 Rankings (.baltop)
+- 🪙 Transferencias
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-### 🎨 **Stickers**
-- 17 formas diferentes
-- 14 efectos visuales
-- Metadatos personalizados
-- Stickers animados
+### 🎨 Stickers
+- 🔷 17 formas (corazón, estrella...)
+- ✨ 14 efectos (blur, sepia...)
+- 🏷️ Metadatos personalizados (.setmeta)
+- 🎞️ Stickers animados
 
-### 🤖 **Inteligencia**
-- Memoria contextual
-- Respuestas IA
-- Sistema AFK
-- Moderación automática
+### 🧠 Inteligencia
+- 💬 Memoria contextual IA
+- 💤 Sistema AFK
+- 🛡️ Antilink inteligente
+- 📂 Categorías por chat
 
 </td>
 </tr>
 </table>
 
----
+<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%"/>
 
 ## 🚀 Instalación rápida
 
@@ -84,114 +75,63 @@ cd BOT-API
 # 2️⃣ Instalar dependencias
 npm install
 
-# 3️⃣ Configurar variables
-cp .env.example .env
-nano .env  # Edita con tu configuración
-
-# 4️⃣ Ejecutar
+# 3️⃣ Ejecutar
 npm start
 ```
-
----
 
 ## 🎯 Comandos destacados
 
 | Categoría | Comando | Descripción |
-|-----------|---------|-------------|
-| 🎮 Juegos | `.trivia` | Trivia multijugador |
-| 💰 Economía | `.bal` | Ver tu balance |
-| 🎨 Stickers | `.s -v -blur` | Sticker corazón con blur |
-| 🤖 IA | `.ai hola` | Chat con IA |
-| 📊 Info | `.ping` | Estado del bot |
-| 🛡️ Moderación | `.antilink` | Control de enlaces |
+|:---:|:---:|:---|
+| 🎮 Juegos | `.trivia` / `.ttt` / `.tetris` | Juegos multijugador |
+| 💰 Economía | `.bal` / `.daily` / `.baltop` | Sistema económico |
+| 🎨 Stickers | `.s -v -blur` | Corazón con desenfoque |
+| 🏷️ Meta | `.setmeta Pack \| Autor` | Firma tus stickers |
+| 🧠 IA | `.ai hola` | Chat con memoria |
+| 📊 Info | `.ping` / `.menu` | Estado y ayuda |
+| 🛡️ Moderación | `.antilink` / `.afk` | Control del chat |
 
-**Ver todos:** `.menu`
+<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%"/>
 
----
-
-## 📦 Requisitos
-
-<div align="center">
-
-![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js&logoColor=white)
-![FFmpeg](https://img.shields.io/badge/FFmpeg-required-red?style=flat-square&logo=ffmpeg&logoColor=white)
-![Sharp](https://img.shields.io/badge/Sharp-required-blue?style=flat-square)
-![Baileys](https://img.shields.io/badge/Baileys-7.x-25D366?style=flat-square&logo=whatsapp)
-
-</div>
-
----
-
-## 🔧 Configuración
-
-```env
-# .env
-PREFIX=.
-OWNER=50578391933
-SESSION_NAME=bot-api
-```
-
----
-
-## 📸 Capturas de pantalla
+## 📊 Stats del desarrollador
 
 <div align="center">
 
-| Stickers con efectos | Sistema económico | Juegos interactivos |
-|:---:|:---:|:---:|
-| ![Stickers](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=🎨+Stickers) | ![Economía](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=💰+Economía) | ![Juegos](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=🎮+Juegos) |
-
-</div>
-
----
-
-## 🤝 Contribuir
-
-¿Quieres mejorar BOT-API? ¡Genial!
-
-1. 🍴 Fork el proyecto
-2. 🌿 Crea una rama (`git checkout -b feature/NuevaFuncion`)
-3. 💾 Commit tus cambios (`git commit -m 'Add NuevaFuncion'`)
-4. 📤 Push a la rama (`git push origin feature/NuevaFuncion`)
-5. 🔀 Abre un Pull Request
-
----
-
-## 📄 Licencia
-
-Distribuido bajo la Licencia **MIT**.  
-Ver archivo `LICENSE` para más información.
-
----
-
-<div align="center">
-
-## 👨‍💻 Créditos
-
-### Desarrollado con ❤️ por **Alex**
-
-[![WhatsApp](https://img.shields.io/badge/📱_Contacto-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/50578391933)
-
----
-
-## 📞 Soporte
-
-[![Canal](https://img.shields.io/badge/📢_Canal-WhatsApp-25D366?style=flat-square&logo=whatsapp)](https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q)
-[![Grupo](https://img.shields.io/badge/💬_Grupo-WhatsApp-25D366?style=flat-square&logo=whatsapp)](https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ)
-[![Contacto](https://img.shields.io/badge/📧_Email-Contacto-25D366?style=flat-square)](https://wa.me/50578391933)
-
----
-
-## ⚡ Powered by Alex
-
-![Made with](https://img.shields.io/badge/Made_with-❤️-red?style=for-the-badge)
-![Built with](https://img.shields.io/badge/Built_with-Node.js-339933?style=for-the-badge&logo=node.js)
-![Powered by](https://img.shields.io/badge/Powered_by-Baileys-25D366?style=for-the-badge&logo=whatsapp)
+<img height="170" src="https://github-readme-stats.vercel.app/api?username=lopezdavison7-ops&show_icons=true&theme=github_dark&hide_border=true&title_color=25D366&icon_color=25D366&text_color=ffffff"/>
+<img height="170" src="https://github-readme-stats.vercel.app/api/top-langs/?username=lopezdavison7-ops&theme=github_dark&hide_border=true&layout=compact&title_color=25D366&text_color=ffffff"/>
 
 <br>
 
-### ⭐ Si este proyecto te fue útil, dale una estrella
+<img src="https://streak-stats.demolab.com?user=lopezdavison7-ops&theme=github-dark-blue&hide_border=true&stroke=25D366&ring=25D366&fire=25D366&currStreakLabel=25D366"/>
 
-<img src="https://i.imgur.com/q7RQZ8L.gif" alt="BOT-API Animation" width="400"/>
+</div>
+
+<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%"/>
+
+## 🤝 Contribuir
+
+1. 🍴 Fork el proyecto
+2. 🌿 Crea tu rama (`git checkout -b feature/NuevaFuncion`)
+3. 💾 Commit (`git commit -m 'Add NuevaFuncion'`)
+4. 📤 Push (`git push origin feature/NuevaFuncion`)
+5. 🔀 Abre un Pull Request
+
+## 📞 Soporte
+
+<div align="center">
+
+<a href="https://wa.me/50578391933"><img src="https://img.shields.io/badge/WhatsApp_ directo-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
+<a href="https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q"><img src="https://img.shields.io/badge/Canal-Noticias-075E54?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
+<a href="https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ"><img src="https://img.shields.io/badge/Grupo-Comunidad-128C7E?style=for-the-badge&logo=whatsapp&logoColor=white"/></a>
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0B7A3E,100:25D366&height=160&section=footer&text=⚡%20Powered%20by%20Alex&fontSize=35&fontColor=ffffff&fontAlignY=60&animation=fadeIn"/>
+
+<div align="center">
+
+### ⭐ Si el bot te sirvió, dale una estrella al repo
+
+**Hecho con ❤️ y mucho ☕ por Alex**
 
 </div>
