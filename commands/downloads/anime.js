@@ -1,15 +1,8 @@
-// commands/download/animesearch.js
-// ============================================================
-// BOT-API — BÚSQUEDA DE ANIME (Delirius API + MyAnimeList)
-// ============================================================
-// .anime <nombre>  → lista numerada de resultados
-// .anime <número>  → ficha completa con póster
-// ============================================================
+
 
 const API = 'https://api.delirius.online/anime/animesearch?query=';
 const MAX_RESULTADOS = 10;
 
-// ---------- NORMALIZAR ITEM (claves ES / EN) ----------
 function normalizarItem(a) {
     const payload = a['carga útil'] || a['carga_util'] || a.payload || {};
     return {
@@ -25,7 +18,6 @@ function normalizarItem(a) {
     };
 }
 
-// ---------- ENVIAR FICHA DETALLADA ----------
 async function enviarDetalle(responder, item, indice) {
     const texto =
         '╭━━〔 🍥 𝐀𝐈𝐄 〕━━⬣\n' +
@@ -45,7 +37,7 @@ async function enviarDetalle(responder, item, indice) {
     try {
         await responder.imagen({ url: item.imagen }, texto);
     } catch (e) {
-        // Si falla el póster, mandar solo texto
+
         await responder.texto(texto);
     }
 }
@@ -60,7 +52,6 @@ export default {
         const chatJid = msg.key.remoteJid;
         const input = String(argumento || '').trim();
 
-        // ---------- AYUDA ----------
         if (!input) {
             return await responder.texto(
                 '╭━━〔 🍥 𝐀𝐍𝐈𝐌𝐄 〕━━⬣\n' +
@@ -76,7 +67,6 @@ export default {
             );
         }
 
-        // ---------- MODO SELECCIÓN: .anime <número> ----------
         if (/^\d+$/.test(input)) {
             const lista = global.animeMap?.[chatJid];
 
@@ -100,7 +90,6 @@ export default {
             return await enviarDetalle(responder, item, idx);
         }
 
-        // ---------- MODO BÚSQUEDA ----------
         try {
             const res = await fetch(API + encodeURIComponent(input));
             const text = await res.text();
@@ -126,11 +115,9 @@ export default {
                 );
             }
 
-            // Guardar lista para selección posterior
             global.animeMap = global.animeMap || {};
             global.animeMap[chatJid] = datos.slice(0, MAX_RESULTADOS).map(normalizarItem);
 
-            // ---------- LISTA NUMERADA ----------
             let texto =
                 '╭━━〔 🍥 𝐍𝐌𝐒 〕━━⬣\n' +
                 '┃\n' +
