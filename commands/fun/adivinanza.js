@@ -1,4 +1,4 @@
-// commands/fun/adivinanza.js
+
 import {
     hayPartidaActiva,
     crearAcertijo
