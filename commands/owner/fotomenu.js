@@ -1,10 +1,4 @@
-// commands/owner/fotomenu.js
-// ============================================================
-// FOTO DEL MENÚ - SOLO OWNER
-// Uso:
-// 1. Cita una imagen y escribe .fotomenu
-// 2. Envía una imagen con el texto .fotomenu
-// ============================================================
+
 
 import fs from 'fs';
 import path from 'path';
@@ -33,17 +27,9 @@ export default {
         try {
             let mensajeImagen = null;
 
-            // ====================================================
-            // IMAGEN ENVIADA DIRECTAMENTE
-            // ====================================================
-
             if (msg.message?.imageMessage) {
                 mensajeImagen = msg;
             }
-
-            // ====================================================
-            // IMAGEN CITADA
-            // ====================================================
 
             if (!mensajeImagen) {
                 const contexto =
@@ -62,10 +48,6 @@ export default {
                 }
             }
 
-            // ====================================================
-            // COMPROBAR IMAGEN
-            // ====================================================
-
             if (!mensajeImagen) {
                 await responder.texto(
                     '🖼️ *FOTO DEL MENÚ*\n\n' +
@@ -82,10 +64,6 @@ export default {
                 '⏳ Guardando la nueva foto del menú...'
             );
 
-            // ====================================================
-            // DESCARGAR IMAGEN
-            // ====================================================
-
             const buffer = await downloadMediaMessage(
                 mensajeImagen,
                 'buffer',
@@ -101,18 +79,10 @@ export default {
                 );
             }
 
-            // ====================================================
-            // CREAR CARPETA SI NO EXISTE
-            // ====================================================
-
             fs.mkdirSync(
                 path.dirname(RUTA_FOTO),
                 { recursive: true }
             );
-
-            // ====================================================
-            // GUARDAR IMAGEN
-            // ====================================================
 
             fs.writeFileSync(
                 RUTA_FOTO,
