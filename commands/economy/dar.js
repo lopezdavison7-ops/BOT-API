@@ -1,9 +1,4 @@
-// commands/economy/dar.js
-// ============================================================
-// BOT-API — DAR COINS (transferir dinero)
-// ============================================================
-// .dar @user <cantidad> → regala dinero de tu saldo a otro usuario
-// ============================================================
+
 
 import { obtenerUsuario, guardarUsuario } from '../../database/economia.js';
 
@@ -17,7 +12,6 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Detectar mención
         let target = null;
         const quotedMention = msg.message?.extendedTextMessage?.contextInfo?.participant;
         const textMentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
@@ -27,14 +21,13 @@ export default {
         } else if (textMentions && textMentions.length > 0) {
             target = textMentions[0];
         } else if (args && args.length > 0) {
-            // Buscar número en el argumento
+
             const numMatch = argumento.match(/\d+/);
             if (numMatch) {
                 target = numMatch[0] + '@s.whatsapp.net';
             }
         }
 
-        // Validar que haya target
         if (!target) {
             return await responder.texto(
                 '╭━━〔 💸 𝐃𝐀𝐑 〕━━⬣\n' +
@@ -52,7 +45,6 @@ export default {
             );
         }
 
-        // Validar que no sea a sí mismo
         if (target === sender) {
             return await responder.texto(
                 '╭━━〔 💸 𝐃𝐀𝐑 〕━━⬣\n' +
@@ -64,11 +56,9 @@ export default {
             );
         }
 
-        // Extraer cantidad
         const cantidadMatch = argumento.match(/\d+/g);
         const cantidad = cantidadMatch ? parseInt(cantidadMatch[cantidadMatch.length - 1]) : 0;
 
-        // Validar cantidad
         if (isNaN(cantidad) || cantidad <= 0) {
             return await responder.texto(
                 '╭━━〔 💸 𝐃𝐀𝐑 〕━━⬣\n' +
@@ -84,7 +74,6 @@ export default {
             );
         }
 
-        // Validar mínimo
         if (cantidad < 100) {
             return await responder.texto(
                 '╭━━〔 💸 𝐃𝐀𝐑 〕━━⬣\n' +
@@ -97,13 +86,11 @@ export default {
             );
         }
 
-        // Obtener usuarios
         const usuarioOrigen = obtenerUsuario(sender);
         const usuarioDestino = obtenerUsuario(target);
 
         const saldoOrigen = usuarioOrigen.dinero || 0;
 
-        // Validar saldo suficiente
         if (saldoOrigen < cantidad) {
             return await responder.texto(
                 '╭━━〔 💸 𝐃𝐀𝐑 〕━━⬣\n' +
@@ -120,7 +107,6 @@ export default {
             );
         }
 
-        // Aplicar transferencia
         const saldoAnteriorOrigen = saldoOrigen;
         const saldoAnteriorDestino = usuarioDestino.dinero || 0;
 
