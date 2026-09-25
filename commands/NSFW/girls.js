@@ -1,8 +1,4 @@
-// commands/nsfw/girls.js
-// ============================================================
-// BOT-API — GIRLS (NSFW - Delirius API)
-// La API devuelve la imagen directa (no JSON)
-// ============================================================
+
 
 import { obtenerStore, guardarStore } from '../../lib/jsonStore.js';
 import path from 'path';
@@ -37,9 +33,6 @@ export default {
 
         const input = String(argumento || '').trim().toLowerCase();
 
-        // ============================================
-        // MODO ADMIN: on / off (comparte flag nsfw con tetas)
-        // ============================================
         if (isGroup && (input === 'on' || input === 'off')) {
             let esAdmin = false;
             try {
@@ -75,9 +68,6 @@ export default {
             );
         }
 
-        // ============================================
-        // RESTRICCIÓN 18+ EN GRUPOS
-        // ============================================
         if (isGroup) {
             const grupos = obtenerGrupos();
             if (!grupos[chatJid]?.nsfw) {
@@ -95,17 +85,11 @@ export default {
             }
         }
 
-        // ============================================
-        // CANTIDAD DE IMÁGENES
-        // ============================================
         let cantidad = 1;
         if (/^\d+$/.test(input)) {
             cantidad = Math.min(Math.max(parseInt(input), 1), MAX_IMAGENES);
         }
 
-        // ============================================
-        // GENERAR Y ENVIAR IMÁGENES
-        // ============================================
         try {
             if (cantidad > 1) {
                 await responder.texto(`⏳ Generando *${cantidad}* imágenes +18...`);
@@ -113,7 +97,7 @@ export default {
 
             for (let i = 0; i < cantidad; i++) {
                 const imageUrl = `${API}?_=${Date.now()}_${i}`;
-                
+
                 await responder.imagen(
                     { url: imageUrl },
                     `🔞 *+18* · 🔥 ${i + 1}/${cantidad}\n\n⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈`
