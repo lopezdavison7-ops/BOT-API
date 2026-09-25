@@ -1,11 +1,4 @@
-// commands/downloads/tiktoksearch.js
-// ============================================================
-// COMANDO: TIKTOKSEARCH
-// BOT-API
-//
-// Busca videos en TikTok usando Lempi API.
-// Devuelve resultados con links directos de descarga.
-// ============================================================
+
 
 import axios from 'axios';
 import config from '../../config.js';
