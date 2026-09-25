@@ -1,13 +1,7 @@
-// commands/info/pais.js
-// ============================================================
-// BOT-API — INFO DE PAÍSES (API Delirius) — Traducido al español
-// ============================================================
-// .pais colombia · .pais usa · .pais japan
-// ============================================================
 
-// Traducciones de valores comunes de la API
+
 const TRADUCCIONES = {
-    // Continentes
+
     'North America': 'América del Norte',
     'South America': 'América del Sur',
     'Central America': 'América Central',
@@ -16,12 +10,10 @@ const TRADUCCIONES = {
     'Africa': 'África',
     'Oceania': 'Oceanía',
     'Antarctica': 'Antártida',
-    
-    // Estado soberano
+
     'Yes': 'Sí',
     'No': 'No',
-    
-    // Océanos
+
     'North Pacific Ocean': 'Océano Pacífico Norte',
     'South Pacific Ocean': 'Océano Pacífico Sur',
     'Pacific Ocean': 'Océano Pacífico',
@@ -30,8 +22,7 @@ const TRADUCCIONES = {
     'Indian Ocean': 'Océano Índico',
     'Arctic Ocean': 'Océano Ártico',
     'Mediterranean Sea': 'Mar Mediterráneo',
-    
-    // Organizaciones
+
     'United Nations': 'Naciones Unidas',
     'Organization of American States': 'Organización de los Estados Americanos',
     'Union of South American Nations': 'Unión de Naciones Suramericanas',
@@ -41,8 +32,7 @@ const TRADUCCIONES = {
     'Central American Integration System': 'Sistema de la Integración Centroamericana',
     'Association of Southeast Asian Nations': 'Asociación de Naciones del Sudeste Asiático',
     'Arab League': 'Liga Árabe',
-    
-    // Fuentes de datos
+
     'World Bank': 'Banco Mundial',
 };
 
