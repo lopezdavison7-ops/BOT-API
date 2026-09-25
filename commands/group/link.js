@@ -1,13 +1,4 @@
-// commands/group/link.js
-// ============================================================
-// COMANDO: LINK
-// BOT-API
-//
-// Uso:
-// .link
-//
-// Envía el enlace de invitación del grupo.
-// ============================================================
+
 
 export default {
     nombre: 'link',
@@ -31,10 +22,6 @@ export default {
         const jid =
             msg?.key?.remoteJid;
 
-        // --------------------------------------------------------
-        // COMPROBAR GRUPO
-        // --------------------------------------------------------
-
         if (
             !jid ||
             !jid.endsWith('@g.us')
@@ -48,10 +35,6 @@ export default {
         }
 
         try {
-
-            // ----------------------------------------------------
-            // OBTENER ENLACE
-            // ----------------------------------------------------
 
             const codigo =
                 await sock.groupInviteCode(jid);
@@ -67,10 +50,6 @@ export default {
 
             const enlace =
                 `https://chat.whatsapp.com/${codigo}`;
-
-            // ----------------------------------------------------
-            // RESPUESTA
-            // ----------------------------------------------------
 
             await responder.texto(
                 `╭〔 🔗 𝐋𝐈𝐍𝐊 𝐃𝐄𝐋 𝐆𝐑𝐔𝐏𝐎 〕⬣\n` +
