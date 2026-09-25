@@ -1,4 +1,4 @@
-// commands/fun/tetriscancelar.js
+
 import {
     cancelarPartida
 } from '../../lib/tetris.js';
