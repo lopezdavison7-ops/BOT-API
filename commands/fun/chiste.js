@@ -1,4 +1,4 @@
-// commands/fun/chiste.js
+
 export default {
     nombre: 'chiste',
     categoria: 'Diversión',
