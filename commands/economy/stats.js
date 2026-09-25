@@ -1,4 +1,4 @@
-// commands/economy/stats.js
+
 import { obtenerEstadisticas } from '../../lib/estadisticas.js';
 
 function formatearTiempo(segundos) {
@@ -15,7 +15,7 @@ export default {
     descripcion: 'Estadísticas de uso del bot desde el último reinicio',
     ejecutar: async ({ responder }) => {
         const { entradas, totalUsos, segundos } = obtenerEstadisticas();
-        
+
         let texto =
             `╭〔 📊 𝐄𝐒𝐓𝐀𝐃Í𝐒𝐓𝐈𝐂𝐀𝐒 〕⬣\n` +
             `┃\n` +
