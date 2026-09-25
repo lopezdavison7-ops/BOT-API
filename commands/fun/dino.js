@@ -1,4 +1,4 @@
-// commands/fun/dino.js
+
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
