@@ -1,24 +1,8 @@
-// commands/downloads/pinterest.js
-// ============================================================
-// COMANDO: PINTEREST
-// BOT-API
-//
-// Busca imágenes usando el endpoint interno de Pinterest.
-// Envía TODAS las imágenes encontradas como álbum.
-// Si el álbum falla, envía las imágenes una por una.
-// ============================================================
 
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
 
 const LIMITE_RESULTADOS = 20;
 const TIMEOUT = 60000;
 const CAPTION = 'BOT-API 💙💻';
-
-// ============================================================
-// FETCH CON TIMEOUT
-// ============================================================
 
 async function fetchConTimeout(
     url,
@@ -41,10 +25,6 @@ async function fetchConTimeout(
         clearTimeout(temporizador);
     }
 }
-
-// ============================================================
-// BUSCAR PINTEREST
-// ============================================================
 
 async function buscarPinterest(consulta) {
 
@@ -212,10 +192,6 @@ async function buscarPinterest(consulta) {
     return imagenes;
 }
 
-// ============================================================
-// DESCARGAR IMAGEN
-// ============================================================
-
 async function descargarImagen(
     url,
     indice
@@ -283,10 +259,6 @@ async function descargarImagen(
     return buffer;
 }
 
-// ============================================================
-// DESCARGAR TODAS EN PARALELO
-// ============================================================
-
 async function descargarTodas(
     resultados
 ) {
@@ -343,10 +315,6 @@ async function descargarTodas(
     return validas;
 }
 
-// ============================================================
-// ENVIAR ÁLBUM
-// ============================================================
-
 async function enviarComoAlbum(
     sock,
     jid,
@@ -394,10 +362,6 @@ async function enviarComoAlbum(
 
     return imagenes.length;
 }
-
-// ============================================================
-// ENVIAR UNA POR UNA
-// ============================================================
 
 async function enviarUnaPorUna(
     sock,
@@ -447,10 +411,6 @@ async function enviarUnaPorUna(
 
     return enviadas;
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
 
@@ -512,18 +472,10 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // BUSCAR
-            // ------------------------------------------------
-
             const resultados =
                 await buscarPinterest(
                     consulta
                 );
-
-            // ------------------------------------------------
-            // AVISO
-            // ------------------------------------------------
 
             await responder.texto(
                 '📌 *Pinterest*\n\n' +
@@ -531,10 +483,6 @@ export default {
                 `🖼️ Encontradas: *${resultados.length}*\n\n` +
                 '⏳ Descargando imágenes...'
             );
-
-            // ------------------------------------------------
-            // DESCARGAR TODAS
-            // ------------------------------------------------
 
             const imagenes =
                 await descargarTodas(
@@ -550,10 +498,6 @@ export default {
             console.log(
                 `[PINTEREST] Descargadas: ${imagenes.length}/${resultados.length}`
             );
-
-            // ------------------------------------------------
-            // ÁLBUM
-            // ------------------------------------------------
 
             let enviadas = 0;
 
@@ -575,10 +519,6 @@ export default {
                     errorAlbum
                 );
 
-                // --------------------------------------------
-                // RESPALDO
-                // --------------------------------------------
-
                 enviadas =
                     await enviarUnaPorUna(
                         sock,
@@ -587,10 +527,6 @@ export default {
                         imagenes
                     );
             }
-
-            // ------------------------------------------------
-            // RESULTADO
-            // ------------------------------------------------
 
             if (!enviadas) {
                 throw new Error(
