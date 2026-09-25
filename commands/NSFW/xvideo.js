@@ -1,14 +1,10 @@
-// commands/descargas/xvideos.js
-// ============================================================
-// BOT-API — XVIDEOS (endpoints correctos de Delirius API)
-// ============================================================
+
 
 const API_BUSCAR = 'https://api.delirius.online/search/xvideos?query=';
 
 async function descargarVideo(video, responder) {
     await responder.texto('⏳ Procesando video...');
 
-    // Probar múltiples endpoints de descarga
     const endpoints = [
         'https://api.delirius.online/download/xvideos?url=',
         'https://api.delirius.online/tools/xvideosdl?url=',
@@ -18,9 +14,9 @@ async function descargarVideo(video, responder) {
     for (const endpoint of endpoints) {
         try {
             const res = await fetch(endpoint + encodeURIComponent(video.url));
-            
+
             if (res.status === 404) continue;
-            
+
             const texto = await res.text();
             let json;
             try { json = JSON.parse(texto); } catch (e) { continue; }
@@ -54,7 +50,6 @@ async function descargarVideo(video, responder) {
         }
     }
 
-    // Fallback: mostrar thumb + link
     if (video.image) {
         await responder.imagen(
             { url: video.image },
@@ -81,7 +76,6 @@ export default {
             return await responder.texto('❌ Escribe qué buscar: `.xvideos mia khalifa`');
         }
 
-        // Número → descargar elegido
         if (/^\d+$/.test(q)) {
             const mapa = global.xvMap?.[jid];
             const video = mapa?.[Number(q)];
@@ -91,16 +85,14 @@ export default {
             return await descargarVideo(video, responder);
         }
 
-        // URL directa
         if (/^https?:\/\//i.test(q)) {
             return await descargarVideo({ url: q, title: 'Video' }, responder);
         }
 
-        // Búsqueda
         try {
             const url = API_BUSCAR + encodeURIComponent(q);
             const res = await fetch(url);
-            
+
             if (res.status === 404) {
                 return await responder.texto('❌ Endpoint no disponible (404)');
             }
@@ -138,7 +130,7 @@ export default {
 
             const primerVideo = lista[0];
             const thumb = primerVideo?.image || primerVideo?.imagen || primerVideo?.thumbnail;
-            
+
             if (thumb) {
                 await responder.imagen({ url: thumb }, txt);
             } else {
