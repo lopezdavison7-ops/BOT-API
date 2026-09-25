@@ -1,9 +1,4 @@
-// commands/owner/reiniciar.js
-// ============================================================
-// COMANDO: REINICIAR
-// ALEX BOT
-// Reinicia el proceso actual del bot
-// ============================================================
+
 
 import {
     spawn
@@ -40,10 +35,6 @@ export default {
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
 
-            // ====================================================
-            // INICIAR NUEVO PROCESO
-            // ====================================================
-
             const hijo =
                 spawn(
                     process.execPath,
@@ -57,10 +48,6 @@ export default {
                 );
 
             hijo.unref();
-
-            // ====================================================
-            // CERRAR PROCESO ACTUAL
-            // ====================================================
 
             setTimeout(() => {
 
