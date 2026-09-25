@@ -1,19 +1,10 @@
-// commands/owner/setowner.js
-// ============================================================
-// COMANDO: SETOWNER
-// ALEX BOT
-// Agrega un nuevo Owner sin quitar al Owner principal
-// ============================================================
+
 
 import {
     guardarOwner,
     obtenerOwner,
     obtenerOwners
 } from '../../lib/owner.js';
-
-// ============================================================
-// OBTENER USUARIO OBJETIVO
-// ============================================================
 
 function obtenerObjetivo(msg) {
 
@@ -22,20 +13,12 @@ function obtenerObjetivo(msg) {
             ?.extendedTextMessage
             ?.contextInfo;
 
-    // --------------------------------------------------------
-    // SI MENCIONÓ A ALGUIEN
-    // --------------------------------------------------------
-
     const mencionado =
         contexto?.mentionedJid?.[0];
 
     if (mencionado) {
         return mencionado;
     }
-
-    // --------------------------------------------------------
-    // SI RESPONDIÓ A UN MENSAJE
-    // --------------------------------------------------------
 
     const citado =
         contexto?.participant;
@@ -47,10 +30,6 @@ function obtenerObjetivo(msg) {
     return null;
 }
 
-// ============================================================
-// NÚMERO VISIBLE
-// ============================================================
-
 function numeroVisible(jid) {
 
     return String(jid)
@@ -58,10 +37,6 @@ function numeroVisible(jid) {
         .split(':')[0]
         .replace(/\D/g, '');
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
 
@@ -85,10 +60,6 @@ export default {
         responder
     }) => {
 
-        // ----------------------------------------------------
-        // OBTENER OBJETIVO
-        // ----------------------------------------------------
-
         const objetivo =
             obtenerObjetivo(msg);
 
@@ -105,10 +76,6 @@ export default {
             return;
         }
 
-        // ----------------------------------------------------
-        // NO PERMITIR GRUPOS
-        // ----------------------------------------------------
-
         if (
             String(objetivo)
                 .endsWith('@g.us')
@@ -123,16 +90,8 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // OWNER PRINCIPAL
-            // ------------------------------------------------
-
             const principal =
                 obtenerOwner();
-
-            // ------------------------------------------------
-            // AGREGAR OWNER
-            // ------------------------------------------------
 
             const nuevo =
                 guardarOwner(objetivo);
@@ -140,16 +99,8 @@ export default {
             const numero =
                 numeroVisible(nuevo);
 
-            // ------------------------------------------------
-            // LISTA ACTUAL
-            // ------------------------------------------------
-
             const owners =
                 obtenerOwners();
-
-            // ------------------------------------------------
-            // ENVIAR CONFIRMACIÓN
-            // ------------------------------------------------
 
             await sock.sendMessage(
                 msg.key.remoteJid,
