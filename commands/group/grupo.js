@@ -1,4 +1,4 @@
-// commands/group/grupo.js
+
 export default {
     nombre: 'grupo',
     categoria: 'Utilidades',
@@ -17,7 +17,6 @@ export default {
             const admins = metadata.participants.filter(p => p.admin).map(p => p.id);
             const total = metadata.participants.length;
 
-            // 🔥 OBTENER EL CREADOR Y PREPARAR LA MENCIÓN
             let creadorNombre = 'Desconocido';
             let creadorMention = null;
 
@@ -26,7 +25,6 @@ export default {
                 creadorMention = metadata.owner;
             }
 
-            // Construir el mensaje
             const respuesta = `
 ╭〔 📊 𝐈𝐍𝐅𝐎 𝐆𝐑𝐔𝐏𝐎 〕⬣
 ┃
@@ -47,7 +45,6 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 🔥 ENVIAR CON sock.sendMessage Y LA MENCIÓN FORZADA
             const mentionsList = creadorMention ? [creadorMention] : [];
 
             await sock.sendMessage(groupId, {
