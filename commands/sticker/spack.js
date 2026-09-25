@@ -1,19 +1,4 @@
-// commands/sticker/spack.js
-// ============================================================
-// COMANDO: SPACK (Sticker Pack)
-// BOT-API
-//
-// .spack <tema>
-//
-// Intenta enviar TODOS los stickers como PACK NATIVO de
-// WhatsApp (stickerPackMessage: un solo mensaje con el pack).
-// Si tu Baileys no lo soporta, cae a envío en bloque.
-//
-// ⚠️ Para packs nativos reales necesitas un Baileys con
-// soporte de stickerPackMessage:
-//   npm i @nexustechpro/baileys
-// y cambiar el import de Baileys en index.js.
-// ============================================================
+
 
 import axios from 'axios';
 import sharp from 'sharp';
@@ -88,10 +73,6 @@ async function convertirASticker(buffer) {
     }
 }
 
-// ============================================================
-// PREPARAR TODOS EN PARALELO
-// ============================================================
-
 async function prepararStickers(urls) {
     console.log(`[SPACK] Preparando ${urls.length} stickers en paralelo...`);
 
@@ -117,15 +98,10 @@ async function prepararStickers(urls) {
     return validos;
 }
 
-// ============================================================
-// ENVIAR COMO PACK NATIVO (prueba los 3 formatos conocidos)
-// ============================================================
-
 async function enviarComoPack(sock, jid, msg, buffers, nombre) {
     const nombrePack = truncarTexto(nombre, 25);
     const publisher = 'BOT-API ⚡';
 
-    // ---- Formato 1: @nexustechpro/baileys (método dedicado) ----
     if (typeof sock.stickerPackMessage === 'function') {
         await sock.stickerPackMessage(jid, {
             name: nombrePack,
@@ -136,7 +112,6 @@ async function enviarComoPack(sock, jid, msg, buffers, nombre) {
         return 'pack nativo';
     }
 
-    // ---- Formato 2: @nexustechpro/baileys (vía sendMessage) ----
     try {
         await sock.sendMessage(jid, {
             stickerPack: {
@@ -151,7 +126,6 @@ async function enviarComoPack(sock, jid, msg, buffers, nombre) {
         console.log('[SPACK] Formato stickerPack no soportado:', e.message);
     }
 
-    // ---- Formato 3: @c4bal/baileys ----
     await sock.sendMessage(jid, {
         cover: buffers[0],
         stickers: buffers.map(b => ({ data: b })),
@@ -162,10 +136,6 @@ async function enviarComoPack(sock, jid, msg, buffers, nombre) {
 
     return 'pack nativo';
 }
-
-// ============================================================
-// RESPALDO: ENVIAR EN BLOQUE (seguidos, sin esperas)
-// ============================================================
 
 async function enviarEnBloque(sock, jid, msg, buffers) {
     let enviados = 0;
@@ -185,10 +155,6 @@ async function enviarEnBloque(sock, jid, msg, buffers) {
 
     return enviados;
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
     nombre: 'spack',
@@ -287,10 +253,6 @@ export default {
             return;
         }
 
-        // ------------------------------------------------
-        // 1) Intentar PACK NATIVO
-        // 2) Si tu Baileys no puede → bloque
-        // ------------------------------------------------
         let enviados = 0;
         let modo = '';
 
