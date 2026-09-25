@@ -1,4 +1,4 @@
-// commands/fun/adivinanzacancelar.js
+
 import {
     cancelarPartida
 } from '../../lib/adivinanza.js';
