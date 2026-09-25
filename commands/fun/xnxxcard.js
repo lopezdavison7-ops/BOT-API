@@ -1,10 +1,5 @@
-// commands/canvas/xnxx.js
-// ============================================================
-// BOT-API — XNXX CARD (Delirius API)
-// Usa servicios que dan URL directa de imagen (no HTML wrapper)
-// ============================================================
 
-// ---------- VERIFICAR QUE UNA URL ES IMAGEN VÁLIDA ----------
+
 async function esImagenValida(url) {
     try {
         const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
@@ -15,7 +10,6 @@ async function esImagenValida(url) {
     }
 }
 
-// ---------- 1) IMGBB (URL directa al CDN) ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -32,16 +26,15 @@ async function uploadToImgbb(buffer) {
 
     const result = JSON.parse(text);
     if (result?.success && result.data?.display_url) {
-        return result.data.display_url; // URL directa a i.ibb.co/xxx.jpg
+        return result.data.display_url;
     }
     throw new Error('Respuesta: ' + text.substring(0, 150));
 }
 
-// ---------- 2) IMGUR anónimo (URL directa, sin key) ----------
 async function uploadToImgur(buffer) {
-    // Client-ID público (se puede usar sin registro)
+
     const CLIENT_ID = '546c25a59c58ad7';
-    
+
     const formData = new FormData();
     formData.append('image', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
     formData.append('type', 'file');
@@ -61,12 +54,11 @@ async function uploadToImgur(buffer) {
 
     const result = await response.json();
     if (result?.data?.link) {
-        return result.data.link; // URL directa a i.imgur.com/xxx.jpg
+        return result.data.link;
     }
     throw new Error('Respuesta inválida');
 }
 
-// ---------- 3) FREEIMAGE.HOST (key pública) ----------
 async function uploadToFreeImage(buffer) {
     const params = new URLSearchParams();
     params.append('key', '6d207e02198a847aa98d0a2a901485a5');
@@ -83,12 +75,11 @@ async function uploadToFreeImage(buffer) {
 
     const result = await response.json();
     if (result?.image?.url) {
-        return result.image.url; // URL directa
+        return result.image.url;
     }
     throw new Error('Respuesta inválida');
 }
 
-// ---------- 4) 0X0.ST (URL directa) ----------
 async function uploadTo0x0(buffer) {
     const formData = new FormData();
     formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
@@ -108,7 +99,6 @@ async function uploadTo0x0(buffer) {
     throw new Error('Respuesta inválida');
 }
 
-// ---------- 5) CATBOX.MOE (URL directa, si funciona) ----------
 async function uploadToCatbox(buffer) {
     const formData = new FormData();
     formData.append('reqtype', 'fileupload');
@@ -129,11 +119,9 @@ async function uploadToCatbox(buffer) {
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR CON FALLBACK + VERIFICACIÓN ----------
 async function subirImagen(buffer) {
     const errores = [];
 
-    // Orden: los que más probable funcionan primero
     const servicios = [
         ['Imgbb', uploadToImgbb],
         ['FreeImage', uploadToFreeImage],
@@ -145,13 +133,12 @@ async function subirImagen(buffer) {
     for (const [nombre, fn] of servicios) {
         try {
             const url = await fn(buffer);
-            
-            // Verificar que sea URL de imagen directa
+
             const esValida = await esImagenValida(url);
             if (!esValida) {
                 throw new Error(`URL no es imagen directa: ${url}`);
             }
-            
+
             console.log(`[XNXX] ✅ ${nombre}: ${url}`);
             return url;
         } catch (e) {
@@ -163,16 +150,15 @@ async function subirImagen(buffer) {
     throw new Error('Todos fallaron:\n' + errores.join('\n'));
 }
 
-// ---------- DESCARGAR CONTENIDO DE MEDIA ----------
 async function descargarMedia(message, sock) {
     try {
         const baileys = await import('baileys');
         const downloadFn = baileys.downloadContentFromMessage || baileys.default?.downloadContentFromMessage;
-        
+
         if (downloadFn) {
             const mediaType = message.imageMessage ? 'image' : 'video';
             const stream = await downloadFn(message.imageMessage || message.videoMessage, mediaType);
-            
+
             const chunks = [];
             for await (const chunk of stream) chunks.push(chunk);
             return Buffer.concat(chunks);
@@ -216,7 +202,6 @@ export default {
         let imageUrl = '';
         let metodoUsado = '';
 
-        // ---------- CASO 1: IMAGEN ENVIADA CON CAPTION ----------
         if (msg.message?.imageMessage) {
             try {
                 const buffer = await descargarMedia(msg.message, s);
@@ -233,7 +218,6 @@ export default {
             }
         }
 
-        // ---------- CASO 2: IMAGEN CITADA ----------
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
                 const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
@@ -251,7 +235,6 @@ export default {
             }
         }
 
-        // ---------- CASO 3: FOTO DE PERFIL ----------
         if (!imageUrl) {
             try {
                 imageUrl = await s.profilePictureUrl(sender, 'image');
