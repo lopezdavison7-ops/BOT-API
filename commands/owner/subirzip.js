@@ -154,10 +154,8 @@ export default {
     uso: '.subirzip (citando un archivo ZIP)',
 
     ejecutar: async ({ sock, msg, responder }) => {
-        // 🔑 Usar el sistema de owners del bot
-        const senderJid = msg.key.participant || msg.key.remoteJid;
-        
-        if (!esOwner(senderJid)) {
+        // 🔑 CORRECCIÓN: Pasar el objeto msg completo, no solo el JID
+        if (!esOwner(msg)) {
             return await responder.texto('🚫 Solo los owners pueden usar este comando.');
         }
 
