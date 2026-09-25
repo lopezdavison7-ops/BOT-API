@@ -1,4 +1,4 @@
-// commands/economy/withdraw.js
+
 import {
     obtenerUsuario,
     retirar
