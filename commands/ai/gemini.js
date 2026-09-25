@@ -1,10 +1,4 @@
-// commands/ia/gemini.js
-// ============================================================
-// BOT-API — GEMINI AI (Delirius API)
-// ============================================================
-// .gemini <pregunta>  → respuesta de Google Gemini
-// .gmn <pregunta>     → alias corto
-// ============================================================
+
 
 const API = 'https://api.delirius.online/ia/gemini?query=';
 
@@ -36,11 +30,10 @@ export default {
             );
         }
 
-        // ---------- INDICADOR DE CARGA ----------
         await responder.texto('⏳ *Gemini está pensando...*\n\n💭 ' + pregunta);
 
         try {
-            // ---------- CONSULTAR API ----------
+
             const res = await fetch(API + encodeURIComponent(pregunta));
             const text = await res.text();
 
@@ -55,11 +48,9 @@ export default {
                 throw new Error('Respuesta no es JSON válida');
             }
 
-            // Normalizar claves (ES / EN)
             const status = json.estado ?? json.status ?? false;
             const datos = json.datos ?? json.data ?? null;
 
-            // Validar estado
             if (status === false || !datos) {
                 const motivo = json.mensaje || json.msg || json.message || 'Error desconocido';
                 throw new Error(motivo);
@@ -71,10 +62,9 @@ export default {
                 throw new Error('Gemini no generó una respuesta');
             }
 
-            // ---------- FORMATEAR RESPUESTA ----------
             const respuestaLimpia = respuesta.trim();
-            const respuestaCorta = pregunta.length > 100 
-                ? pregunta.substring(0, 100) + '...' 
+            const respuestaCorta = pregunta.length > 100
+                ? pregunta.substring(0, 100) + '...'
                 : pregunta;
 
             const texto =
@@ -91,12 +81,11 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Si es muy larga, mandar en partes
             if (texto.length > 4000) {
                 const partes = [];
                 const lineas = respuestaLimpia.split('\n');
                 let chunk = '';
-                
+
                 for (const linea of lineas) {
                     if ((chunk + '\n' + linea).length > 2500) {
                         partes.push(chunk);
@@ -107,7 +96,6 @@ export default {
                 }
                 if (chunk) partes.push(chunk);
 
-                // Primera parte con header
                 await responder.texto(
                     '╭━━〔 🤖 𝐆𝐄𝐌𝐈𝐍𝐈 𝐀𝐈 〕━━⬣\n' +
                     '┃\n' +
@@ -123,7 +111,6 @@ export default {
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
 
-                // Resto
                 for (let i = 1; i < partes.length; i++) {
                     await responder.texto(
                         '╭━━〔 🤖 𝐆𝐄𝐌𝐈𝐍𝐈 𝐀𝐈 〕━━⬣\n' +
