@@ -1,4 +1,4 @@
-// commands/group/kick.js
+
 import { esGrupo, verificarPermisosAdmin, obtenerObjetivo } from '../../lib/grupos.js';
 
 export default {
@@ -10,19 +10,11 @@ export default {
     ejecutar: async ({ sock, msg, responder, argumento }) => {
         const chatId = msg.key.remoteJid;
 
-        // ============================================================
-        // VERIFICAR QUE SEA UN GRUPO
-        // ============================================================
-
         if (!esGrupo(chatId)) {
             return responder.texto(
                 '❌ Este comando solo funciona dentro de un grupo.'
             );
         }
-
-        // ============================================================
-        // VERIFICAR PERMISOS DEL USUARIO
-        // ============================================================
 
         const permiso = await verificarPermisosAdmin(
             sock,
@@ -33,15 +25,6 @@ export default {
         if (!permiso.ok) {
             return responder.texto(permiso.motivo);
         }
-
-        // ============================================================
-        // OBTENER OBJETIVO
-        // SOLO:
-        // 1. Usuario mencionado
-        // 2. Usuario cuyo mensaje fue respondido
-        //
-        // NO se acepta número escrito manualmente.
-        // ============================================================
 
         const objetivo = obtenerObjetivo(msg, '');
 
@@ -54,10 +37,6 @@ export default {
             );
         }
 
-        // ============================================================
-        // EVITAR EXPULSAR AL PROPIO BOT
-        // ============================================================
-
         const miJid = sock.user?.id;
 
         if (
@@ -68,10 +47,6 @@ export default {
                 '🤖 No puedo expulsarme a mí mismo.'
             );
         }
-
-        // ============================================================
-        // EXPULSAR
-        // ============================================================
 
         try {
             await sock.groupParticipantsUpdate(
