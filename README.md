@@ -1,10 +1,10 @@
 <div align="center">
 
+<img src="https://i.imgur.com/q7RQZ8L.gif" alt="BOT-API Animation" width="400"/>
+
 # 🤖 BOT-API
 
 ### ⚡ Bot de WhatsApp avanzado con Baileys
-
-<img src="https://i.imgur.com/placeholder.png" alt="BOT-API" width="300"/>
 
 <br>
 
@@ -24,34 +24,71 @@
 
 ---
 
-## ✨ Características
+<div align="center">
 
-- 🎮 **Juegos interactivos** - Trivia, Tetris, Tres en raya, Adivinanzas
-- 💰 **Sistema económico** - Balance, transferencias, daily rewards
-- 🏷️ **Stickers personalizados** - Formas, efectos, metadatos custom
-- 🤖 **Integración IA** - Memoria contextual, respuestas inteligentes
-- 🛡️ **Moderación** - Antilink, AFK detector, sistema de categorías
-- 📊 **Estadísticas** - Niveles, experiencia, rankings
-- 🎨 **Multimedia** - Descarga de videos, imágenes, audio
-- ⚙️ **Configuración por chat** - Control granular de features
+## 🌟 ¿Qué es BOT-API?
+
+**BOT-API** es un bot de WhatsApp completo y moderno desarrollado con **Node.js** y **Baileys**.  
+Incluye juegos interactivos, sistema económico, stickers personalizados, IA y mucho más.
+
+</div>
+
+---
+
+## ✨ Características principales
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎮 **Juegos**
+- Trivia multijugador
+- Tres en raya (TTT)
+- Tetris
+- Adivinanzas
+
+### 💰 **Economía**
+- Balance y banco
+- Daily rewards
+- Transferencias
+- Rankings
+
+</td>
+<td width="50%">
+
+### 🎨 **Stickers**
+- 17 formas diferentes
+- 14 efectos visuales
+- Metadatos personalizados
+- Stickers animados
+
+### 🤖 **Inteligencia**
+- Memoria contextual
+- Respuestas IA
+- Sistema AFK
+- Moderación automática
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## 🚀 Instalación rápida
 
 ```bash
-# Clonar repositorio
+# 1️⃣ Clonar repositorio
 git clone https://github.com/lopezdavison7-ops/BOT-API.git
 cd BOT-API
 
-# Instalar dependencias
+# 2️⃣ Instalar dependencias
 npm install
 
-# Configurar variables de entorno
+# 3️⃣ Configurar variables
 cp .env.example .env
-# Edita .env con tu configuración
+nano .env  # Edita con tu configuración
 
-# Ejecutar
+# 4️⃣ Ejecutar
 npm start
 ```
 
@@ -59,25 +96,29 @@ npm start
 
 ## 🎯 Comandos destacados
 
-| Categoría | Comandos | Descripción |
-|-----------|----------|-------------|
-| 🎮 Juegos | `.trivia`, `.ttt`, `.tetris` | Juegos interactivos multijugador |
-| 💰 Economía | `.bal`, `.daily`, `.transfer` | Sistema económico completo |
-| 🎨 Stickers | `.s -v`, `.s -c -blur` | Stickers con formas y efectos |
-| 🤖 IA | `.ai`, `.memoria` | Respuestas inteligentes con contexto |
-| 📊 Info | `.ping`, `.stats`, `.profile` | Estadísticas y perfiles |
-| 🛡️ Moderación | `.antilink`, `.afk` | Herramientas de moderación |
+| Categoría | Comando | Descripción |
+|-----------|---------|-------------|
+| 🎮 Juegos | `.trivia` | Trivia multijugador |
+| 💰 Economía | `.bal` | Ver tu balance |
+| 🎨 Stickers | `.s -v -blur` | Sticker corazón con blur |
+| 🤖 IA | `.ai hola` | Chat con IA |
+| 📊 Info | `.ping` | Estado del bot |
+| 🛡️ Moderación | `.antilink` | Control de enlaces |
 
-**Ver todos los comandos:** `.menu`
+**Ver todos:** `.menu`
 
 ---
 
 ## 📦 Requisitos
 
-- Node.js 20+
-- FFmpeg (para stickers animados)
-- Sharp (procesamiento de imágenes)
-- Baileys (API de WhatsApp)
+<div align="center">
+
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-required-red?style=flat-square&logo=ffmpeg&logoColor=white)
+![Sharp](https://img.shields.io/badge/Sharp-required-blue?style=flat-square)
+![Baileys](https://img.shields.io/badge/Baileys-7.x-25D366?style=flat-square&logo=whatsapp)
+
+</div>
 
 ---
 
@@ -92,13 +133,13 @@ SESSION_NAME=bot-api
 
 ---
 
-## 📸 Screenshots
+## 📸 Capturas de pantalla
 
 <div align="center">
 
-| Stickers con efectos | Sistema económico | Juegos |
+| Stickers con efectos | Sistema económico | Juegos interactivos |
 |:---:|:---:|:---:|
-| <img src="https://via.placeholder.com/200x350/1a1a1a/ffffff?text=Stickers" width="200"/> | <img src="https://via.placeholder.com/200x350/1a1a1a/ffffff?text=Economía" width="200"/> | <img src="https://via.placeholder.com/200x350/1a1a1a/ffffff?text=Juegos" width="200"/> |
+| ![Stickers](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=🎨+Stickers) | ![Economía](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=💰+Economía) | ![Juegos](https://via.placeholder.com/250x400/1a1a1a/ffffff?text=🎮+Juegos) |
 
 </div>
 
@@ -106,41 +147,40 @@ SESSION_NAME=bot-api
 
 ## 🤝 Contribuir
 
-1. Fork el proyecto
-2. Crea una rama (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+¿Quieres mejorar BOT-API? ¡Genial!
+
+1. 🍴 Fork el proyecto
+2. 🌿 Crea una rama (`git checkout -b feature/NuevaFuncion`)
+3. 💾 Commit tus cambios (`git commit -m 'Add NuevaFuncion'`)
+4. 📤 Push a la rama (`git push origin feature/NuevaFuncion`)
+5. 🔀 Abre un Pull Request
 
 ---
 
 ## 📄 Licencia
 
-Distribuido bajo la Licencia MIT. Ver `LICENSE` para más información.
+Distribuido bajo la Licencia **MIT**.  
+Ver archivo `LICENSE` para más información.
 
 ---
 
-## 👨‍💻 Créditos
-
 <div align="center">
+
+## 👨‍💻 Créditos
 
 ### Desarrollado con ❤️ por **Alex**
 
-[![WhatsApp](https://img.shields.io/badge/Contacto-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/50578391933)
-
-</div>
+[![WhatsApp](https://img.shields.io/badge/📱_Contacto-+505_7839_1933-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/50578391933)
 
 ---
 
 ## 📞 Soporte
 
-- 📢 **Canal:** [WhatsApp Channel](https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q)
-- 💬 **Grupo:** [WhatsApp Group](https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ)
-- 📧 **Contacto directo:** [+505 7839 1933](https://wa.me/50578391933)
+[![Canal](https://img.shields.io/badge/📢_Canal-WhatsApp-25D366?style=flat-square&logo=whatsapp)](https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q)
+[![Grupo](https://img.shields.io/badge/💬_Grupo-WhatsApp-25D366?style=flat-square&logo=whatsapp)](https://chat.whatsapp.com/E22llksHl5y69M2QWhR0VJ)
+[![Contacto](https://img.shields.io/badge/📧_Email-Contacto-25D366?style=flat-square)](https://wa.me/50578391933)
 
 ---
-
-<div align="center">
 
 ## ⚡ Powered by Alex
 
@@ -150,6 +190,8 @@ Distribuido bajo la Licencia MIT. Ver `LICENSE` para más información.
 
 <br>
 
-**Si este proyecto te fue útil, considera darle una ⭐**
+### ⭐ Si este proyecto te fue útil, dale una estrella
+
+<img src="https://i.imgur.com/Q7RQZ8L.gif" alt="Star" width="100"/>
 
 </div>
