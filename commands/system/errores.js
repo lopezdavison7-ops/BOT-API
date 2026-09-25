@@ -1,4 +1,4 @@
-// commands/system/errores.js — 📋 Ver últimos errores del bot
+
 import { getLogs, getLogsErrores, clearLogs, getTotalLogs } from '../../lib/logs.js';
 
 function bold(t) {
@@ -16,7 +16,6 @@ export default {
     ejecutar: async ({ sock, msg, argumento, responder, fromMe, isOwner }) => {
         const senderJid = msg.key.participant || msg.key.remoteJid;
 
-        // Filtro de owner
         if (!fromMe && !isOwner) {
             const senderNum = senderJid.split('@')[0].replace(/\D/g, '');
             const owners = (process.env.OWNER || '').split(',').map(n => n.replace(/\D/g, ''));
@@ -28,7 +27,6 @@ export default {
         const args = (argumento || '').toLowerCase().trim().split(/\s+/);
         const accion = args[0];
 
-        // CLEAR
         if (accion === 'clear' || accion === 'limpiar') {
             clearLogs();
             return await responder.texto(
@@ -40,7 +38,6 @@ export default {
             );
         }
 
-        // Parsear cantidad y filtro
         let cantidad = 10;
         let filtro = 'all';
 
@@ -51,7 +48,6 @@ export default {
 
         cantidad = Math.min(Math.max(cantidad, 1), 50);
 
-        // FILTRO: UNCAUGHT/REJECTION se incluyen en 'error'
         let filtrados;
         if (filtro === 'error') {
             filtrados = getLogsErrores(cantidad);
@@ -76,7 +72,6 @@ export default {
             );
         }
 
-        // Generar texto
         let texto =
             '╭━━〔 📋 𝐋𝐎𝐆𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕━━⬣\n' +
             '┃\n' +
@@ -113,7 +108,6 @@ export default {
             '┃\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-        // Si es muy largo, dividir en partes
         if (texto.length > 4000) {
             const partes = texto.match(/[\s\S]{1,4000}/g) || [texto];
             for (let i = 0; i < partes.length; i++) {
