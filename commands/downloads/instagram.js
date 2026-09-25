@@ -1,9 +1,4 @@
-// commands/downloads/instagram.js
-// ============================================================
-// BOT-API — INSTAGRAM DOWNLOADER
-// ============================================================
-// .ig <url> → descarga fotos/videos de post, carrusel o reel
-// ============================================================
+
 
 const API = 'https://api.delirius.online/download/instagram?url=';
 const UA =
@@ -11,7 +6,6 @@ const UA =
     'AppleWebKit/537.36 (KHTML, like Gecko) ' +
     'Chrome/133.0.0.0 Safari/537.36';
 
-// ---------- DESCARGAR BUFFER ----------
 async function descargarBuffer(url) {
     const res = await fetch(url, { headers: { 'user-agent': UA } });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -20,17 +14,13 @@ async function descargarBuffer(url) {
     return buffer;
 }
 
-// ---------- DETECTAR SI ES VIDEO ----------
 function esVideo(item) {
     const tipo = String(item.type || item.tipo || '').toLowerCase();
     if (tipo) return /video|vídeo/.test(tipo);
-    // Si no viene tipo, adivinar por extensión
+
     return /\.mp4(\?|$)/i.test(item.url || '');
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'instagram',
     categoria: 'descargas',
@@ -61,7 +51,7 @@ export default {
         }
 
         try {
-            // ---------- CONSULTAR API ----------
+
             const res = await fetch(API + encodeURIComponent(url));
             const json = await res.json();
 
@@ -78,12 +68,10 @@ export default {
                 return await responder.texto('❌ La publicación no tiene archivos descargables.');
             }
 
-            // Aviso solo si son varios archivos
             if (items.length > 1) {
                 await responder.texto('⏳ Descargando *' + items.length + '* archivos de Instagram...');
             }
 
-            // ---------- DESCARGAR TODO EN PARALELO ----------
             const resultados = await Promise.allSettled(
                 items.map(i => descargarBuffer(i.url))
             );
@@ -104,9 +92,8 @@ export default {
             const imagenes = archivos.filter(a => !a.video).map(a => a.buffer);
             const videos = archivos.filter(a => a.video).map(a => a.buffer);
 
-            // ---------- ENVIAR IMÁGENES ----------
             if (imagenes.length > 1) {
-                // Carrusel: álbum agrupado (igual que pinterest)
+
                 try {
                     await s.sendMessage(
                         chatJid,
@@ -129,7 +116,6 @@ export default {
                 );
             }
 
-            // ---------- ENVIAR VIDEOS ----------
             for (let i = 0; i < videos.length; i++) {
                 try {
                     await s.sendMessage(
