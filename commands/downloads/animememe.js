@@ -1,10 +1,4 @@
-// commands/downloads/animememe.js
-// ============================================================
-// COMANDO: ANIME MEME
-// Obtiene un meme aleatorio de anime desde Alex API.
-// Uso: .animememe
-// Alias: .meme
-// ============================================================
+
 
 import { llamarApi } from '../../lib/api.js';
 
