@@ -1,4 +1,4 @@
-// commands/group/todos.js
+
 import {
     esGrupo,
     verificarPermisosAdmin,
@@ -16,19 +16,11 @@ export default {
     ejecutar: async ({ sock, msg, responder, argumento }) => {
         const chatId = msg.key.remoteJid;
 
-        // ============================================================
-        // VERIFICAR GRUPO
-        // ============================================================
-
         if (!esGrupo(chatId)) {
             return responder.texto(
                 '❌ Este comando solo funciona dentro de un grupo.'
             );
         }
-
-        // ============================================================
-        // VERIFICAR PERMISOS DE ADMIN
-        // ============================================================
 
         const permiso = await verificarPermisosAdmin(
             sock,
@@ -39,10 +31,6 @@ export default {
         if (!permiso.ok) {
             return responder.texto(permiso.motivo);
         }
-
-        // ============================================================
-        // OBTENER MIEMBROS
-        // ============================================================
 
         try {
             const metadata =
@@ -55,10 +43,6 @@ export default {
                 );
             }
 
-            // ========================================================
-            // CREAR MENCIONES
-            // ========================================================
-
             const menciones = metadata.participants
                 .map(participante => participante.id)
                 .filter(Boolean);
@@ -67,19 +51,11 @@ export default {
                 .map(jid => `@${jid.split('@')[0]}`)
                 .join(' ');
 
-            // ========================================================
-            // MENSAJE
-            // ========================================================
-
             const textoExtra = argumento?.trim();
 
             const encabezado = textoExtra
                 ? `📢 *${textoExtra}*\n\n`
                 : '📢 *Atención a todos:*\n\n';
-
-            // ========================================================
-            // ENVIAR
-            // ========================================================
 
             await sock.sendMessage(
                 chatId,
