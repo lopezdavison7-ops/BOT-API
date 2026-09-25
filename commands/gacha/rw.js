@@ -1,4 +1,4 @@
-// commands/gacha/rw.js
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,18 +11,10 @@ import {
     guardarUsuario
 } from '../../database/economia.js';
 
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const RW_DIR = path.join(__dirname, '../../media/gacha');
+const RW_DIR = path.join(__dirname, '../../media/gacha/jpg');
 const GACHA_DATABASE = path.join(__dirname, '../../database/gacha.json');
-
-// ============================================================
-// OBTENER IMÁGENES
-// ============================================================
 
 function obtenerImagenes() {
     if (!fs.existsSync(RW_DIR)) {
@@ -37,10 +29,6 @@ function obtenerImagenes() {
     return archivos;
 }
 
-// ============================================================
-// ELEGIR IMAGEN ALEATORIA
-// ============================================================
-
 function elegirImagen() {
     const imagenes = obtenerImagenes();
     const nombre = imagenes[Math.floor(Math.random() * imagenes.length)];
@@ -50,10 +38,6 @@ function elegirImagen() {
         total: imagenes.length
     };
 }
-
-// ============================================================
-// CARGAR DATOS DEL GACHA
-// ============================================================
 
 function cargarDatosGacha() {
     if (!fs.existsSync(GACHA_DATABASE)) {
@@ -67,10 +51,6 @@ function cargarDatosGacha() {
     }
 }
 
-// ============================================================
-// CONVERTIR NOMBRE DEL ARCHIVO
-// ============================================================
-
 function nombreDesdeArchivo(archivo) {
     return path
         .basename(archivo, path.extname(archivo))
@@ -80,10 +60,6 @@ function nombreDesdeArchivo(archivo) {
         .toUpperCase();
 }
 
-// ============================================================
-// OBTENER INFORMACIÓN DE LA CARTA (CON VALOR SEGURO)
-// ============================================================
-
 function obtenerDatosCarta(archivo) {
     const datos = cargarDatosGacha();
     const carta = datos[archivo];
@@ -92,7 +68,7 @@ function obtenerDatosCarta(archivo) {
             nombre: carta.nombre || nombreDesdeArchivo(archivo),
             genero: carta.genero || 'Desconocido',
             serie: carta.serie || 'Desconocida',
-            // 🔥 VALOR SEGURO: si es 0 o no existe, le ponemos un valor aleatorio entre 1 y 100
+
             valor: (carta.valor && carta.valor > 0) ? carta.valor : Math.floor(Math.random() * 100) + 1
         };
     }
@@ -104,10 +80,6 @@ function obtenerDatosCarta(archivo) {
     };
 }
 
-// ============================================================
-// FORMATEAR VALOR
-// ============================================================
-
 function formatearValor(valor) {
     const numero = Number(valor);
     if (!Number.isFinite(numero)) {
@@ -115,10 +87,6 @@ function formatearValor(valor) {
     }
     return '¥' + numero.toLocaleString('en-US');
 }
-
-// ============================================================
-// FORMATEAR TIEMPO
-// ============================================================
 
 function formatearTiempo(milisegundos) {
     const totalSegundos = Math.ceil(milisegundos / 1000);
@@ -138,10 +106,6 @@ function formatearTiempo(milisegundos) {
     return partes.join(' y ');
 }
 
-// ============================================================
-// CREAR MENSAJE
-// ============================================================
-
 function crearMensaje(carta) {
     return (
 `╭〔 ✨ 𝐆𝐀𝐂𝐇𝐀 〕⬣
@@ -160,10 +124,6 @@ function crearMensaje(carta) {
     );
 }
 
-// ============================================================
-// COMANDO RW
-// ============================================================
-
 export default {
     nombre: 'rw',
     categoria: 'Diversión',
@@ -172,9 +132,7 @@ export default {
     ejecutar: async ({ msg, responder, sock }) => {
         const id = msg.key.participant || msg.key.remoteJid;
         try {
-            // ------------------------------------------------
-            // COMPROBAR COOLDOWN
-            // ------------------------------------------------
+
             if (!puedeUsarRW(id)) {
                 const restante = tiempoRestanteRW(id);
                 await responder.texto(
@@ -186,10 +144,6 @@ export default {
                 );
                 return;
             }
-
-            // ============================================================
-            // 🔥 SISTEMA DE PROGRESO EN VIVO (ESTILO BOT-API)
-            // ============================================================
 
             const mensajeInicial = `
 ╭〔 🎲 𝐆𝐀𝐂𝐇𝐀 〕⬣
@@ -242,10 +196,6 @@ export default {
                 });
             }
 
-            // ============================================================
-            // 🎁 LÓGICA ORIGINAL DEL RW
-            // ============================================================
-
             const imagen = elegirImagen();
             const carta = obtenerDatosCarta(imagen.nombre);
             const buffer = fs.readFileSync(imagen.ruta);
@@ -256,14 +206,8 @@ export default {
 
             const mensaje = crearMensaje(carta);
 
-            // ------------------------------------------------
-            // ENVIAR IMAGEN
-            // ------------------------------------------------
             await responder.imagen(buffer, mensaje);
 
-            // ------------------------------------------------
-            // GUARDAR CARTA PENDIENTE
-            // ------------------------------------------------
             const usuario = obtenerUsuario(id);
             usuario.cartaPendiente = {
                 nombre: carta.nombre,
@@ -275,9 +219,6 @@ export default {
 
             console.log(`[COMANDO rw] ✓ Carta pendiente guardada para ${id}`);
 
-            // ------------------------------------------------
-            // REGISTRAR USO
-            // ------------------------------------------------
             registrarRW(id);
 
             console.log(`[COMANDO rw] ✓ Carta enviada: ${carta.nombre}`);
