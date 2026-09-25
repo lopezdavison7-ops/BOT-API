@@ -1,9 +1,5 @@
-// commands/NSFW/gay.js — 🔞 Videos +18 gay (evogb)
-// ============================================
-// Misma protección NSFW que girls.js:
-// - Grupos: requiere .girls on (flag nsfw en grupos.json)
-// - Privado: siempre permitido
-// ============================================
+
+
 import { obtenerStore } from '../../lib/jsonStore.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -29,9 +25,6 @@ export default {
         const chatJid = msg.key.remoteJid;
         const isGroup = chatJid.endsWith('@g.us');
 
-        // ============================================
-        // RESTRICCIÓN 18+ EN GRUPOS
-        // ============================================
         if (isGroup) {
             const grupos = obtenerGrupos();
             if (!grupos[chatJid]?.nsfw) {
@@ -49,18 +42,12 @@ export default {
             }
         }
 
-        // ============================================
-        // CANTIDAD (1-3)
-        // ============================================
         let cantidad = parseInt((argumento || '').trim());
         if (isNaN(cantidad) || cantidad < 1) cantidad = 1;
         if (cantidad > MAX_VIDEOS) cantidad = MAX_VIDEOS;
 
         await responder.texto('🔞 Buscando *' + cantidad + '* video(s) +18...');
 
-        // ============================================
-        // PEDIR Y ENVIAR VIDEOS
-        // ============================================
         let enviados = 0;
 
         for (let i = 0; i < cantidad; i++) {
