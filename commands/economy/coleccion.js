@@ -1,4 +1,4 @@
-// commands/economy/coleccion.js
+
 import {
     obtenerUsuario
 } from '../../database/economia.js';
