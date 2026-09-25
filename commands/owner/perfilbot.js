@@ -1,4 +1,4 @@
-// commands/owner/perfilbot.js
+
 import { downloadMediaMessage } from 'baileys';
 
 export default {
@@ -9,10 +9,6 @@ export default {
     async ejecutar({ sock, msg, responder, argumento }) {
         try {
             let imagen = null;
-
-            // ====================================================
-            // 1. IMAGEN CITADA
-            // ====================================================
 
             const citado =
                 msg.message?.extendedTextMessage?.contextInfo
@@ -42,10 +38,6 @@ export default {
                 );
             }
 
-            // ====================================================
-            // 2. IMAGEN ENVIADA DIRECTAMENTE CON EL COMANDO
-            // ====================================================
-
             if (!imagen && msg.message?.imageMessage) {
                 imagen = await downloadMediaMessage(
                     msg,
@@ -58,10 +50,6 @@ export default {
                 );
             }
 
-            // ====================================================
-            // 3. ENLACE DE IMAGEN
-            // ====================================================
-
             if (!imagen && argumento) {
                 if (
                     /^https?:\/\/\S+$/i.test(argumento)
@@ -71,10 +59,6 @@ export default {
                     };
                 }
             }
-
-            // ====================================================
-            // 4. SI NO HAY IMAGEN
-            // ====================================================
 
             if (!imagen) {
                 await responder.texto(
@@ -91,10 +75,6 @@ export default {
 
                 return;
             }
-
-            // ====================================================
-            // 5. CAMBIAR FOTO DEL BOT
-            // ====================================================
 
             await responder.texto(
                 '⏳ Cambiando la foto del perfil del bot...'
