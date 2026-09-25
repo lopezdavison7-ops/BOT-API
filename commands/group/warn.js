@@ -1,4 +1,4 @@
-// commands/group/warn.js
+
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -19,7 +19,6 @@ export default {
             let target = null;
             let razon = 'Sin razón especificada';
 
-            // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
@@ -28,7 +27,6 @@ export default {
                 }
             }
 
-            // FORMA 2: Mención
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
@@ -53,7 +51,6 @@ export default {
                 return;
             }
 
-            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
@@ -75,7 +72,6 @@ export default {
             const total = warns[target].length;
             const moderadorJid = msg.key.participant || msg.key.remoteJid;
 
-            // AUTO-KICK A LAS 3
             if (total >= 3) {
                 try {
                     await sock.groupParticipantsUpdate(msg.key.remoteJid, [target], 'remove');
@@ -97,7 +93,7 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-                    await sock.sendMessage(msg.key.remoteJid, { 
+                    await sock.sendMessage(msg.key.remoteJid, {
                         text: textoKick,
                         mentions: [target, moderadorJid]
                     }, { quoted: msg });
@@ -108,7 +104,6 @@ export default {
                 }
             }
 
-            // MENSAJE NORMAL DE WARN
             const textoWarn = `
 ╭〔 ⚠️ 𝐖𝐀𝐑𝐍 〕⬣
 ┃
@@ -124,7 +119,7 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-            await sock.sendMessage(msg.key.remoteJid, { 
+            await sock.sendMessage(msg.key.remoteJid, {
                 text: textoWarn,
                 mentions: [target, moderadorJid]
             }, { quoted: msg });
