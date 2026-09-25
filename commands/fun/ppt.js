@@ -1,4 +1,4 @@
-// commands/fun/ppt.js
+
 import {
     obtenerUsuario,
     modificarDinero,
@@ -34,11 +34,9 @@ export default {
             );
         }
 
-        // Obtener datos del usuario
         const usuario = obtenerUsuario(id);
         const saldo = Number(usuario.dinero || 0);
 
-        // Verificar que tenga al menos 100 monedas
         if (saldo < 100) {
             return responder.texto(
                 `❌ *SALDO INSUFICIENTE*\n\n` +
@@ -66,7 +64,6 @@ export default {
             modificarDinero(id, -100);
         }
 
-        // Guardamos el cambio (por si acaso)
         guardarUsuario(id, usuario);
 
         const respuesta = `
