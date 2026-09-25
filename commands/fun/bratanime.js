@@ -1,8 +1,7 @@
-// commands/fun/bratanime.js — 🌸 Sticker anime con sistema de fallback (3 APIs)
+
 import fetch from 'node-fetch';
 import sharp from 'sharp';
 
-// Sistema de fallback: si una API falla, prueba la siguiente
 const API_SOURCES = [
     {
         name: 'waifu.pics',
@@ -48,11 +47,10 @@ function wrapText(text, maxChars) {
     return lines.slice(0, 3);
 }
 
-// Intenta obtener imagen de varias APIs hasta que una funcione
 async function obtenerAnime(cat) {
     const errores = [];
     for (const src of API_SOURCES) {
-        if (!src.cats[cat]) continue; // Esta fuente no soporta esta categoría
+        if (!src.cats[cat]) continue;
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
@@ -117,21 +115,17 @@ export default {
                 return await responder.texto('❌ Falta el texto. Ejemplo: .bratanime hola');
             }
 
-            // 1) Obtener imagen con fallback automático
             const { url, source } = await obtenerAnime(cat);
 
-            // 2) Descargar la imagen
             const imgResp = await fetch(url);
             if (!imgResp.ok) throw new Error('No se pudo descargar la imagen (' + imgResp.status + ')');
             const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
 
-            // 3) Recortar a cuadrado 512x512
             const base = await sharp(imgBuffer)
                 .resize(512, 512, { fit: 'cover', position: 'centre' })
                 .png()
                 .toBuffer();
 
-            // 4) Texto estilo brat: barra oscura + texto blanco con blur
             const lines = wrapText(texto, 18);
             const fontSize = (Math.max(...lines.map(l => l.length)) > 24) ? 28 : (Math.max(...lines.map(l => l.length)) > 16 ? 34 : 42);
             const barH = lines.length * 46 + 26;
@@ -145,13 +139,11 @@ export default {
                 textosSvg +
                 '</svg>';
 
-            // 5) Componer y convertir a sticker WebP
             const stickerBuffer = await sharp(base)
                 .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
                 .webp({ quality: 85 })
                 .toBuffer();
 
-            // 6) Enviar como sticker
             await sock.sendMessage(msg.key.remoteJid, {
                 sticker: stickerBuffer,
                 mimetype: 'image/webp'
