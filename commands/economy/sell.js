@@ -1,4 +1,4 @@
-// commands/economy/sell.js
+
 import {
     obtenerUsuario,
     guardarUsuario,
@@ -87,10 +87,6 @@ export default {
             return;
         }
 
-        // ----------------------------------------------------
-        // ELIMINAR CARTA
-        // ----------------------------------------------------
-
         personajes.splice(
             indice,
             1
@@ -103,10 +99,6 @@ export default {
             id,
             usuario
         );
-
-        // ----------------------------------------------------
-        // DAR DINERO
-        // ----------------------------------------------------
 
         modificarDinero(
             id,
