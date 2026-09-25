@@ -1,14 +1,6 @@
-// commands/utils/readviewonce.js — 👁️ Ver mensajes de vista única (imagen/video/audio)
-// ============================================================
-// Extrae el contenido real de un mensaje "ver una vez" y lo
-// reenvía al chat como mensaje normal, conservando el caption.
-// ============================================================
+
 
 import { downloadContentFromMessage, extractMessageContent } from 'baileys';
-
-// ============================================================
-// REACCIONES
-// ============================================================
 
 async function reaccionar(sock, msg, emoji) {
     try {
@@ -16,13 +8,9 @@ async function reaccionar(sock, msg, emoji) {
             react: { text: emoji, key: msg.key }
         });
     } catch (e) {
-        // Si falla la reacción, no interrumpe el flujo
+
     }
 }
-
-// ============================================================
-// EXTRAER MENSAJE CITADO
-// ============================================================
 
 function obtenerMensajeCitado(msg) {
     return (
@@ -31,29 +19,19 @@ function obtenerMensajeCitado(msg) {
     );
 }
 
-// ============================================================
-// DESAPACETAR VIEWONCE
-// ============================================================
-// Los mensajes viewOnce vienen envueltos en un contenedor:
-// { viewOnceMessage: { message: { imageMessage: {...} } } }
-// Hay que extraer el message real para poder descargarlo.
-
 function desempaquetarViewOnce(content) {
     if (!content) return null;
 
-    // Si viene envuelto en viewOnceMessage, desenvolver
     if (content.viewOnceMessage) {
         const interno = content.viewOnceMessage.message || content.viewOnceMessage;
         return interno;
     }
 
-    // Si viene envuelto en viewOnceMessageV2 (versión nueva)
     if (content.viewOnceMessageV2) {
         const interno = content.viewOnceMessageV2.message || content.viewOnceMessageV2;
         return interno;
     }
 
-    // Si viene envuelto en viewOnceMessageV2Extension
     if (content.viewOnceMessageV2Extension) {
         const interno = content.viewOnceMessageV2Extension.message || content.viewOnceMessageV2Extension;
         return interno;
@@ -61,10 +39,6 @@ function desempaquetarViewOnce(content) {
 
     return null;
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
     nombre: 'readviewonce',
@@ -76,7 +50,6 @@ export default {
     ejecutar: async ({ sock, msg, responder, jid }) => {
         const mensajeCitado = obtenerMensajeCitado(msg);
 
-        // Validar que hay mensaje citado
         if (!mensajeCitado) {
             return await responder.texto(
                 '╭━━〔 👁️ 𝐑𝐄𝐀𝐃 𝐕𝐈𝐄𝐖𝐎𝐍𝐂𝐄 〕━━⬣\n' +
@@ -96,7 +69,7 @@ export default {
         await reaccionar(sock, msg, '🕒');
 
         try {
-            // Extraer contenido real del mensaje citado
+
             const contenidoOriginal = extractMessageContent(mensajeCitado);
 
             if (!contenidoOriginal) {
@@ -104,10 +77,8 @@ export default {
                 return await responder.texto('❌ No se pudo extraer el contenido del mensaje.');
             }
 
-            // Desenvolver si es viewOnce
             const contenidoReal = desempaquetarViewOnce(contenidoOriginal) || contenidoOriginal;
 
-            // Detectar tipo de mensaje (image, video, audio)
             const tipoMensaje = Object.keys(contenidoReal)[0];
 
             if (!tipoMensaje) {
@@ -117,16 +88,13 @@ export default {
 
             const mediaMessage = contenidoReal[tipoMensaje];
 
-            // Verificar que tenga datos descargables
             if (!mediaMessage || (!mediaMessage.url && !mediaMessage.directPath)) {
                 await reaccionar(sock, msg, '❌');
                 return await responder.texto('❌ El mensaje no contiene multimedia descargable.');
             }
 
-            // Determinar tipo de medio
             const mediaType = tipoMensaje.replace('Message', '').toLowerCase();
 
-            // Descargar contenido
             const stream = await downloadContentFromMessage(mediaMessage, mediaType);
 
             if (!stream) {
@@ -134,7 +102,6 @@ export default {
                 return await responder.texto('❌ No se pudo iniciar la descarga del contenido.');
             }
 
-            // Concatenar chunks en un buffer
             const chunks = [];
             for await (const chunk of stream) {
                 chunks.push(chunk);
@@ -146,13 +113,11 @@ export default {
                 return await responder.texto('❌ El contenido descargado está vacío.');
             }
 
-            // Caption original (si existe)
             const captionOriginal = mediaMessage.caption || '';
             const caption = captionOriginal
                 ? '👁️ *ViewOnce extraído:*\n\n' + captionOriginal
                 : '👁️ *Contenido extraído ten chismoso*';
 
-            // Enviar según el tipo
             if (/video/i.test(tipoMensaje)) {
                 await sock.sendMessage(jid, {
                     video: buffer,
