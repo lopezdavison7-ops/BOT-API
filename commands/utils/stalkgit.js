@@ -1,8 +1,5 @@
-// commands/utils/github.js — 🐙 Stalker de perfiles GitHub
-// ============================================================
-// API: api.stellarwa.xyz/stalking/github
-// Uso: .github <usuario>
-// ============================================================
+
+
 import fetch from 'node-fetch';
 
 const API = 'https://api.stellarwa.xyz/stalking/github';
@@ -30,7 +27,7 @@ export default {
     descripcion: 'Stalkea un perfil de GitHub: stats, lenguajes y repos top',
     uso: '.github <usuario>',
     ejecutar: async ({ sock, msg, argumento, responder }) => {
-        // Limpia el input: acepta @user, links de github o nombre pelado
+
         const user = (argumento || '')
             .trim()
             .replace(/^@/, '')
@@ -54,7 +51,7 @@ export default {
         await responder.texto('🐙 Stalkeando a *' + user + '* en GitHub...');
 
         try {
-            // Intenta con ?username= y si falla con ?user=
+
             let json = null;
             for (const param of ['username', 'user']) {
                 try {
@@ -76,7 +73,6 @@ export default {
             const s = r.stats || {};
             const acc = r.account || {};
 
-            // ---------- LENGUAJES TOP ----------
             let langs = '';
             const topLangs = (r.top_languages || []).slice(0, 5);
             if (topLangs.length) {
@@ -87,7 +83,6 @@ export default {
                 langs = '┃ _(sin lenguajes detectados)_\n';
             }
 
-            // ---------- REPOS TOP ----------
             let repos = '';
             const topRepos = (r.top_repos || []).slice(0, 5);
             if (topRepos.length) {
@@ -130,7 +125,6 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // ---------- ENVIAR CON AVATAR ----------
             try {
                 await sock.sendMessage(msg.key.remoteJid, {
                     image: { url: r.avatar },
