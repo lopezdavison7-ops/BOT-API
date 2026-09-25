@@ -1,7 +1,7 @@
-// commands/economy/crime.js
+
 import { obtenerUsuario, guardarUsuario } from '../../database/economia.js';
 
-const COOLDOWN = 10 * 60 * 1000; // 10 min
+const COOLDOWN = 10 * 60 * 1000;
 const cache = new Map();
 setInterval(() => cache.clear(), 5 * 60 * 1000);
 
@@ -32,16 +32,15 @@ export default {
 
             const ahora = Date.now();
             const restante = COOLDOWN - (ahora - usuario.ultimoCrime);
-            
+
             if (restante > 0) {
                 return await responder.texto(`⏰ Espera *${msToTime(restante)}* para delinquir de nuevo`);
             }
 
-            const roll = Math.random(); // 0 a 1
+            const roll = Math.random();
             let texto = '';
             let cantidad = 0;
 
-            // 60% ÉXITO
             if (roll > 0.4) {
                 cantidad = Math.floor(Math.random() * 800) + 200;
                 usuario.dinero += cantidad;
@@ -50,8 +49,7 @@ export default {
 ┃ 💰 Robaste: *$${cantidad.toLocaleString()}*
 ┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
 ╰━━━━━━━━⬣`;
-            
-            // 25% ATRAPADO CON MULTA
+
             } else if (roll > 0.15) {
                 cantidad = Math.floor(Math.random() * 400) + 200;
                 usuario.dinero = Math.max(0, usuario.dinero - cantidad);
@@ -61,12 +59,11 @@ export default {
 ┃ 💵 Saldo: *$${usuario.dinero.toLocaleString()}*
 ╰━━━━━━━━⬣`;
 
-            // 15% PERSECUCIÓN Y PIERDE TODO
             } else {
-                let perdido = Math.floor(usuario.dinero * 0.5); // pierde 50% de lo que tiene
-                if (perdido < 500) perdido = 500; // mínimo 500
+                let perdido = Math.floor(usuario.dinero * 0.5);
+                if (perdido < 500) perdido = 500;
                 usuario.dinero = Math.max(0, usuario.dinero - perdido);
-                
+
                 texto = `╭━━〔 🚨 𝐏𝐄𝐑𝐒𝐄𝐂𝐔𝐂𝐈𝐎𝐍 〕━━⬣
 ┃ CORRE!! La poli te está persiguiendo!
 ┃ Te atraparon después de una persecución
