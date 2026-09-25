@@ -9,7 +9,7 @@ export default {
     alias: ['asectar', 'accept'],
     descripcion: 'Acepta una propuesta de matrimonio pendiente. Uso:.aceptar',
 
-    ejecutar: async ({ msg, responder, sock }) => { // <- agregué sock
+    ejecutar: async ({ msg, responder, sock }) => {
         const s = sock || global.conns?.[0] || Object.values(global.conns)[0];
         const chatJid = msg.key.remoteJid;
         const receptor = msg.key.participant || msg.key.remoteJid;
@@ -31,7 +31,6 @@ export default {
 
         const pareja = aceptarPropuesta(receptor);
 
-        // NUEVO: Checar si expiró
         if (pareja === 'expirado') {
             let text = '╭〔 ⏰ 𝐀𝐂𝐄𝐏𝐓𝐀𝐑 〕⬣\n';
             text += '┃\n';
@@ -61,7 +60,6 @@ export default {
         text += '┃\n';
         text += '╰━━━━━━━━⬣';
 
-        // FIX: usar sendMessage para que mencione
         await s.sendMessage(chatJid, { text, mentions: [pareja, receptor] }, { quoted: msg });
     }
 };
