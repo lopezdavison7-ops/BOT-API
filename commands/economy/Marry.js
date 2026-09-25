@@ -41,9 +41,8 @@ export default {
             return responder.texto('╭〔 ❌ 𝐌𝐀𝐑𝐘 〕⬣\n┃\n┃ Esa persona ya está casada.\n┃\n╰━━━━━━━━⬣');
         }
 
-        // NUEVO 1: Checar si EL EMISOR ya tiene una propuesta enviada
         const perfilEmisor = obtenerPerfil(emisor);
-        // Buscamos si alguien tiene propuestaDe = emisor
+
         const db = datos();
         const yaPropusoA = Object.keys(db).find(id => db[id].propuestaDe === emisor);
 
@@ -54,13 +53,12 @@ export default {
                 const seg = Math.ceil(restante / 1000);
                 return responder.texto(`╭〔 ⚠️ 𝐌𝐀𝐑𝐑𝐘〕⬣\n┃\n┃ Ya tienes una propuesta pendiente.\n┃ Espera a que responda o se cancele.\n┃ ⏰ Te quedan ${seg}s\n┃\n╰━━━━━━━━⬣`);
             } else {
-                eliminarPropuesta(yaPropusoA); // limpiar la vieja
+                eliminarPropuesta(yaPropusoA);
             }
         }
 
         const prop = obtenerPropuestaPendiente(receptor);
 
-        // Si hay propuesta al receptor, checar si expiró
         if (prop) {
             if (Date.now() - prop.timestamp > DOS_MINUTOS) {
                 eliminarPropuesta(receptor);
@@ -84,7 +82,6 @@ export default {
 
         await s.sendMessage(chatJid, { text, mentions: [emisor, receptor] }, { quoted: msg });
 
-        // NUEVO 2: Aviso de "tiempo agotado" cuando se cumpla
         setTimeout(async () => {
             const p = obtenerPropuestaPendiente(receptor);
             if (p && p.emisor === emisor) {
@@ -101,5 +98,4 @@ export default {
     }
 };
 
-// Import que faltaba arriba
 import { obtenerPerfil, datos } from '../../database/perfiles.js';
