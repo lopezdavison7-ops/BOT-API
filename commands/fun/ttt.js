@@ -1,4 +1,4 @@
-// commands/fun/ttt.js
+
 import {
     hayPartidaActiva,
     crearPartida,
