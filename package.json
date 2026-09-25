@@ -4,7 +4,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node --env-file=.env index.js"
+    "start": "node --env-file=.env index.js",
+    "gacha": "node lib/gacha-selector.cjs"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
