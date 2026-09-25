@@ -1,4 +1,4 @@
-// commands/utils/traducir.js
+
 import { llamarApi } from '../../lib/api.js';
 
 export default {
@@ -8,7 +8,7 @@ export default {
     descripcion: 'Traduce texto. Uso: .traducir <texto>|<idioma>',
     ejecutar: async ({ responder, argumento }) => {
         const input = String(argumento || '').trim();
-        
+
         if (!input.includes('|')) {
             return responder.texto(
                 `❌ *TRADUCIR*\n\n` +
