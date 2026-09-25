@@ -1,4 +1,4 @@
-// commands/owner/update.js
+
 import {
     spawn
 } from 'child_process';
@@ -68,10 +68,6 @@ export default {
 
             const keyMensaje = msgInicial.key;
 
-            // ====================================================
-            // OBTENER ARCHIVOS ANTES DE ACTUALIZAR
-            // ====================================================
-
             let archivosAntes = '';
 
             try {
@@ -90,10 +86,6 @@ export default {
                 archivosAntes = '';
 
             }
-
-            // ====================================================
-            // EJECUTAR GIT PULL
-            // ====================================================
 
             const git = spawn('git', ['pull'], {
                 cwd: process.cwd(),
@@ -150,10 +142,6 @@ export default {
 
                 }
 
-                // ====================================================
-                // OBTENER ARCHIVOS DESPUÉS DE ACTUALIZAR
-                // ====================================================
-
                 let cambios = '';
 
                 try {
@@ -189,10 +177,6 @@ export default {
 
                 }
 
-                // ====================================================
-                // MOSTRAR RESULTADO Y REINICIAR
-                // ====================================================
-
                 await editar(
                     keyMensaje,
                     '╭━━〔 ✅ 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐑 〕━━⬣\n' +
@@ -205,10 +189,6 @@ export default {
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣'
                 );
-
-                // ====================================================
-                // REINICIAR PROCESO
-                // ====================================================
 
                 setTimeout(() => {
 
