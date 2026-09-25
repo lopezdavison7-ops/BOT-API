@@ -1,4 +1,4 @@
-// commands/utils/hora.js
+
 export default {
     nombre: 'hora',
     categoria: 'Utilidades',
