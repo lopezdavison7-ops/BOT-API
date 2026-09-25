@@ -1,4 +1,4 @@
-// commands/economy/baltop.js — vFINAL4: nombres guardados en DB
+
 import fs from 'fs';
 import path from 'path';
 
@@ -20,18 +20,16 @@ function guardarDB(db) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 const fmt = n => '$' + n.toLocaleString('en-US');
 
-// Mención LIMPIA: primero nombre guardado, luego PN real, luego @lid puro
 async function datosMencion(sock, jid, nombreGuardado) {
-    // Si tenemos nombre guardado en la DB, usarlo directamente
+
     if (nombreGuardado && nombreGuardado.trim()) {
-        return { 
-            token: '*' + nombreGuardado + '*', 
+        return {
+            token: '*' + nombreGuardado + '*',
             jids: [jid],
             esNombre: true
         };
     }
 
-    // Intentar resolver @lid a número real
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
@@ -40,12 +38,11 @@ async function datosMencion(sock, jid, nombreGuardado) {
                 return { token: '@' + pj.split('@')[0], jids: [pj] };
             }
         }
-    } catch (e) { /* sin mapeo local */ }
+    } catch (e) {   }
 
-    // Si no se pudo resolver, mostrar ID sin el @
     const idLimpio = jid.split('@')[0];
-    return { 
-        token: '*Usuario ' + idLimpio.slice(-4) + '*', 
+    return {
+        token: '*Usuario ' + idLimpio.slice(-4) + '*',
         jids: [jid],
         esNombre: true
     };
@@ -61,14 +58,12 @@ export default {
         try {
             const usuarios = cargarDB();
 
-            // Guarda tu nombre (pushName) en la DB para futuras vistas bonitas
             const callerId = msg.key.participant || msg.key.remoteJid;
             if (usuarios[callerId] && msg.pushName && usuarios[callerId].nombre !== msg.pushName) {
                 usuarios[callerId].nombre = msg.pushName;
                 try { guardarDB(usuarios); } catch (e) {}
             }
 
-            // Ranking por TOTAL (banco + dinero) - incluye a todos los que tengan algo
             const top = Object.entries(usuarios)
                 .filter(([jid, u]) => (num(u.banco) + num(u.dinero)) > 0)
                 .sort((a, b) => (num(b[1].banco) + num(b[1].dinero)) - (num(a[1].banco) + num(a[1].dinero)))
@@ -90,7 +85,7 @@ export default {
                 m.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
 
                 const total = num(u.banco) + num(u.dinero);
-                
+
                 txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' ' + m.token + '\n';
                 txt += '┃    💰 Total › *' + fmt(total) + '*\n';
                 txt += '┃\n';
