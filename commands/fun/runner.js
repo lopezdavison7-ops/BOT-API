@@ -1,4 +1,4 @@
-// commands/fun/runner.js
+
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
