@@ -1,15 +1,4 @@
-// commands/system/menu.js
-// ============================================================
-// MENU - BOT-API 2.0
-// ============================================================
-// MENÚ MULTI-DISEÑO
-//
-// ✅ La foto del menú se envía como mensaje NORMAL (se puede
-//    guardar, reenviar y descargar como siempre).
-// ✅ El botón del canal va en una tarjeta interactiva aparte
-//    (interactiveMessage + nativeFlowMessage), que es el único
-//    formato de botones que WhatsApp oficial renderiza hoy.
-// ============================================================
+
 
 import fs from 'fs';
 import path from 'path';
@@ -24,7 +13,6 @@ const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 const VIDEO_MENU_URL = '';
 const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
 
-// 🔗 TU CANAL OFICIAL
 const CANAL_URL = 'https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q';
 
 const GRUPO_MENCIONES = '120363429140811226@g.us';
@@ -41,10 +29,6 @@ const ICONOS = {
     Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
     Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
-
-// ============================================================
-// DISEÑOS
-// ============================================================
 
 const DISEÑOS = [
     {
@@ -189,7 +173,6 @@ const DISEÑOS = [
     }
 ];
 
-// Último diseño utilizado por cada chat.
 const ultimoDiseñoPorChat = new Map();
 
 function obtenerDiseño(jid) {
@@ -201,10 +184,6 @@ function obtenerDiseño(jid) {
     ultimoDiseñoPorChat.set(jid, diseño.nombre);
     return diseño;
 }
-
-// ============================================================
-// HELPERS
-// ============================================================
 
 function obtenerAutor(msg) {
     const key = msg?.key || {};
@@ -300,10 +279,6 @@ async function obtenerMencionesFijas() {
     }
 }
 
-// ============================================================
-// GENERAR MENÚ
-// ============================================================
-
 function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño, extra = {}) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
@@ -351,7 +326,6 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño
         texto += `${diseño.categoryEnd}\n`;
     }
 
-    // Si canal.json está vacío, se muestra igual tu canal fijo.
     const canal = obtenerCanal() || CANAL_URL;
     texto += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     texto += `📢 *CANAL OFICIAL*\n${canal}\n`;
@@ -364,14 +338,6 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño
 
     return texto;
 }
-
-// ============================================================
-// TARJETA CON BOTÓN DEL CANAL
-// ============================================================
-// Mensaje interactivo pequeño y separado: así la foto del menú
-// sigue siendo un mensaje NORMAL (guardable/reenviable) y el
-// botón del canal funciona con el formato que WhatsApp sí muestra.
-// ============================================================
 
 async function enviarBotonCanal(sock, jid) {
     await sock.relayMessage(jid, {
@@ -410,10 +376,6 @@ async function enviarBotonCanal(sock, jid) {
     }, {});
 }
 
-// ============================================================
-// COMANDO MENU
-// ============================================================
-
 export default {
     nombre: 'menu',
     categoria: 'Sistema',
@@ -443,9 +405,6 @@ export default {
                 { mencionesTexto: textoMenciones }
             );
 
-            // ------------------------------------------------
-            // 1) MENÚ CON FOTO NORMAL (guardable y reenviable)
-            // ------------------------------------------------
             if (VIDEO_MENU_URL) {
                 await sock.sendMessage(jid, {
                     video: { url: VIDEO_MENU_URL },
@@ -466,9 +425,6 @@ export default {
                 }, { quoted: msg });
             }
 
-            // ------------------------------------------------
-            // 2) TARJETA CON EL BOTÓN DEL CANAL
-            // ------------------------------------------------
             try {
                 await enviarBotonCanal(sock, jid);
             } catch (errorBoton) {
