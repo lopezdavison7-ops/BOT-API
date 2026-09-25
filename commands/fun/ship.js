@@ -1,9 +1,5 @@
-// commands/fun/ship.js
-// ============================================================
-// BOT-API — SHIP (con menciones correctas)
-// ============================================================
 
-// ---------- NIVELES DE COMPATIBILIDAD ----------
+
 const NIVELES = [
     {
         min: 100, emoji: '💍', titulo: '¡BODA INMEDIATA!',
@@ -137,7 +133,6 @@ export default {
         let userA = msg.key.participant || msg.key.remoteJid;
         let userB = quotedParticipant || mentioned[0];
 
-        // Si menciona a 2 personas
         if (mentioned.length >= 2) {
             userA = mentioned[0];
             userB = mentioned[1];
@@ -186,7 +181,6 @@ export default {
         const frase = fraseRandom(nivel.frases);
         const barra = barraProgreso(percent);
 
-        // Extraer números para mostrar (sin el dominio)
         const num1 = userA.split('@')[0];
         const num2 = userB.split('@')[0];
 
@@ -214,7 +208,7 @@ export default {
             remoteJid,
             {
                 text: texto,
-                mentions: [userA, userB]  // Menciones con JID completo
+                mentions: [userA, userB]
             },
             { quoted: msg }
         );
