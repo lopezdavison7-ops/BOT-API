@@ -1,9 +1,4 @@
-// commands/group/despedida.js
-// ============================================================
-// BOT-API
-// COMANDO: DESPEDIDA
-// Activa/desactiva las despedidas automáticas por grupo.
-// ============================================================
+
 
 const despedidas = global.despedidas || (global.despedidas = new Map());
 
@@ -73,11 +68,6 @@ export default {
         );
     }
 };
-
-
-// ============================================================
-// MANEJADOR DE SALIDAS
-// ============================================================
 
 export async function manejarDespedida(sock, update) {
     const { id, participants, action } = update;
