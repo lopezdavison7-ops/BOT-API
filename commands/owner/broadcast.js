@@ -1,9 +1,4 @@
-// commands/owner/broadcast.js
-// ============================================================
-// BROADCAST - SOLO OWNER
-// Envía un mensaje a todos los grupos donde está el bot.
-// Uso: .broadcast mensaje
-// ============================================================
+
 
 export default {
     nombre: 'broadcast',
@@ -47,7 +42,6 @@ export default {
 
                     enviados++;
 
-                    // Pequeña pausa para evitar enviar todo de golpe.
                     await new Promise(resolve =>
                         setTimeout(resolve, 1000)
                     );
