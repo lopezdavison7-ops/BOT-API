@@ -1,4 +1,4 @@
-// commands/system/avatar.js
+
 export default {
     nombre: 'avatar',
 
@@ -17,10 +17,6 @@ export default {
         msg,
         responder
     }) => {
-
-        // ====================================================
-        // OBTENER MENCIÓN
-        // ====================================================
 
         const contexto =
             msg.message?.extendedTextMessage?.contextInfo;
@@ -44,28 +40,16 @@ export default {
             return;
         }
 
-        // ====================================================
-        // PRIMER USUARIO MENCIONADO
-        // ====================================================
-
         const usuario =
             menciones[0];
 
         try {
-
-            // =================================================
-            // OBTENER FOTO
-            // =================================================
 
             const url =
                 await sock.profilePictureUrl(
                     usuario,
                     'image'
                 );
-
-            // =================================================
-            // TEXTO CON MENCIÓN REAL
-            // =================================================
 
             const numero =
                 usuario.split('@')[0];
@@ -76,10 +60,6 @@ export default {
                 `┃ 👤 Usuario: @${numero}\n` +
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━⬣`;
-
-            // =================================================
-            // DESCARGAR FOTO
-            // =================================================
 
             const respuesta =
                 await fetch(url);
@@ -96,10 +76,6 @@ export default {
 
             const buffer =
                 Buffer.from(arrayBuffer);
-
-            // =================================================
-            // ENVIAR CON MENCIÓN REAL
-            // =================================================
 
             await sock.sendMessage(
                 msg.key.remoteJid,
