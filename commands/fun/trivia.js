@@ -1,4 +1,4 @@
-// commands/fun/trivia.js
+
 import {
     hayPartidaActiva,
     crearPregunta,
