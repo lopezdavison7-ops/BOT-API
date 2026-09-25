@@ -1,10 +1,8 @@
-// commands/economy/inventario.js
+
 import {
     obtenerInventario
 } from '../../database/economia.js';
 
-// Mismo catálogo que shop.js (nombre + emoji por id), para
-// mostrar el inventario bonito en vez de ids sueltos.
 const CATALOGO = {
 
     boost: '⚡ BOOST',
@@ -54,7 +52,6 @@ export default {
 
         }
 
-        // Agrupar por cantidad
         const conteo = {};
 
         items.forEach(itemId => {
