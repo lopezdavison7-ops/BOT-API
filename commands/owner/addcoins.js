@@ -1,11 +1,10 @@
-// commands/owner/addcoins.js — 💰 Agregar/quitar coins (SOLO OWNER)
+
 import fs from 'fs';
 import path from 'path';
 
 const RUTA_DB = path.join(process.cwd(), 'database', 'economia.json');
 const RUTA_OWNERS = path.join(process.cwd(), 'database', 'owner.json');
 
-// ---------- CARGAR / GUARDAR ECONOMÍA ----------
 function cargarDB() {
     try {
         if (!fs.existsSync(RUTA_DB)) return {};
@@ -23,21 +22,18 @@ function guardarDB(db) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 const fmt = n => '$' + Math.abs(n).toLocaleString('en-US');
 
-// ---------- FILTRO DE OWNER (multi-fuente) ----------
 function esOwner(fromMe, senderJid) {
-    // 1) Si el mensaje viene del propio número del bot
+
     if (fromMe) return true;
 
     const senderNum = senderJid.split('@')[0].replace(/\D/g, '');
     const owners = new Set();
 
-    // 2) Variable de entorno OWNER (acepta "504xxx,504yyy")
     (process.env.OWNER || '').split(',').forEach(n => {
         const c = n.replace(/\D/g, '');
         if (c) owners.add(c);
     });
 
-    // 3) database/owner.json (array, objeto o { owners: [] })
     try {
         const raw = JSON.parse(fs.readFileSync(RUTA_OWNERS, 'utf8'));
         const lista = Array.isArray(raw) ? raw : (raw.owners || raw.owner || Object.keys(raw));
@@ -46,12 +42,11 @@ function esOwner(fromMe, senderJid) {
             const c = String(s).replace(/\D/g, '');
             if (c) owners.add(c);
         });
-    } catch (e) { /* sin archivo de owners */ }
+    } catch (e) {   }
 
     return owners.has(senderNum);
 }
 
-// ---------- MENCION LIMPIA ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -74,7 +69,6 @@ export default {
     ejecutar: async ({ sock, msg, argumento, responder, fromMe }) => {
         const senderJid = msg.key.participant || msg.key.remoteJid;
 
-        // ---------- FILTRO: SOLO OWNER ----------
         if (!esOwner(fromMe, senderJid)) {
             return await responder.texto(
                 '╭━━〔 🛡️ 𝐑𝐄𝐒𝐓𝐑𝐈𝐍𝐆𝐈𝐃𝐎 〕━━⬣\n' +
@@ -86,7 +80,6 @@ export default {
             );
         }
 
-        // ---------- PARSEAR ARGUMENTOS ----------
         const texto = (argumento || '').trim();
         const ctx = msg.message?.extendedTextMessage?.contextInfo;
         let target = ctx?.mentionedJid?.[0] || ctx?.participant || null;
@@ -95,17 +88,17 @@ export default {
         let cantidad = null;
 
         if (target) {
-            // .addcoins 5000 @user  |  .addcoins @user 5000
+
             cantidad = nums.length ? parseInt(nums[0]) : null;
         } else {
-            // .addcoins 5000 50499999999  |  .addcoins 50499999999 5000
+
             const phone = nums.find(n => n.replace('-', '').length >= 7);
             if (phone) {
                 target = phone.replace(/\D/g, '') + '@s.whatsapp.net';
                 const resto = nums.filter(n => n !== phone);
                 cantidad = resto.length ? parseInt(resto[0]) : null;
             } else if (nums.length) {
-                // .addcoins 5000 → se lo da a sí mismo
+
                 target = senderJid;
                 cantidad = parseInt(nums[0]);
             }
@@ -125,7 +118,6 @@ export default {
             );
         }
 
-        // ---------- APLICAR CAMBIO ----------
         try {
             const db = cargarDB();
             if (!db[target] || typeof db[target] !== 'object') {
