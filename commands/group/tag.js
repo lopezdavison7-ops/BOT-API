@@ -1,17 +1,4 @@
-// commands/group/tag.js
-// ============================================================
-// COMANDO: TAG
-// ALEX BOT
-// Solo administradores
-//
-// Uso:
-// Responde a un mensaje y escribe:
-// .tag
-//
-// El bot vuelve a enviar únicamente el contenido del mensaje
-// respondido, pero incluye a todos los miembros del grupo
-// como mencionados.
-// ============================================================
+
 
 import { identificadoresDe } from '../../lib/resolverJid.js';
 
@@ -23,27 +10,22 @@ function obtenerTextoCitado(msg) {
 
     if (!citado) return null;
 
-    // Mensaje de texto normal
     if (citado.conversation) {
         return citado.conversation;
     }
 
-    // Texto extendido
     if (citado.extendedTextMessage?.text) {
         return citado.extendedTextMessage.text;
     }
 
-    // Imagen con descripción
     if (citado.imageMessage?.caption) {
         return citado.imageMessage.caption;
     }
 
-    // Video con descripción
     if (citado.videoMessage?.caption) {
         return citado.videoMessage.caption;
     }
 
-    // Documento con descripción
     if (citado.documentWithCaptionMessage?.message?.documentMessage?.caption) {
         return citado.documentWithCaptionMessage.message.documentMessage.caption;
     }
@@ -51,14 +33,9 @@ function obtenerTextoCitado(msg) {
     return null;
 }
 
-// ============================================================
-// COMPROBAR SI EL USUARIO ES ADMIN
-// ============================================================
-
 async function esAdministrador(sock, msg) {
     const jid = msg?.key?.remoteJid;
 
-    // Solo funciona en grupos
     if (!jid || !jid.endsWith('@g.us')) {
         return false;
     }
@@ -84,10 +61,6 @@ async function esAdministrador(sock, msg) {
 
         if (!admin) continue;
 
-        // Se revisan TODOS los identificadores del participante
-        // (id, jid, phoneNumber, lid) — no solo `id`, que puede
-        // venir como @lid y nunca coincidir con el número real
-        // que trae el mensaje.
         const idsParticipante = identificadoresDe(participante).map(
             id => String(id).split('@')[0].split(':')[0]
         );
@@ -103,10 +76,6 @@ async function esAdministrador(sock, msg) {
 
     return false;
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
     nombre: 'tag',
@@ -126,10 +95,6 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // COMPROBAR GRUPO
-            // ------------------------------------------------
-
             const jid = msg?.key?.remoteJid;
 
             if (!jid || !jid.endsWith('@g.us')) {
@@ -140,10 +105,6 @@ export default {
                 return;
             }
 
-            // ------------------------------------------------
-            // COMPROBAR ADMIN
-            // ------------------------------------------------
-
             const admin = await esAdministrador(sock, msg);
 
             if (!admin) {
@@ -153,10 +114,6 @@ export default {
 
                 return;
             }
-
-            // ------------------------------------------------
-            // OBTENER MENSAJE RESPONDIDO
-            // ------------------------------------------------
 
             const texto = obtenerTextoCitado(msg);
 
@@ -170,10 +127,6 @@ export default {
 
                 return;
             }
-
-            // ------------------------------------------------
-            // OBTENER MIEMBROS DEL GRUPO
-            // ------------------------------------------------
 
             const metadata = await sock.groupMetadata(jid);
 
@@ -197,19 +150,6 @@ export default {
             console.log(
                 `[TAG] Mencionando ${miembros.length} miembros.`
             );
-
-            // ------------------------------------------------
-            // ENVIAR SOLAMENTE EL MENSAJE
-            // ------------------------------------------------
-            //
-            // NO agregamos @usuario al texto.
-            // La lista de JID va en "mentions".
-            //
-            // De esta forma el texto visible sigue siendo:
-            //
-            // Hola
-            //
-            // ------------------------------------------------
 
             await sock.sendMessage(
                 jid,
