@@ -13,6 +13,9 @@ import { spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { downloadMediaMessage } from 'baileys';
 
+// Importar sistema de owners
+import { esOwner } from '../../lib/owner.js';
+
 const exec = promisify(spawn);
 
 // ───────────── CONFIGURACIÓN ─────────────
@@ -20,7 +23,7 @@ const REPO = 'lopezdavison7-ops/BOT-API';
 const BRANCH = 'main';
 const API = 'https://api.github.com';
 
-// 🔑 Token desde variable de entorno (NUNCA hardcodear)
+// 🔑 Token desde variable de entorno
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const IGNORED_DIRS = new Set([
@@ -28,13 +31,6 @@ const IGNORED_DIRS = new Set([
     'sessions', 'session', 'auth_info', '.DS_Store'
 ]);
 // ───────────────────────────────────────────
-
-function isOwner(msg) {
-    const sender = msg.key.participant || msg.key.remoteJid || '';
-    const numero = String(sender).split('@')[0].replace(/\D/g, '');
-    const owners = (process.env.OWNER || '50578391933').split(',').map(n => n.trim());
-    return owners.includes(numero);
-}
 
 function headers() {
     if (!GITHUB_TOKEN) {
@@ -158,8 +154,11 @@ export default {
     uso: '.subirzip (citando un archivo ZIP)',
 
     ejecutar: async ({ sock, msg, responder }) => {
-        if (!isOwner(msg)) {
-            return await responder.texto('🚫 Solo el owner puede usar este comando.');
+        // 🔑 Usar el sistema de owners del bot
+        const senderJid = msg.key.participant || msg.key.remoteJid;
+        
+        if (!esOwner(senderJid)) {
+            return await responder.texto('🚫 Solo los owners pueden usar este comando.');
         }
 
         const quoted = msg?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
