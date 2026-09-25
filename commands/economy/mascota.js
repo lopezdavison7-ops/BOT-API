@@ -1,7 +1,5 @@
-// commands/fun/mascota.js
-// ============================================================
-// BOT-API — MASCOTA v3 (adaptado al sistema oficial de economía)
-// ============================================================
+
+
 import fs from 'fs';
 import path from 'path';
 import {
@@ -23,7 +21,6 @@ const ETAPAS = [
     { nombre: 'Legendario', emoji: '🐉', xpMin: 2000 }
 ];
 
-// ---------- TRUCOS ----------
 const TRUCOS = {
     sentar:   { emoji: '🪑', frames: ['🐾 Camina tranquilo...', '🧎 Se agacha despacio...', '🪑 ¡SE SENTÓ!'], xp: 4, energia: 5, felicidad: 6 },
     girar:    { emoji: '🌀', frames: ['🐶 Mira hacia arriba...', '🔄 Gira y gira...', '🌀 ¡GIRO COMPLETO!'], xp: 5, energia: 7, felicidad: 7 },
@@ -37,7 +34,6 @@ const TRUCOS = {
     voltereta:{ emoji: '🤸', frames: ['🧍 Se estira...', '🙃 Cabeza abajo...', '🤸 ¡VOLTERETA PRO!'], xp: 6, energia: 9, felicidad: 8 }
 };
 
-// ---------- EMPLEOS ----------
 const EMPLEOS = {
     granjero:   { nombre: 'Granjero', emoji: '🧑‍🌾', sueldo: 120, etapaMin: 1 },
     policia:    { nombre: 'Policía', emoji: '👮‍♂️', sueldo: 150, etapaMin: 2 },
@@ -49,7 +45,6 @@ const EMPLEOS = {
     astronauta: { nombre: 'Astronauta', emoji: '🧑‍🚀', sueldo: 400, etapaMin: 4 }
 };
 
-// ---------- DB ----------
 function leer(ruta, def) {
     try { return JSON.parse(fs.readFileSync(ruta, 'utf8')); } catch (e) { return def; }
 }
@@ -73,14 +68,13 @@ function edadDias(m) {
     return Math.max(0, Math.floor((Date.now() - m.nacido) / DIA_MS));
 }
 
-// ---------- USAR SISTEMA OFICIAL DE ECONOMÍA ----------
 function cobrar(jid, monto) {
     const usuario = obtenerUsuario(jid);
     const total = (usuario.dinero || 0) + (usuario.banco || 0);
     if (total < monto) {
         return { ok: false, msg: 'No te alcanza (' + fmt(total) + ' vs ' + fmt(monto) + ').' };
     }
-    // Cobrar primero de dinero en mano, luego del banco
+
     let rest = monto;
     if ((usuario.dinero || 0) >= rest) {
         modificarDinero(jid, -rest);
@@ -88,7 +82,7 @@ function cobrar(jid, monto) {
         const deMano = usuario.dinero || 0;
         rest -= deMano;
         if (deMano > 0) modificarDinero(jid, -deMano);
-        // Del banco (modificar directo ya que no hay función para banco)
+
         const u2 = obtenerUsuario(jid);
         u2.banco = (u2.banco || 0) - rest;
         guardarUsuario(jid, u2);
@@ -100,7 +94,6 @@ function darOro(jid, monto) {
     modificarDinero(jid, monto);
 }
 
-// ---------- CRECIMIENTO DIARIO ----------
 function aplicarCrecimiento(m) {
     const hoy = new Date().toISOString().slice(0, 10);
     if (!m.ultimoDia) { m.ultimoDia = hoy; return ''; }
@@ -136,9 +129,6 @@ function estadoTexto(m) {
     return '✨ Saludable';
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'mascota',
     categoria: 'Fun',
@@ -153,9 +143,6 @@ export default {
         let db = leer(RUTA_MASCOTAS, {});
         let m = db[id];
 
-        // ============================================
-        // VER ESTADO
-        // ============================================
         if (!accion) {
             if (!m) {
                 return await responder.texto(
@@ -215,9 +202,6 @@ export default {
             return;
         }
 
-        // ============================================
-        // ADOPTAR
-        // ============================================
         if (accion === 'adoptar' || accion === 'adopt') {
             if (m && m.vivo) return await responder.texto('⚠️ Ya tienes mascota viva.');
             const cobro = cobrar(id, COSTOS.adoptar);
@@ -252,9 +236,6 @@ export default {
         const etapa = obtenerEtapa(m.xp);
         const idxEtapa = ETAPAS.indexOf(etapa);
 
-        // ============================================
-        // LISTA DE TRUCOS
-        // ============================================
         if (accion === 'trucos' || accion === 'tricks') {
             const lista = Object.entries(TRUCOS).map(([k, v]) => '┃ ' + v.emoji + ' .mascota ' + k).join('\n');
             db[id] = m; guardar(RUTA_MASCOTAS, db);
@@ -270,9 +251,6 @@ export default {
             );
         }
 
-        // ============================================
-        // HACER TRUCO
-        // ============================================
         if (TRUCOS[accion]) {
             const t = TRUCOS[accion];
             const ahora = Date.now();
@@ -302,9 +280,6 @@ export default {
             );
         }
 
-        // ============================================
-        // EMPLEO
-        // ============================================
         if (accion === 'empleo' || accion === 'trabajo' || accion === 'job') {
             const cual = tokens[1] || '';
             if (cual === 'dejar' || cual === 'renunciar') {
@@ -354,9 +329,6 @@ export default {
             );
         }
 
-        // ============================================
-        // COBRAR SUELDO
-        // ============================================
         if (accion === 'cobrar' || accion === 'sueldo') {
             if (!m.empleo) { db[id] = m; guardar(RUTA_MASCOTAS, db); return await responder.texto('❌ Tu mascota no tiene empleo.'); }
             const emp = EMPLEOS[m.empleo.tipo];
@@ -382,9 +354,6 @@ export default {
             );
         }
 
-        // ============================================
-        // ACCIONES CLÁSICAS
-        // ============================================
         if (accion === 'alimentar' || accion === 'feed') {
             if (m.hambre >= 95) { db[id] = m; guardar(RUTA_MASCOTAS, db); return await responder.texto('🍗 No tiene hambre.'); }
             const c = cobrar(id, COSTOS.alimentar);
