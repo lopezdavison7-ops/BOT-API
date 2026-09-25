@@ -192,6 +192,6 @@ Ver archivo `LICENSE` para más información.
 
 ### ⭐ Si este proyecto te fue útil, dale una estrella
 
-<img src="https://i.imgur.com/Q7RQZ8L.gif" alt="Star" width="100"/>
+<img src="https://i.imgur.com/q7RQZ8L.gif" alt="BOT-API Animation" width="400"/>
 
 </div>
