@@ -1,13 +1,7 @@
-// commands/search/lyrics.js
-// ============================================================
-// BOT-API — LETRAS DE CANCIONES (Delirius API)
-// ============================================================
-// .letra <canción> → muestra título, artista, álbum y letra
-// ============================================================
+
 
 const API = 'https://api.delirius.online/search/lyrics?query=';
 
-// ---------- DIVIDIR LETRA LARGA EN PARTES ----------
 function dividirTexto(texto, limite = 2500) {
     const partes = [];
     let restante = texto;
@@ -53,7 +47,7 @@ export default {
         }
 
         try {
-            // ---------- CONSULTAR API ----------
+
             const res = await fetch(API + encodeURIComponent(q));
             const json = await res.json();
 
@@ -73,7 +67,6 @@ export default {
                 );
             }
 
-            // Normalizar claves (ES / EN)
             const titulo = d.title || d.título || 'Sin título';
             const artistas = d.artists || d.artista || 'Desconocido';
             const album = d.album || d.álbum || null;
@@ -91,7 +84,6 @@ export default {
                 );
             }
 
-            // ---------- ENCABEZADO CON INFO ----------
             const header =
                 '╭━━〔 🎤 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
                 '┃\n' +
@@ -102,16 +94,13 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣\n\n';
 
-            // ---------- ENVIAR LETRA (dividida si es larga) ----------
             const partes = dividirTexto(letra, 2500);
 
-            // Primera parte con el encabezado
             await responder.texto(
                 header + partes[0] +
                 (partes.length > 1 ? '\n\n📄 (1/' + partes.length + ')' : '')
             );
 
-            // Resto de partes
             for (let i = 1; i < partes.length; i++) {
                 await responder.texto(
                     partes[i] + '\n\n📄 (' + (i + 1) + '/' + partes.length + ')'
