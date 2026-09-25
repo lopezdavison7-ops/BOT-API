@@ -4,7 +4,7 @@ export default {
     alias: ['predecir', 'futuro', 'oraculo'],
     descripcion: 'Predicción gratis.prediccion @user',
     ejecutar: async ({ sock, msg, jid }) => {
-        // ARREGLO: usa sock directo en vez de global.conns
+
         const jugador = msg.key.participant || msg.key.remoteJid;
         const mencionado = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
         const objetivo = mencionado || jugador;
@@ -47,7 +47,7 @@ export default {
         const prediccion = predicciones[Math.floor(Math.random() * predicciones.length)];
         const texto = `📜 *ORÁCULO DE 💻 BOT-API ⚡* 📜\n\nPara @${objetivo.split('@')[0]}\n\n${prediccion}`;
 
-        await sock.sendMessage(jid, { // <- usa sock en vez de s
+        await sock.sendMessage(jid, {
             text: texto,
             mentions: [objetivo]
         });
