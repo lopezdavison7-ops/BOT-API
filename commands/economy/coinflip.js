@@ -1,9 +1,4 @@
-// commands/economy/coinflip.js
-// ============================================================
-// BOT-API — COINFLIP (Cara o Cruz)
-// ============================================================
-// .cf <cantidad> <cara|cruz> → apuesta dinero al lanzamiento
-// ============================================================
+
 
 import { obtenerUsuario, modificarDinero, guardarUsuario } from '../../database/economia.js';
 
@@ -17,11 +12,9 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Parsear argumentos
         const cantidad = parseInt(args[0]);
         const eleccion = args[1]?.toLowerCase();
 
-        // Validar cantidad
         if (isNaN(cantidad) || cantidad <= 0) {
             return await responder.texto(
                 '╭━━〔 🪙 𝐂𝐎𝐈𝐍𝐅𝐋𝐈𝐏 〕━━⬣\n' +
@@ -38,7 +31,6 @@ export default {
             );
         }
 
-        // Validar elección
         if (!eleccion || !['cara', 'cruz'].includes(eleccion)) {
             return await responder.texto(
                 '╭━━〔 🪙 𝐂𝐎𝐈𝐍𝐅𝐋𝐈𝐏 〕━━⬣\n' +
@@ -55,7 +47,6 @@ export default {
             );
         }
 
-        // Validar mínimo
         if (cantidad < 200) {
             return await responder.texto(
                 '╭━━〔 🪙 𝐂𝐎𝐈𝐍𝐅𝐋𝐈𝐏 〕━━⬣\n' +
@@ -68,7 +59,6 @@ export default {
             );
         }
 
-        // Obtener usuario y validar saldo
         const usuario = obtenerUsuario(sender);
         const saldo = usuario.dinero || 0;
 
@@ -88,13 +78,11 @@ export default {
             );
         }
 
-        // Lanzar moneda
         const resultado = Math.random() < 0.5 ? 'cara' : 'cruz';
         const gano = resultado === eleccion;
         const emoji = gano ? '🎉' : '💔';
         const titulo = gano ? '𝐆𝐀𝐍𝐀𝐒𝐓𝐄' : '𝐏𝐄𝐑𝐃𝐈𝐒𝐓𝐄';
 
-        // Aplicar cambios
         if (gano) {
             usuario.dinero += cantidad;
         } else {
