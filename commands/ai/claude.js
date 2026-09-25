@@ -1,9 +1,4 @@
-// commands/ai/claude.js
-// ============================================================
-// COMANDO: CLAUDE
-// Consulta /ai/claude de la API de Lempi.
-// Uso: .claude <pregunta>
-// ============================================================
+
 
 import axios from 'axios';
 import config from '../../config.js';
