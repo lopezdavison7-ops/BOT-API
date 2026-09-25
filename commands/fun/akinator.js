@@ -1,4 +1,4 @@
-// commands/fun/akinator.js — 🧞 Akinator offline con selector de idioma
+
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
