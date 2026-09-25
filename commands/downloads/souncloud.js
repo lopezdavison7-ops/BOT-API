@@ -1,14 +1,8 @@
-// commands/search/soundcloud.js
-// ============================================================
-// BOT-API — SOUNDCLOUD (Delirius API)
-// ============================================================
-// .sc <canción> → manda ficha + audio del mejor resultado
-// ============================================================
+
 
 const API_SEARCH = 'https://api.delirius.online/search/soundcloud?q=';
 const API_DL = 'https://api.delirius.online/download/soundcloud?url=';
 
-// ---------- DURACIÓN (ms → m:ss) ----------
 function fmtDuracion(ms) {
     const totalSec = Math.floor((ms || 0) / 1000);
     const m = Math.floor(totalSec / 60);
@@ -16,7 +10,6 @@ function fmtDuracion(ms) {
     return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// ---------- NÚMEROS BONITOS (1.2M, 45K) ----------
 function fmtNum(n) {
     n = Number(n) || 0;
     if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -49,7 +42,7 @@ export default {
         }
 
         try {
-            // ---------- 1) BUSCAR ----------
+
             await responder.texto('⏳ *Buscando en SoundCloud...*\n\n🔎 ' + q);
 
             const res = await fetch(API_SEARCH + encodeURIComponent(q));
@@ -74,7 +67,6 @@ export default {
                 );
             }
 
-            // ---------- 2) MEJOR RESULTADO ----------
             const item = datos[0];
 
             const ficha =
@@ -92,14 +84,12 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Manda ficha con portada
             try {
                 await responder.imagen({ url: item.image }, ficha);
             } catch (e) {
                 await responder.texto(ficha);
             }
 
-            // ---------- 3) DESCARGAR Y MANDAR AUDIO ----------
             await responder.texto('⏳ *Descargando audio...*\n\n🎧 ' + item.title);
 
             const resDl = await fetch(API_DL + encodeURIComponent(item.link));
