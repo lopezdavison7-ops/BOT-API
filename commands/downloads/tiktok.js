@@ -1,4 +1,4 @@
-// commands/downloads/tiktok.js
+
 
 export default {
     nombre: 'tiktok',
