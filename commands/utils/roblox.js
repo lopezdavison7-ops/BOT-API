@@ -1,11 +1,7 @@
-// commands/tools/roblox.js
-// ============================================================
-// BOT-API — ROBLOX STALK (Delirius API)
-// Manda avatar + ficha completa
-// ============================================================
+
 
 const API = 'https://api.delirius.online/tools/robloxstalk?username=';
-// Thumbnail oficial de Roblox (no bloquea como tr.rbxcdn.com)
+
 const API_THUMBNAIL = 'https://thumbnails.roblox.com/v1/users/avatar?userIds={ID}&size=420x420&format=Png&isCircular=false';
 
 function fmtNum(n) {
@@ -15,7 +11,6 @@ function fmtNum(n) {
     return String(n);
 }
 
-// ---------- SUBIR A TELEGRAPH (respaldo si la descarga falla) ----------
 async function uploadToTelegraph(buffer) {
     const formData = new FormData();
     formData.append('file', new Blob([buffer], { type: 'image/png' }), 'avatar.png');
@@ -37,9 +32,8 @@ async function uploadToTelegraph(buffer) {
     throw new Error('Telegraph respuesta inválida');
 }
 
-// ---------- DESCARGAR AVATAR (varios intentos) ----------
 async function obtenerAvatar(userId, urlOriginal) {
-    // Intento 1: Thumbnail oficial de Roblox (el más confiable)
+
     try {
         const thumbUrl = API_THUMBNAIL.replace('{ID}', userId);
         const res = await fetch(thumbUrl);
@@ -62,7 +56,6 @@ async function obtenerAvatar(userId, urlOriginal) {
         console.error('[ROBLOX] Thumbnail oficial falló:', e.message);
     }
 
-    // Intento 2: URL original de la API (tr.rbxcdn.com)
     if (urlOriginal) {
         try {
             const res = await fetch(urlOriginal, {
@@ -111,7 +104,7 @@ export default {
         }
 
         try {
-            // ---------- CONSULTAR API ----------
+
             const res = await fetch(API + encodeURIComponent(usuario));
             const text = await res.text();
 
@@ -137,7 +130,6 @@ export default {
                 );
             }
 
-            // ---------- NORMALIZAR CLAVES ----------
             const extra = d.extraInfo || d.extra || {};
             const nombre = d.nombre || d.name || d.displayName || d.username || '—';
             const descripcion = d.descripcion || d.description || d.bio || '';
@@ -156,7 +148,6 @@ export default {
             const verificado = d.hasVerified ?? d.verified ?? false;
             const juegos = d.juegosCreados || d.games || d.createdGames || [];
 
-            // ---------- CONSTRUIR FICHA ----------
             let ficha =
                 '╭━━〔 🎮 𝐑𝐎𝐁𝐋𝐎𝐗 〕━━⬣\n' +
                 '┃\n' +
@@ -190,7 +181,6 @@ export default {
 
             ficha += '┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // ---------- OBTENER AVATAR (con múltiples intentos) ----------
             let enviado = false;
 
             if (userId) {
@@ -198,7 +188,7 @@ export default {
 
                 if (avatarResult?.buffer) {
                     try {
-                        // Intento 1: enviar buffer directo
+
                         await s.sendMessage(chatJid, {
                             image: avatarResult.buffer,
                             caption: ficha
@@ -207,7 +197,6 @@ export default {
                     } catch (e) {
                         console.error('[ROBLOX] Envío directo falló:', e.message);
 
-                        // Intento 2: subir a Telegraph y mandar URL
                         try {
                             const telegraphUrl = await uploadToTelegraph(avatarResult.buffer);
                             await responder.imagen({ url: telegraphUrl }, ficha);
@@ -219,7 +208,6 @@ export default {
                 }
             }
 
-            // ---------- FALLBACK: solo texto ----------
             if (!enviado) {
                 await responder.texto(
                     '⚠️ *No pude cargar el avatar*\n' +
