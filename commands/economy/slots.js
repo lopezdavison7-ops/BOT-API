@@ -1,4 +1,4 @@
-// commands/economy/slots.js
+
 import {
     obtenerUsuario,
     modificarDinero
@@ -13,7 +13,6 @@ const SIMBOLOS = [
     '💎'
 ];
 
-// Multiplicador según qué símbolo salió en trío
 const MULTIPLICADORES = {
     '🍒': 2,
     '🍋': 3,
@@ -142,7 +141,6 @@ export default {
 
         if (a === b && b === c) {
 
-            // Trío exacto: multiplicador alto según el símbolo
             const multiplicador =
                 MULTIPLICADORES[a] || 2;
 
@@ -158,7 +156,6 @@ export default {
             a === c
         ) {
 
-            // Dos iguales: recupera la apuesta (x1.5)
             ganancia =
                 Math.floor(apuesta * 1.5);
 
@@ -167,7 +164,6 @@ export default {
 
         } else {
 
-            // Nada: pierde la apuesta completa
             ganancia = 0;
             lineaResultado =
                 '┃ 😢 Sin suerte esta vez.\n';
