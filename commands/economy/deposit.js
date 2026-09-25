@@ -1,4 +1,4 @@
-// commands/economy/deposit.js
+
 import {
     obtenerUsuario,
     depositar
