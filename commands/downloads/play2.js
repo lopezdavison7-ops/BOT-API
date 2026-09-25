@@ -1,14 +1,4 @@
-// commands/downloads/play2.js
-// ============================================================
-// COMANDO: PLAY2
-// BOT-API
-//
-// Busca y descarga videos de YouTube en MP4.
-// Usa Lempi API para búsqueda y descarga de video.
-//
-// ✅ ANTI-403: headers de navegador real + reintentos con
-//    URL nueva cuando un servidor de video rechaza (403/404).
-// ============================================================
+
 
 import 'dotenv/config';
 import config from '../../config.js';
@@ -22,13 +12,6 @@ const TIMEOUT_API = 45000;
 const MEDIA_TIMEOUT = 300000;
 
 const MAX_INTENTOS_STREAM = 3;
-
-// ============================================================
-// HEADERS DE NAVEGADOR REAL
-// ============================================================
-// Varios servidores de video devuelven 403 si el User-Agent no
-// parece un navegador de verdad. Con estos headers se evita.
-// ============================================================
 
 const HEADERS_MEDIA = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -194,10 +177,6 @@ async function obtenerVideo(videoUrl) {
     };
 }
 
-// ============================================================
-// ABRIR STREAM (una sola tentativa, headers de navegador)
-// ============================================================
-
 async function abrirStream(url) {
     const respuesta = await fetchConTimeout(url, {
         headers: HEADERS_MEDIA
@@ -213,13 +192,6 @@ async function abrirStream(url) {
 
     return Readable.fromWeb(respuesta.body);
 }
-
-// ============================================================
-// STREAM CON REINTENTOS ANTI-403
-// ============================================================
-// Si un servidor rechaza (403/404/410), se pide una URL NUEVA
-// a la API (cae en otro servidor) y se reintenta, hasta 3 veces.
-// ============================================================
 
 async function obtenerStreamConReintentos(videoUrlApi) {
     let video = await obtenerVideo(videoUrlApi);
@@ -343,9 +315,6 @@ export default {
                 await responder.texto(crearInformacion(resultado));
             }
 
-            // ------------------------------------------------
-            // DESCARGA CON REINTENTOS ANTI-403
-            // ------------------------------------------------
             const { stream, video } = await obtenerStreamConReintentos(resultado.videoUrl);
 
             if (!thumbnail && video.thumbnail && video.thumbnail !== resultado.thumbnail) {
