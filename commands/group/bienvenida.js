@@ -1,9 +1,4 @@
-// commands/group/bienvenida.js
-// ============================================================
-// BOT-API
-// COMANDO: BIENVENIDA
-// Activa o desactiva la bienvenida por grupo.
-// ============================================================
+
 
 import fs from 'fs';
 import path from 'path';
@@ -13,10 +8,6 @@ const ARCHIVO = path.join(
     'database',
     'bienvenida.json'
 );
-
-// ============================================================
-// ASEGURAR ARCHIVO DE CONFIGURACIÓN
-// ============================================================
 
 function asegurarArchivo() {
     const carpeta = path.dirname(ARCHIVO);
@@ -34,10 +25,6 @@ function asegurarArchivo() {
         );
     }
 }
-
-// ============================================================
-// LEER CONFIGURACIÓN
-// ============================================================
 
 function leerConfiguracion() {
     asegurarArchivo();
@@ -60,10 +47,6 @@ function leerConfiguracion() {
     }
 }
 
-// ============================================================
-// GUARDAR CONFIGURACIÓN
-// ============================================================
-
 function guardarConfiguracion(configuracion) {
     asegurarArchivo();
 
@@ -77,10 +60,6 @@ function guardarConfiguracion(configuracion) {
     );
 }
 
-// ============================================================
-// EXPORTAR FUNCIONES PARA INDEX.JS
-// ============================================================
-
 export function bienvenidaActivada(grupoId) {
     if (!grupoId) return false;
 
@@ -89,10 +68,6 @@ export function bienvenidaActivada(grupoId) {
 
     return configuracion[grupoId] === true;
 }
-
-// ============================================================
-// ACTIVAR / DESACTIVAR
-// ============================================================
 
 export function establecerBienvenida(
     grupoId,
@@ -112,10 +87,6 @@ export function establecerBienvenida(
 
     return configuracion[grupoId];
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
     nombre: 'bienvenida',
@@ -154,10 +125,6 @@ export default {
             .trim()
             .toLowerCase();
 
-        // ----------------------------------------------------
-        // MOSTRAR AYUDA / ESTADO
-        // ----------------------------------------------------
-
         if (!opcion) {
 
             const activa =
@@ -184,10 +151,6 @@ export default {
             );
         }
 
-        // ----------------------------------------------------
-        // ACTIVAR
-        // ----------------------------------------------------
-
         if (
             opcion === 'on' ||
             opcion === 'activar' ||
@@ -212,10 +175,6 @@ export default {
             );
         }
 
-        // ----------------------------------------------------
-        // DESACTIVAR
-        // ----------------------------------------------------
-
         if (
             opcion === 'off' ||
             opcion === 'desactivar' ||
@@ -238,10 +197,6 @@ export default {
                 '╰━━━━━━━━━━━━━━━━━━━━╯'
             );
         }
-
-        // ----------------------------------------------------
-        // OPCIÓN INVÁLIDA
-        // ----------------------------------------------------
 
         return responder.texto(
             '❌ Opción no válida.\n\n' +
