@@ -7,7 +7,7 @@ export default {
         const chatJid = msg.key.remoteJid;
         const esGrupo = chatJid.endsWith('@g.us');
         const nombreBot = '💻 BOT-API ⚡';
-        const s = sock || global.conns?.[0] || Object.values(global.conns)[0]; // <- por si acaso
+        const s = sock || global.conns?.[0] || Object.values(global.conns)[0];
 
         if (!esGrupo) {
             let text = `╭〔 ❌ ${nombreBot} 〕⬣\n`;
@@ -47,7 +47,6 @@ export default {
 
         const mentions = top10.map(p => p.id);
 
-        // USAR sendMessage DIRECTO PARA QUE TAGUEE
         await s.sendMessage(chatJid, { text: mensaje, mentions }, { quoted: msg });
     }
 };
