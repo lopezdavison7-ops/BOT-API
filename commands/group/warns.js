@@ -1,4 +1,4 @@
-// commands/group/warns.js
+
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -13,13 +13,11 @@ export default {
         try {
             let target = null;
 
-            // FORMA 1: Respondiendo a un mensaje
             const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
             if (quoted) {
                 target = quoted;
             }
 
-            // FORMA 2: Mención (@usuario)
             const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentioned.length > 0) {
                 target = mentioned[0];
@@ -38,7 +36,6 @@ export default {
                 return;
             }
 
-            // Cargar warns
             let warns = {};
             try {
                 const data = await fs.readFile(WARN_FILE, 'utf8');
@@ -66,8 +63,7 @@ export default {
                 return;
             }
 
-            // Construir lista de advertencias
-            const lista = warns[target].map((w, i) => 
+            const lista = warns[target].map((w, i) =>
                 `${i + 1}. #${w.id} | ${w.fecha} | ${w.razon}`
             ).join('\n');
 
