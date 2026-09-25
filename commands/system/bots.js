@@ -1,25 +1,9 @@
-// commands/system/bots.js
-// ============================================================
-// COMANDO: BOTS
-// Consulta el servidor de subbots (proceso aparte, con su
-// propia web en /subbot) para ver cuántos subbots están
-// conectados en este momento.
-//
-// Uso: .bots
-// ============================================================
+
 
 import axios from 'axios';
 
 const SUBBOT_API_URL = 'https://subbotapi.swallox.com';
 
-// ============================================================
-// ENMASCARAR NÚMERO
-// ============================================================
-// No se muestra el número completo de cada subbot en un
-// comando que cualquiera puede correr en cualquier grupo —
-// eso sería exponer el teléfono de otra persona sin permiso.
-// Se deja ver solo el inicio y el final.
-// ============================================================
 function enmascararNumero(numero) {
     const limpio = String(numero || '').replace(/\D/g, '');
 
