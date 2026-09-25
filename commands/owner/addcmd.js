@@ -1,13 +1,5 @@
-// commands/owner/addcmd.js
-// ============================================================
-// COMANDO: ADDCMD (solo owner)
-// ============================================================
-// Crea comandos nuevos desde el chat sin tocar el servidor.
-//
-// Ejemplos:
-// .addcmd fun/hola/export default { nombre: 'hola', categoria: 'Fun', alias: [], descripcion: 'Saluda', ejecutar: async ({ responder }) => { await responder.texto('Hola xd') } }
-// .addcmd economy/dar/import db from "#db"; export default { nombre: 'dar', categoria: 'Economy', alias: [], descripcion: 'Da dinero', ejecutar: async ({ argumento, responder }) => { await responder.texto('Diste ' + argumento) } }
-// ============================================================
+
+
 import fs from 'fs';
 import path from 'path';
 import { esOwner } from '../../lib/owner.js';
@@ -24,9 +16,6 @@ export default {
     uso: '.addcmd carpeta/nombre/CÓDIGO',
     ejecutar: async ({ msg, argumento, responder }) => {
 
-        // ----------------------------------------------------
-        // SOLO OWNER (igual que .update)
-        // ----------------------------------------------------
         if (!esOwner(msg)) {
             await responder.texto('❌ Este comando es solo para el Owner.');
             return;
@@ -121,7 +110,6 @@ export default {
 
             fs.writeFileSync(archivo, codigo, 'utf8');
 
-            // Validación de sintaxis: importa el módulo en prueba
             try {
                 await import(archivo + '?t=' + Date.now());
             } catch (e) {
