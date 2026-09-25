@@ -8,7 +8,7 @@ import { obtenerStore, guardarStore } from '../../lib/jsonStore.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const MEDIA_DIR = path.join(__dirname, '../../media/gacha');
+const MEDIA_DIR = path.join(__dirname, '../../media/gacha/jpg');
 const GACHA_DATABASE = path.join(__dirname, '../../database/gacha.json');
 
 const VALORES_POSIBLES = [
