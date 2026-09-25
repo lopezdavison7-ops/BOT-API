@@ -1,5 +1,5 @@
-import { loadCommands } from './controllers/cmdManager.js';
-import { revisarAntilink } from './lib/antilink.js';
+import { loadCommands } from './lib/cmdManager.js';
+import { revisarAntilink, estaActivo as antilinkActivo } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
 import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
@@ -7,30 +7,13 @@ import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import { manejarMensajeTTT } from './lib/ttt.js';
 import { manejarMemoriaIA } from './lib/memoria.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
-import fs from 'fs';
-import path from 'path';
+import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
+import { fmtTiempo } from './lib/helpers.js';
 
 const PREFIJO = '.';
-const RUTA_AFK = path.join(process.cwd(), 'database', 'afk.json');
 
 let comandos = null;
 let botJid = null;
-
-function leerAfk() {
-    try { return JSON.parse(fs.readFileSync(RUTA_AFK, 'utf8')); } catch (e) { return {}; }
-}
-function guardarAfk(db) {
-    fs.mkdirSync(path.dirname(RUTA_AFK), { recursive: true });
-    fs.writeFileSync(RUTA_AFK, JSON.stringify(db, null, 2), 'utf8');
-}
-function fmtTiempo(ms) {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    if (d) return d + 'd ' + h + 'h';
-    if (h) return h + 'h ' + m + 'm';
-    if (m) return m + 'm ' + sec + 's';
-    return sec + 's';
-}
 
 export async function cargarComandosHandler() {
     if (!comandos) {
@@ -55,22 +38,17 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
-        // ============================================
-        // 🔥 DETECTOR AFK AUTÓNOMO
-        // ============================================
         if (!fromMe) {
             try {
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
 
                 if (!esComandoAfk) {
-                    const db = leerAfk();
                     const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
+                    const data = obtenerAfk(sender);
 
-                    if (db[sender]) {
-                        const data = db[sender];
-                        delete db[sender];
-                        guardarAfk(db);
+                    if (data) {
+                        quitarAfk(sender);
 
                         let textoUser = '@' + String(sender).split('@')[0].replace(/\D/g, '');
                         let mentions = [sender];
@@ -112,10 +90,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
-        // ============================================
-        // ANTILINK — SOLO ENLACES DE WHATSAPP
-        // ============================================
-        if (isGroup && !fromMe) {
+        if (isGroup && !fromMe && antilinkActivo(jid)) {
             let esAdmin = false;
 
             try {
@@ -130,10 +105,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (bloqueado) return;
         }
 
-        // ============================================
-        // 🎮 JUEGOS ACTIVADOS (trivia, tetris, adivinanza, ttt)
-        // Procesar mensajes SIN prefijo para juegos activos
-        // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
             if (fueTrivia) return;
@@ -144,22 +115,15 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
             if (fueAdivinanza) return;
 
-            // TRES EN RAYA (TTT)
             const fueTTT = await manejarMensajeTTT(sock, msg);
             if (fueTTT) return;
         }
 
-        // ============================================
-        // 🧠 MEMORIA IA
-        // ============================================
         if (!fromMe) {
             const fueMemoria = await manejarMemoriaIA(sock, msg);
             if (fueMemoria) return;
         }
 
-        // ============================================
-        // SACAR TEXTO
-        // ============================================
         let texto = '';
 
         if (msg.message?.conversation) {
@@ -233,13 +197,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
         if (!cmd) return;
 
-        // ============================================
-        // 📂 BLOQUEO DE CATEGORÍAS (por chat)
-        // ============================================
         try {
             const catCmd = String(cmd.categoria || '').toLowerCase().trim();
 
-            // system/owner nunca se bloquean (para poder reactivar)
             if (catCmd && catCmd !== 'system' && catCmd !== 'owner') {
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
