@@ -38,7 +38,6 @@ async function scrapeURL(url, modo = 'normal') {
 
     const contentType = res.headers.get('content-type') || '';
 
-    // MODO JSON: Si es API o lo convertimos
     if(modo === 'json'){
         if(contentType.includes('application/json')){
             return await res.json();
@@ -56,12 +55,10 @@ async function scrapeURL(url, modo = 'normal') {
 
     const html = await res.text();
 
-    // MODO TEXT: Solo texto limpio
     if(modo === 'text'){
         return { texto: stripHTML(html).slice(0, 4000) }
     }
 
-    // MODO DOWNLOAD: Baja todas las imgs
     if(modo === 'download'){
         if(!fs.existsSync(SCRAPE_DIR)) fs.mkdirSync(SCRAPE_DIR, { recursive: true });
         const imgs = [...html.matchAll(/<img[^>]+src="([^"]*)"/gi)].map(m => decode(m[1])).filter(i => i.startsWith('http')).slice(0, 10);
@@ -79,7 +76,6 @@ async function scrapeURL(url, modo = 'normal') {
         return { descargadas, total: imgs.length }
     }
 
-    // MODO NORMAL
     const titulo = html.match(/<title>(.*?)<\/title>/i)?.[1] || 'Sin título';
     const desc = html.match(/<meta name="description" content="(.*?)"/i)?.[1] || 'Sin descripción';
     const links = [...html.matchAll(/<a[^>]+href="([^"]*)"/gi)].map(m => decode(m[1])).filter(l => l.startsWith('http')).slice(0, 15);
