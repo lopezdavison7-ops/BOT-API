@@ -1,4 +1,4 @@
-// commands/group/listadmins.js
+
 export default {
     nombre: 'listadmins',
     categoria: 'Moderación',
@@ -20,12 +20,10 @@ export default {
                 return;
             }
 
-            // Construir lista con @mención en el texto
-            const lista = admins.map((p, i) => 
+            const lista = admins.map((p, i) =>
                 `${i + 1}. @${p.id.split('@')[0]} ${p.admin === 'superadmin' ? '👑' : '🛡️'}`
             ).join('\n');
 
-            // Sacar los JIDs para mencionarlos
             const mentions = admins.map(p => p.id);
 
             const respuesta = `
@@ -42,7 +40,6 @@ export default {
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
 
-            // 🔥 ENVIAR CON MENCIONES OBLIGADAS
             await sock.sendMessage(msg.key.remoteJid, {
                 text: respuesta,
                 mentions: mentions
