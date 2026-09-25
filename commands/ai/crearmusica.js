@@ -1,8 +1,5 @@
-// commands/ai/crearmusica.js — 🎵 Generador de música
-// ============================================================
-// Sintetizador procedural integrado (nunca falla, sin APIs)
-// + Hugging Face MusicGen automático si defines HF_TOKEN en .env
-// ============================================================
+
+
 import fetch from 'node-fetch';
 
 function bold(t) {
@@ -11,12 +8,10 @@ function bold(t) {
     );
 }
 
-// ---------- UTILS ----------
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
-// ---------- GÉNEROS (detectados por palabras del prompt) ----------
 const GENEROS = [
     { keys: ['reggaeton', 'regueton', 'dembow', 'perreo', 'latino'], bpm: 95, beat: 'dembow', esc: 'menor', nombre: 'Reggaetón' },
     { keys: ['techno', 'tech', 'electronico', 'electronic', 'edm'], bpm: 128, beat: 'four', esc: 'menor', nombre: 'Techno' },
@@ -37,7 +32,6 @@ const PATRONES = {
     none:   { k: [], s: [], h: [] }
 };
 
-// ---------- INSTRUMENTOS ----------
 function addTone(buf, sr, t0, dur, freq, amp, type, attack) {
     attack = attack || 0.01;
     const start = Math.floor(t0 * sr), end = Math.min(buf.length, Math.floor((t0 + dur) * sr));
@@ -83,7 +77,6 @@ function addHat(buf, sr, t0, rng, amp) {
     }
 }
 
-// ---------- SINTETIZADOR ----------
 function sintetizar(prompt) {
     const p = prompt.toLowerCase();
     const g = GENEROS.find(x => x.keys.some(k => p.includes(k))) || { bpm: 100, beat: 'four', esc: 'menor', nombre: 'Electrónica' };
@@ -132,7 +125,6 @@ function sintetizar(prompt) {
     return { buf, SR, dur, g };
 }
 
-// ---------- EXPORTAR A WAV ----------
 function toWav(samples, sr) {
     const n = samples.length; const b = Buffer.alloc(44 + n * 2);
     b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVE', 8);
@@ -143,7 +135,6 @@ function toWav(samples, sr) {
     return b;
 }
 
-// ---------- HF MUSICGEN (solo si hay HF_TOKEN en .env) ----------
 async function generarHF(prompt) {
     const token = process.env.HF_TOKEN;
     if (!token) return null;
@@ -187,13 +178,12 @@ export default {
             );
         }
 
-        // 1) IA real si hay token
         let audio = null, mime = 'audio/wav', fuente = '', extra = '';
         const hf = await generarHF(prompt);
         if (hf) {
             audio = hf; mime = 'audio/flac'; fuente = 'Hugging Face MusicGen (IA)';
         } else {
-            // 2) Sintetizador integrado (siempre funciona)
+
             const r = sintetizar(prompt);
             audio = toWav(r.buf, r.SR);
             fuente = 'Sintetizador BOT-API';
