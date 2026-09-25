@@ -1,10 +1,5 @@
-// ============================================================
-// BOT-API
-// Conexión por código de emparejamiento o QR
-// Sistema de bienvenida + despedida con foto de perfil
-// ============================================================
 
-// IMPORTANTE: esto debe ir primero que cualquier otro import.
+
 import 'dotenv/config';
 
 import * as baileysNS from 'baileys';
@@ -14,10 +9,14 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { handleMessage } from './handler.js';
-import { loadCommands } from './controllers/cmdManager.js';
+import { loadCommands } from './lib/cmdManager.js';
 import { manejarDespedida } from './commands/group/despedida.js';
+import { invalidarMetadata } from './lib/grupos.js';
 import './lib/logs.js';
 
 const baileys = baileysNS.default ?? baileysNS;
@@ -43,9 +42,73 @@ let iniciando = false;
 
 let comandos = null;
 
-const app = Fastify({ logger: false });
+let listaComandosUnica = [];
+
+const app = Fastify({
+    logger: false,
+
+    bodyLimit: 90 * 1024 * 1024
+});
 
 app.get('/', async () => ({ status: 'online', bot: 'BOT-API' }));
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const GACHA_HTML = path.join(__dirname, 'lib', 'gacha-selector.html');
+const GACHA_DIR = path.join(__dirname, 'media', 'gacha', 'jpg');
+
+function limpiarNombreGacha(nombre) {
+    return String(nombre)
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .replace(/\.{2,}/g, '.')
+        .slice(0, 100);
+}
+
+app.get('/gacha', async (req, reply) => {
+    try {
+        const html = fs.readFileSync(GACHA_HTML, 'utf8');
+        return reply.type('text/html').send(html);
+    } catch (error) {
+        console.error('[GACHA] Error leyendo el HTML del selector:', error?.message || error);
+        return reply.code(500).type('text/plain').send('No se pudo cargar el selector de Gacha.');
+    }
+});
+
+app.post('/guardar', async (req, reply) => {
+    try {
+        const datos = req.body;
+
+        if (!datos?.imagenes || !Array.isArray(datos.imagenes) || datos.imagenes.length === 0) {
+            return reply.code(400).send({ ok: false, error: 'No se recibieron imágenes.' });
+        }
+
+        fs.mkdirSync(GACHA_DIR, { recursive: true });
+
+        for (const archivo of fs.readdirSync(GACHA_DIR)) {
+            const ruta = path.join(GACHA_DIR, archivo);
+            if (fs.statSync(ruta).isFile()) fs.unlinkSync(ruta);
+        }
+
+        let guardadas = 0;
+        for (const imagen of datos.imagenes) {
+            if (!imagen?.data || typeof imagen.data !== 'string') continue;
+
+            const nombre = limpiarNombreGacha(imagen.nombre || `gacha_${Date.now()}.jpg`);
+            const ruta = path.join(GACHA_DIR, nombre);
+            const buffer = Buffer.from(imagen.data, 'base64');
+
+            fs.writeFileSync(ruta, buffer);
+            guardadas++;
+        }
+
+        console.log(`🎰 Gacha actualizado: ${guardadas} fotos`);
+        return reply.send({ ok: true, cantidad: guardadas });
+
+    } catch (error) {
+        console.error('[GACHA] Error guardando fotos:', error?.message || error);
+        return reply.code(500).send({ ok: false, error: error.message });
+    }
+});
 
 app.get('/qr', async (req, reply) => {
     if (!ultimoQR) {
@@ -178,9 +241,10 @@ async function iniciarBot() {
         }
 
         comandos = await loadCommands();
+        listaComandosUnica = Array.from(new Set(comandos.values()));
         console.log(`📦 Comandos cargados: ${comandos.size}`);
 
-        const logger = pino({ level: 'debug' });
+        const logger = pino({ level: process.env.LOG_LEVEL || 'silent' });
         const opciones = {
             logger,
             printQRInTerminal: false,
@@ -205,15 +269,9 @@ async function iniciarBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // ========================================================
-        // BIENVENIDA + DESPEDIDA
-        // ========================================================
-
         sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
 
-            // ====================================================
-            // DESPEDIDA
-            // ====================================================
+            invalidarMetadata(id);
 
             if (action === 'remove') {
                 try {
@@ -231,10 +289,6 @@ async function iniciarBot() {
 
                 return;
             }
-
-            // ====================================================
-            // BIENVENIDA
-            // ====================================================
 
             try {
                 if (action !== 'add' || !Array.isArray(participants) || participants.length === 0) return;
@@ -409,19 +463,12 @@ async function iniciarBot() {
             }
         });
 
-        // ============================================================
-        // MENSAJES (CON LISTA DE COMANDOS REAL)
-        // ============================================================
-
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const m = messages[0];
 
             if (!m.message || m.key.remoteJid === 'status@broadcast') return;
 
-            const listaComandos = Array.from(comandos.values())
-                .filter((v, i, self) => self.indexOf(v) === i);
-
-            handleMessage(sock, m, '.', listaComandos);
+            handleMessage(sock, m, '.', listaComandosUnica);
         });
 
         if (!state.creds.registered && metodoConexion === '1') {
