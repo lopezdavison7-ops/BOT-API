@@ -1,4 +1,4 @@
-// commands/fun/encuesta.js
+
 export default {
     nombre: 'encuesta',
     categoria: 'Diversión',
