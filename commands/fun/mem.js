@@ -1,5 +1,5 @@
-// commands/fun/mem.js
-// Memoria: TÚ vs 💻 BOT-API ⚡ con dificultades reales
+
+
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
