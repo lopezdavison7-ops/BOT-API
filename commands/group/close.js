@@ -1,4 +1,4 @@
-// commands/group/close.js
+
 import {
     esGrupo,
     verificarPermisosAdmin
