@@ -1,12 +1,5 @@
-// commands/ia/age.js
-// ============================================================
-// BOT-API — DETECTOR DE EDAD (Delirius AI)
-// Usa FormData NATIVO de Node (igual que xnxx.js)
-// ============================================================
 
-// ⚠️ NO importa form-data — usa el FormData global de Node 18+
 
-// ---------- VERIFICAR QUE UNA URL ES IMAGEN VÁLIDA ----------
 async function esImagenValida(url) {
     try {
         const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
@@ -17,7 +10,6 @@ async function esImagenValida(url) {
     }
 }
 
-// ---------- 1) IMGBB ----------
 async function uploadToImgbb(buffer) {
     const params = new URLSearchParams();
     params.append('key', '64a2723a04b67c579c8977c14b498535');
@@ -39,7 +31,6 @@ async function uploadToImgbb(buffer) {
     throw new Error('Respuesta: ' + text.substring(0, 150));
 }
 
-// ---------- 2) TELEGRAPH ----------
 async function uploadToTelegraph(buffer) {
     const formData = new FormData();
     formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
@@ -64,7 +55,6 @@ async function uploadToTelegraph(buffer) {
     throw new Error('Respuesta: ' + text.substring(0, 100));
 }
 
-// ---------- 3) CATBOX ----------
 async function uploadToCatbox(buffer) {
     const formData = new FormData();
     formData.append('reqtype', 'fileupload');
@@ -83,7 +73,6 @@ async function uploadToCatbox(buffer) {
     throw new Error('Respuesta: ' + url.substring(0, 80));
 }
 
-// ---------- 4) 0X0.ST ----------
 async function uploadTo0x0(buffer) {
     const formData = new FormData();
     formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'foto.jpg');
@@ -101,7 +90,6 @@ async function uploadTo0x0(buffer) {
     throw new Error('Respuesta: ' + url.substring(0, 80));
 }
 
-// ---------- 5) FREEIMAGE ----------
 async function uploadToFreeImage(buffer) {
     const params = new URLSearchParams();
     params.append('key', '6d207e02198a847aa98d0a2a901485a5');
@@ -121,7 +109,6 @@ async function uploadToFreeImage(buffer) {
     throw new Error('Respuesta inválida');
 }
 
-// ---------- SUBIR CON FALLBACK ----------
 async function subirImagen(buffer) {
     const errores = [];
 
@@ -149,7 +136,6 @@ async function subirImagen(buffer) {
     throw new Error('Todos fallaron:\n' + errores.join('\n'));
 }
 
-// ---------- DESCARGAR MEDIA ----------
 async function descargarMedia(message, sock) {
     try {
         const baileys = await import('baileys');
@@ -177,7 +163,6 @@ async function descargarMedia(message, sock) {
     throw new Error('No se pudo descargar');
 }
 
-// ---------- TRADUCCIONES ----------
 function traducirGenero(g) {
     const map = { 'mujer': '👩 Mujer', 'hombre': '👨 Hombre', 'male': '👨 Hombre', 'female': '👩 Mujer' };
     return map[String(g).toLowerCase()] || `👤 ${g}`;
@@ -191,9 +176,6 @@ function traducirForma(f) {
     return map[String(f).toLowerCase()] || `🎨 ${f}`;
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'age',
     categoria: 'ia',
@@ -211,13 +193,11 @@ export default {
 
         const argumentoTrim = String(argumento || '').trim();
 
-        // CASO 0: URL DIRECTA
         if (argumentoTrim && /^https?:\/\//i.test(argumentoTrim)) {
             imageUrl = argumentoTrim;
             metodoUsado = 'URL directa';
         }
 
-        // CASO 1: IMAGEN ENVIADA
         if (!imageUrl && msg.message?.imageMessage) {
             try {
                 const buffer = await descargarMedia(msg.message, s);
@@ -241,7 +221,6 @@ export default {
             }
         }
 
-        // CASO 2: IMAGEN CITADA
         if (!imageUrl && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
             try {
                 const quotedMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage;
@@ -266,7 +245,6 @@ export default {
             }
         }
 
-        // CASO 3: FOTO DE PERFIL
         if (!imageUrl) {
             try {
                 imageUrl = await s.profilePictureUrl(sender, 'image');
@@ -287,7 +265,6 @@ export default {
             }
         }
 
-        // ---------- LLAMAR API ----------
         try {
             const apiUrl = `https://api.delirius.online/ia/age?image=${encodeURIComponent(imageUrl)}&language=es`;
 
@@ -347,7 +324,6 @@ export default {
                 return await responder.texto(diag);
             }
 
-            // ÉXITO
             const edad = data.age || data.edad || 'N/A';
             const genero = traducirGenero(data.gender || data.genero || 'Desconocido');
             const expresion = traducirExpresion(data.expression || data.expresion || 'ninguna');
