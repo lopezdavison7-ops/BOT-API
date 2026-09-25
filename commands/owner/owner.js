@@ -1,24 +1,9 @@
-// commands/owner/owner.js
-// ============================================================
-// BOT-API
-// COMANDO: OWNER
-// ============================================================
-// Muestra los propietarios del bot mediante menciones reales
-// de WhatsApp.
-//
-// Compatible con Baileys 7.
-// Soporta owners almacenados como LID.
-// Convierte LID -> PN y utiliza el JID PN real.
-// ============================================================
+
 
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { jidNormalizedUser } from 'baileys';
-
-// ============================================================
-// RUTA DEL ARCHIVO
-// ============================================================
 
 const __filename =
     fileURLToPath(import.meta.url);
@@ -31,10 +16,6 @@ const OWNER_FILE =
         __dirname,
         '../../database/owner.json'
     );
-
-// ============================================================
-// ASEGURAR ARCHIVO
-// ============================================================
 
 async function asegurarOwnerFile() {
 
@@ -68,10 +49,6 @@ async function asegurarOwnerFile() {
     }
 }
 
-// ============================================================
-// LIMPIAR JID
-// ============================================================
-
 function limpiarJid(valor) {
 
     if (!valor) {
@@ -101,10 +78,6 @@ function limpiarJid(valor) {
 
     return texto;
 }
-
-// ============================================================
-// OBTENER LID
-// ============================================================
 
 function obtenerLidJid(owner) {
 
@@ -144,10 +117,6 @@ function obtenerLidJid(owner) {
     return `${numero}@lid`;
 }
 
-// ============================================================
-// NORMALIZAR PN
-// ============================================================
-
 function normalizarPN(valor) {
 
     if (!valor) {
@@ -172,7 +141,7 @@ function normalizarPN(valor) {
             );
 
         } catch {
-            // Continuar con limpieza manual.
+
         }
     }
 
@@ -189,10 +158,6 @@ function normalizarPN(valor) {
     return `${numero}@s.whatsapp.net`;
 }
 
-// ============================================================
-// RESOLVER LID -> PN
-// ============================================================
-
 async function resolverPN(
     sock,
     owner
@@ -205,10 +170,6 @@ async function resolverPN(
         return null;
     }
 
-    // --------------------------------------------------------
-    // Si ya es PN.
-    // --------------------------------------------------------
-
     if (
         valor.endsWith(
             '@s.whatsapp.net'
@@ -220,20 +181,12 @@ async function resolverPN(
         );
     }
 
-    // --------------------------------------------------------
-    // Obtener LID.
-    // --------------------------------------------------------
-
     const lid =
         obtenerLidJid(owner);
 
     if (!lid) {
         return null;
     }
-
-    // --------------------------------------------------------
-    // Mapping de Baileys.
-    // --------------------------------------------------------
 
     const mapping =
         sock?.signalRepository?.lidMapping;
@@ -299,10 +252,6 @@ async function resolverPN(
     }
 }
 
-// ============================================================
-// OBTENER NÚMERO
-// ============================================================
-
 function obtenerNumero(jid) {
 
     if (!jid) {
@@ -319,10 +268,6 @@ function obtenerNumero(jid) {
 
     return numero || null;
 }
-
-// ============================================================
-// LEER OWNER.JSON
-// ============================================================
 
 async function leerOwners() {
 
@@ -341,20 +286,12 @@ async function leerOwners() {
     const data =
         JSON.parse(raw);
 
-    // --------------------------------------------------------
-    // Array directo
-    // --------------------------------------------------------
-
     if (
         Array.isArray(data)
     ) {
 
         return data;
     }
-
-    // --------------------------------------------------------
-    // { owners: [] }
-    // --------------------------------------------------------
 
     if (
         Array.isArray(
@@ -365,10 +302,6 @@ async function leerOwners() {
         return data.owners;
     }
 
-    // --------------------------------------------------------
-    // { owner: [] }
-    // --------------------------------------------------------
-
     if (
         Array.isArray(
             data?.owner
@@ -377,10 +310,6 @@ async function leerOwners() {
 
         return data.owner;
     }
-
-    // --------------------------------------------------------
-    // Objeto
-    // --------------------------------------------------------
 
     if (
         data &&
@@ -398,10 +327,6 @@ async function leerOwners() {
 
     return [];
 }
-
-// ============================================================
-// COMANDO OWNER
-// ============================================================
 
 export default {
 
@@ -426,10 +351,6 @@ export default {
 
         try {
 
-            // =================================================
-            // LEER OWNERS
-            // =================================================
-
             let owners;
 
             try {
@@ -453,10 +374,6 @@ export default {
                 return;
             }
 
-            // =================================================
-            // COMPROBAR SI EXISTEN
-            // =================================================
-
             if (
                 !Array.isArray(owners) ||
                 owners.length === 0
@@ -468,10 +385,6 @@ export default {
 
                 return;
             }
-
-            // =================================================
-            // RESOLVER OWNERS
-            // =================================================
 
             const propietarios = [];
 
@@ -496,10 +409,6 @@ export default {
                     continue;
                 }
 
-                // ------------------------------------------------
-                // Evitar duplicados.
-                // ------------------------------------------------
-
                 if (
                     propietarios.some(
                         item =>
@@ -516,10 +425,6 @@ export default {
                 });
             }
 
-            // =================================================
-            // NINGÚN OWNER RESUELTO
-            // =================================================
-
             if (
                 propietarios.length === 0
             ) {
@@ -532,19 +437,11 @@ export default {
                 return;
             }
 
-            // =================================================
-            // CONSTRUIR MENSAJE
-            // =================================================
-
             let texto =
                 '╭〔 👑 𝐏𝐑𝐎𝐏𝐈𝐄𝐓𝐀𝐑𝐈𝐎𝐒 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣\n' +
                 '┃\n' +
                 `┃ 📌 Total: ${propietarios.length} owner(s)\n` +
                 '┃\n';
-
-            // =================================================
-            // MENCIONES
-            // =================================================
 
             const mentions = [];
 
@@ -570,10 +467,6 @@ export default {
                 '╰━━━━━━━━━━━━━━━━⬣\n\n' +
                 '╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣';
 
-            // =================================================
-            // ENVIAR MENSAJE
-            // =================================================
-
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
@@ -584,10 +477,6 @@ export default {
                     quoted: msg
                 }
             );
-
-            // =================================================
-            // LOG
-            // =================================================
 
             console.log(
                 '================================================'
