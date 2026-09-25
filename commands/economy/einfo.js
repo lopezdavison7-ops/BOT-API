@@ -1,25 +1,24 @@
-// commands/economy/einfo.js — ℹ️ Sistema económico con cooldowns en vivo
-import fs from 'fs';
-import path from 'path';
 
-// ---------- CONFIG: cooldowns en ms (ajústalos a tu bot) ----------
+import path from 'path';
+import { obtenerStore } from '../../lib/jsonStore.js';
+import { fmtTiempo } from '../../lib/helpers.js';
+
 const COOLDOWNS = {
-    daily:   24 * 60 * 60 * 1000,        // 24h
-    weekly:   7 * 24 * 60 * 60 * 1000,   // 7 días
-    monthly: 30 * 24 * 60 * 60 * 1000,   // 30 días
-    crime:    2 * 60 * 60 * 1000,        // 2h
-    slut:     2 * 60 * 60 * 1000,        // 2h
-    adventure: 60 * 60 * 1000,           // 1h
-    hunt:     60 * 60 * 1000,            // 1h
-    fish:     30 * 60 * 1000,            // 30m
-    mine:     30 * 60 * 1000,            // 30m
-    limosna:  60 * 60 * 1000,            // 1h
-    rob:      60 * 60 * 1000,            // 1h
-    hackear:  2 * 60 * 60 * 1000,        // 2h
-    masmorra: 12 * 60 * 60 * 1000        // 12h
+    daily:   24 * 60 * 60 * 1000,
+    weekly:   7 * 24 * 60 * 60 * 1000,
+    monthly: 30 * 24 * 60 * 60 * 1000,
+    crime:    2 * 60 * 60 * 1000,
+    slut:     2 * 60 * 60 * 1000,
+    adventure: 60 * 60 * 1000,
+    hunt:     60 * 60 * 1000,
+    fish:     30 * 60 * 1000,
+    mine:     30 * 60 * 1000,
+    limosna:  60 * 60 * 1000,
+    rob:      60 * 60 * 1000,
+    hackear:  2 * 60 * 60 * 1000,
+    masmorra: 12 * 60 * 60 * 1000
 };
 
-// Variantes de campo que usan los comandos para guardar el último uso
 const CAMPOS = {
     daily:     ['ultimoDaily', 'lastDaily', 'dailyUltimo', 'cooldownDaily'],
     weekly:    ['ultimoWeekly', 'lastWeekly', 'weeklyUltimo', 'cooldownWeekly'],
@@ -38,28 +37,13 @@ const CAMPOS = {
 
 const RUTA_ECO = path.join(process.cwd(), 'database', 'economia.json');
 
-// ---------- LEER USUARIO DE LA BASE ----------
 function leerUsuario(jid) {
     try {
-        const db = JSON.parse(fs.readFileSync(RUTA_ECO, 'utf8'));
+        const db = obtenerStore(RUTA_ECO, {});
         return db[jid] || db.users?.[jid] || db.usuarios?.[jid] || null;
     } catch { return null; }
 }
 
-// ---------- FORMATEAR TIEMPO (23h 59m / 6d 2h / 45m 12s) ----------
-function fmtTiempo(ms) {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (d > 0) return d + 'd ' + h + 'h';
-    if (h > 0) return h + 'h ' + m + 'm';
-    if (m > 0) return m + 'm ' + sec + 's';
-    return sec + 's';
-}
-
-// ---------- ESTADO DE UN COMANDO: ⏳ o ✅ ----------
 function estado(cmd, usuario) {
     const cd = COOLDOWNS[cmd];
     if (!cd) return '✅ Disponible';
@@ -77,7 +61,6 @@ function estado(cmd, usuario) {
     return '⏳ _' + fmtTiempo(restante) + '_';
 }
 
-// ---------- BOLD UNICODE ----------
 function bold(t) {
     const map = {
         'A':'𝐀','B':'𝐁','C':'𝐂','D':'𝐃','E':'𝐄','F':'𝐅','G':'𝐆','H':'𝐇','I':'𝐈','J':'𝐉','K':'𝐊','L':'𝐋','M':'𝐌','N':'𝐍','O':'𝐎','P':'𝐏','Q':'𝐐','R':'𝐑','S':'𝐒','T':'𝐓','U':'𝐔','V':'𝐕','W':'𝐖','X':'𝐗','Y':'𝐘','Z':'𝐙',
