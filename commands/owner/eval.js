@@ -1,11 +1,4 @@
-// commands/owner/eval.js
-// ============================================================
-// EVAL - SOLO OWNER
-// Ejecuta código JavaScript directamente en el proceso del bot.
-// Uso: .eval 1 + 1
-// Uso: .eval await sock.sendMessage(msg.key.remoteJid, { text: 'hola' })
-// Uso: .eval const x = 5; await foo(); x * 2
-// ============================================================
+
 
 import util from 'util';
 import { esOwner } from '../../lib/owner.js';
@@ -24,17 +17,6 @@ function conTimeout(promesa, ms) {
         )
     ]);
 }
-
-// ============================================================
-// AUTO-RETURN DE LA ÚLTIMA EXPRESIÓN
-// ============================================================
-// Cuando el código tiene varios statements (const x = ...;
-// foo(); JSON.stringify(x)) y el último es una expresión SIN
-// 'return' explícito, por defecto no se captura ningún valor
-// (igual que en JS normal). Esto imita lo que hace la consola
-// de Node: si la última línea es una expresión "suelta", se le
-// agrega 'return' automáticamente para poder ver su resultado.
-// ============================================================
 
 const PALABRA_RESERVADA_INICIO =
     /^(const|let|var|function|async\s+function|class|if|for|while|do|switch|try|catch|finally|return|throw|import|export|break|continue|yield)\b/;
@@ -124,8 +106,6 @@ function autoReturnUltimaExpresion(codigo) {
 
     if (/\breturn\b/.test(codigo)) {
 
-        // Ya tiene un return explícito en algún lado,
-        // no tocamos nada para no interferir.
         return codigo;
 
     }
@@ -150,9 +130,6 @@ function autoReturnUltimaExpresion(codigo) {
         PALABRA_RESERVADA_INICIO.test(ultima)
     ) {
 
-        // La última línea no es una expresión "suelta"
-        // (es una declaración/control de flujo) -> no se
-        // puede inferir un valor de retorno con seguridad.
         return codigo;
 
     }
@@ -164,13 +141,6 @@ function autoReturnUltimaExpresion(codigo) {
 
 }
 
-// ============================================================
-// RED DE SEGURIDAD
-// Si el código llegó "aplastado" en una sola línea (por ejemplo
-// porque el handler colapsó los saltos de línea originales),
-// intenta insertar los ';' que falten antes de palabras clave
-// de statement para permitir que el parser lo entienda igual.
-// ============================================================
 function repararStatements(codigo) {
 
     return codigo.replace(
@@ -234,12 +204,6 @@ export default {
         argumento
     }) => {
 
-        // ====================================================
-        // VERIFICACIÓN DE OWNER
-        // (el handler no filtra por la propiedad `owner`,
-        // así que cada comando sensible debe verificarlo aquí)
-        // ====================================================
-
         if (!esOwner(msg)) {
 
             await responder.texto(
@@ -276,19 +240,6 @@ export default {
         let esError = false;
 
         try {
-
-            // ====================================================
-            // EJECUCIÓN
-            // Se envuelve en una función async para poder usar
-            // await dentro del propio código evaluado, y con un
-            // timeout para no colgar el proceso del bot.
-            //
-            // 1) Se intenta primero como EXPRESIÓN simple
-            //    (ej: 1 + 1, msg.key.remoteJid)
-            // 2) Si eso da SyntaxError (porque es código con
-            //    varias líneas/statements: const, await, for, etc.)
-            //    se ejecuta directo como bloque de código.
-            // ====================================================
 
             let resultado;
 
@@ -329,10 +280,6 @@ export default {
 
                     }
 
-                    // Último recurso: reparar statements pegados
-                    // en una sola línea (sin saltos ni ';'),
-                    // y además intentar capturar el valor de
-                    // la última expresión suelta.
                     const reparado =
                         autoReturnUltimaExpresion(
                             repararStatements(argumento)
