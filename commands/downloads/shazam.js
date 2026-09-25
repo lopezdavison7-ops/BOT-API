@@ -1,12 +1,7 @@
-// ============================================================
-// BOT-API
-// COMANDO: SHAZAM
-// VERSION: 2.0 - AJUSTADO PARA BOT-API
-// Identifica una canción desde un audio o video citado.
-// ============================================================
+
 
 import { downloadMediaMessage } from 'baileys';
-import { identifySong } from '../../controllers/shazamScraper.js';
+import { identifySong } from '../../lib/shazamScraper.js';
 
 function obtenerContextInfo(message) {
     return (
