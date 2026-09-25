@@ -1,4 +1,4 @@
-// commands/economy/shop.js
+
 import {
     obtenerUsuario,
     modificarDinero,
@@ -58,10 +58,6 @@ export default {
                 .split(/\s+/)
                 .filter(Boolean);
 
-        // ----------------------------------------------------
-        // MOSTRAR TIENDA
-        // ----------------------------------------------------
-
         if (
             partes.length === 0
         ) {
@@ -95,10 +91,6 @@ export default {
 
             return;
         }
-
-        // ----------------------------------------------------
-        // COMPRAR
-        // ----------------------------------------------------
 
         if (
             partes[0].toLowerCase() !== 'comprar'
@@ -150,10 +142,6 @@ export default {
 
             return;
         }
-
-        // ----------------------------------------------------
-        // COBRAR
-        // ----------------------------------------------------
 
         modificarDinero(
             id,
