@@ -4,7 +4,7 @@ import {
     guardarUsuario
 } from '../../database/economia.js';
 
-const COOLDOWN_LIMOSNA = 12 * 60 * 60 * 1000; // 12 horas
+const COOLDOWN_LIMOSNA = 12 * 60 * 60 * 1000;
 
 function formatearTiempo(ms) {
     const h = Math.floor(ms / 3600000);
@@ -34,7 +34,7 @@ export default {
         }
 
         const cantidad = Math.floor(Math.random() * 91) + 10;
-        
+
         usuario.ultimoLimosna = ahora;
         guardarUsuario(id, usuario);
         modificarDinero(id, cantidad);
