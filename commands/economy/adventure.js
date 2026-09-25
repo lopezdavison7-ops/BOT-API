@@ -1,8 +1,4 @@
-// commands/economy/adventure.js
-// ============================================================
-// BOT-API
-// COMANDO: ADVENTURE
-// ============================================================
+
 
 import {
     obtenerUsuario,
