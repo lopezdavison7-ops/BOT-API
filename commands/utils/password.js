@@ -1,4 +1,4 @@
-// commands/utils/password.js
+
 import { llamarApi } from '../../lib/api.js';
 
 export default {
@@ -9,7 +9,7 @@ export default {
     ejecutar: async ({ responder, argumento }) => {
         const longitud = argumento?.trim() || '16';
         const data = await llamarApi('/api/v1/tools/password', { q: longitud });
-        
+
         if (!data.status || !data.result?.password) {
             return responder.texto('❌ No se pudo generar la contraseña.');
         }
