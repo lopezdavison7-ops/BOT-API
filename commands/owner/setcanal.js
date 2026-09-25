@@ -1,7 +1,4 @@
-// ============================================================
-// SETCANAL - BOT-API
-// Configura el canal oficial que aparecerá en el menú.
-// ============================================================
+
 
 import path from 'path';
 import { obtenerStore, guardarStore } from '../../lib/jsonStore.js';
@@ -12,10 +9,6 @@ const CANAL_FILE = path.join(
     'canal.json'
 );
 
-// ============================================================
-// GUARDAR CANAL
-// ============================================================
-
 function guardarCanal(url) {
 
     const datos =
@@ -23,15 +16,9 @@ function guardarCanal(url) {
 
     datos.url = url;
 
-    // Inmediato: este comando se usa poco (owner), y así el
-    // .menu de otros chats ve el cambio al instante.
     guardarStore(CANAL_FILE, true);
 
 }
-
-// ============================================================
-// VALIDAR ENLACE
-// ============================================================
 
 function validarCanal(url) {
     try {
@@ -47,10 +34,6 @@ function validarCanal(url) {
     }
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
-
 export default {
     nombre: 'setcanal',
     categoria: 'Owner',
@@ -59,9 +42,7 @@ export default {
 
     async ejecutar({ msg, responder }) {
         try {
-            // ----------------------------------------------------
-            // COMPROBAR OWNER
-            // ----------------------------------------------------
+
             const key = msg?.key || {};
 
             const candidatos = [
@@ -96,10 +77,6 @@ export default {
                 );
             }
 
-            // ----------------------------------------------------
-            // OBTENER TEXTO DEL COMANDO
-            // ----------------------------------------------------
-
             const texto =
                 msg?.message?.conversation ||
                 msg?.message?.extendedTextMessage?.text ||
@@ -123,10 +100,6 @@ export default {
                 );
             }
 
-            // ----------------------------------------------------
-            // VALIDAR
-            // ----------------------------------------------------
-
             if (!validarCanal(url)) {
                 return responder.texto(
                     `╭━━〔 ❌ 𝐒𝐄𝐓𝐂𝐀𝐍𝐀𝐋 〕━━⬣
@@ -140,10 +113,6 @@ export default {
 ╰━━━━━━━━━━━━━━━━⬣`
                 );
             }
-
-            // ----------------------------------------------------
-            // GUARDAR
-            // ----------------------------------------------------
 
             guardarCanal(url);
 
