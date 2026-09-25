@@ -1,4 +1,4 @@
-// commands/fun/tetris.js
+
 import {
     hayPartidaActiva,
     crearPartida
