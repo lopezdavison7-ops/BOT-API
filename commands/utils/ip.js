@@ -1,4 +1,4 @@
-// commands/utils/ip.js
+
 import fetch from 'node-fetch';
 
 export default {
