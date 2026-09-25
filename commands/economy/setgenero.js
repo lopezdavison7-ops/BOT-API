@@ -1,10 +1,9 @@
-// commands/economy/setgenero.js
+
 import {
     GENEROS,
     setGenero
 } from '../../database/perfiles.js';
 
-// Mapea variantes de escritura hacia una clave válida de GENEROS.
 const ALIAS_GENERO = {
 
     masculino: 'masculino',
