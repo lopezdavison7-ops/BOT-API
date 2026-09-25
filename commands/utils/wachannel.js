@@ -1,16 +1,11 @@
-// commands/tools/wachannel.js
-// ============================================================
-// BOT-API — WHATSAPP CHANNEL STALK (Delirius API)
-// ============================================================
-// .wachannel <url o ID del canal> → ficha del canal de WhatsApp
-// ============================================================
+
 
 const API = 'https://api.delirius.online/tools/whatsappchannelstalk?channel=';
 
 function fmtNum(n) {
     if (!n) return '0';
     const str = String(n);
-    // Extraer número de "Noticias... Channel • 615K"
+
     const match = str.match(/([\d,.]+)\s*(K|M|B)?/i);
     if (match) {
         const num = parseFloat(match[1].replace(/,/g, ''));
@@ -25,20 +20,18 @@ function fmtNum(n) {
     return str;
 }
 
-// Extraer solo el número de seguidores del texto
 function extraerSeguidores(texto) {
     if (!texto) return '0';
-    // Buscar patrón "• 615K" o "• 1.2M" al final
+
     const match = texto.match(/•\s*([\d,.]+[KMB]?)/i);
     if (match) return match[1];
-    // Si no, devolver el texto completo formateado
+
     return fmtNum(texto);
 }
 
-// Extraer descripción real (quitar el texto genérico de WhatsApp)
 function limpiarDescripcion(desc) {
     if (!desc) return '—';
-    // Quitar textos genéricos de WhatsApp
+
     const genericos = ['What we do', 'Who we are', 'Use WhatsApp', 'Need help?'];
     let limpia = desc;
     genericos.forEach(g => {
@@ -47,7 +40,6 @@ function limpiarDescripcion(desc) {
     return limpia || '—';
 }
 
-// ---------- DESCARGAR FOTO DE PERFIL DEL CANAL ----------
 async function descargarProfile(url) {
     try {
         const res = await fetch(url, {
@@ -67,7 +59,6 @@ async function descargarProfile(url) {
     return null;
 }
 
-// ---------- SUBIR A TELEGRAPH (respaldo) ----------
 async function uploadToTelegraph(buffer) {
     const formData = new FormData();
     formData.append('file', new Blob([buffer], { type: 'image/jpeg' }), 'profile.jpg');
@@ -117,7 +108,6 @@ export default {
             );
         }
 
-        // Si es solo ID (sin http), armar URL
         if (!input.startsWith('http')) {
             input = 'https://www.whatsapp.com/channel/' + input;
         }
@@ -147,9 +137,8 @@ export default {
                 );
             }
 
-            // Detectar si WhatsApp bloqueó (título genérico)
             if (d.title && d.title.toLowerCase().includes("don't have whatsapp")) {
-                // El título real está en los followers (formato: "Descripción. Channel • 615K")
+
                 const followersRaw = d.followers || '';
                 const match = followersRaw.match(/^(.+?)\s*Channel\s*•/i);
                 const tituloReal = match ? match[1].trim() : d.title;
@@ -159,7 +148,6 @@ export default {
                 const url = d.url || input;
                 const profile = d.profile || '';
 
-                // Construir ficha
                 let ficha =
                     '╭━━〔 📢 𝐖𝐀 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 〕━━⬣\n' +
                     '┃\n' +
@@ -179,7 +167,6 @@ export default {
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-                // Intentar mandar con foto
                 if (profile) {
                     const buffer = await descargarProfile(profile);
                     if (buffer) {
@@ -190,7 +177,7 @@ export default {
                             }, { quoted: msg });
                             return;
                         } catch (e) {
-                            // Intentar subir a Telegraph
+
                             try {
                                 const telegraphUrl = await uploadToTelegraph(buffer);
                                 await responder.imagen({ url: telegraphUrl }, ficha);
@@ -201,7 +188,6 @@ export default {
                         }
                     }
 
-                    // Intento 2: URL directa
                     try {
                         await responder.imagen({ url: profile }, ficha);
                         return;
@@ -210,12 +196,10 @@ export default {
                     }
                 }
 
-                // Sin foto
                 await responder.texto(ficha);
                 return;
             }
 
-            // ---------- CASO NORMAL (API devuelve bien) ----------
             const titulo = d.title || '—';
             const seguidores = extraerSeguidores(d.followers);
             const descripcion = limpiarDescripcion(d.description);
@@ -242,7 +226,6 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Intentar mandar con foto
             if (profile) {
                 const buffer = await descargarProfile(profile);
                 if (buffer) {
