@@ -1,4 +1,4 @@
-// commands/utils/calc.js
+
 export default {
     nombre: 'calc',
     categoria: 'Utilidades',
@@ -18,7 +18,6 @@ export default {
                 return;
             }
 
-            // Validar solo números y operadores básicos
             if (!/^[0-9+\-*/().\s]+$/.test(operacion)) {
                 await responder.texto('❌ Solo números y operadores (+, -, *, /)');
                 return;
