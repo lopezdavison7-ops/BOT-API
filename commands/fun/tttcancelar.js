@@ -1,4 +1,4 @@
-// commands/fun/tttcancelar.js
+
 import {
     cancelarPartida
 } from '../../lib/ttt.js';
