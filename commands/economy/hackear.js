@@ -1,14 +1,4 @@
-// commands/economy/hackear.js
-// ============================================================
-// BOT-API — HACKEAR BANCO
-// ============================================================
-// .hackear @user → intenta hackear el banco de otro usuario
-// ============================================================
-// Probabilidad de éxito: 35%
-// Si tiene éxito: roba 10-25% del banco de la víctima
-// Si falla: multa al hacker del 15% de su dinero
-// Cooldown: 15 minutos
-// ============================================================
+
 
 import {
     obtenerUsuario,
@@ -16,13 +6,12 @@ import {
     modificarDinero
 } from '../../database/economia.js';
 
-const COOLDOWN_HACKEO = 15 * 60 * 1000; // 15 minutos
-const PROBABILIDAD_EXITO = 0.35; // 35%
-const MIN_PORCENTAJE_ROBO = 0.10; // 10% del banco
-const MAX_PORCENTAJE_ROBO = 0.25; // 25% del banco
-const MULTA_PORCENTAJE = 0.15; // 15% de multa si falla
+const COOLDOWN_HACKEO = 15 * 60 * 1000;
+const PROBABILIDAD_EXITO = 0.35;
+const MIN_PORCENTAJE_ROBO = 0.10;
+const MAX_PORCENTAJE_ROBO = 0.25;
+const MULTA_PORCENTAJE = 0.15;
 
-// ---------- ESCENARIOS DE ÉXITO ----------
 const EXITOS = [
     '💻 Entraste a su cuenta usando SQL injection',
     '🔓 Descifraste su contraseña: "123456"',
@@ -36,7 +25,6 @@ const EXITOS = [
     '🎯 Adivinaste su PIN en 3 intentos'
 ];
 
-// ---------- ESCENARIOS DE FALLO ----------
 const FALLOS = [
     '🚨 El banco detectó actividad sospechosa',
     '🔐 Su contraseña era demasiado fuerte',
@@ -50,7 +38,6 @@ const FALLOS = [
     '🐌 Tu internet era demasiado lento'
 ];
 
-// ---------- FORMATEAR TIEMPO ----------
 function fmtTiempo(ms) {
     const minutos = Math.ceil(ms / 60000);
     if (minutos >= 60) {
@@ -71,7 +58,6 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Detectar mención
         let target = null;
         const quotedMention = msg.message?.extendedTextMessage?.contextInfo?.participant;
         const textMentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
@@ -87,7 +73,6 @@ export default {
             }
         }
 
-        // Validar que haya target
         if (!target) {
             return await responder.texto(
                 '╭━━〔 💻 𝐇𝐀𝐂𝐊𝐄𝐀𝐑 〕━━⬣\n' +
@@ -107,7 +92,6 @@ export default {
             );
         }
 
-        // Validar que no sea a sí mismo
         if (target === sender) {
             return await responder.texto(
                 '╭━━〔 💻 𝐇𝐀𝐂𝐊𝐄𝐀𝐑 〕━━⬣\n' +
@@ -119,11 +103,9 @@ export default {
             );
         }
 
-        // Obtener usuarios
         const hacker = obtenerUsuario(sender);
         const victima = obtenerUsuario(target);
 
-        // Validar cooldown
         const ahora = Date.now();
         const ultimoHackeo = hacker.ultimoHackeo || 0;
         const tiempoTranscurrido = ahora - ultimoHackeo;
@@ -144,7 +126,6 @@ export default {
             );
         }
 
-        // Validar que la víctima tenga dinero en el banco
         const bancoVictima = victima.banco || 0;
 
         if (bancoVictima < 500) {
@@ -163,21 +144,18 @@ export default {
             );
         }
 
-        // Registrar intento (cooldown cuenta aunque falle)
         hacker.ultimoHackeo = ahora;
 
-        // Calcular resultado
         const exito = Math.random() < PROBABILIDAD_EXITO;
         const escenario = exito
             ? EXITOS[Math.floor(Math.random() * EXITOS.length)]
             : FALLOS[Math.floor(Math.random() * FALLOS.length)];
 
         if (exito) {
-            // Calcular monto a robar (10-25% del banco)
+
             const porcentaje = MIN_PORCENTAJE_ROBO + Math.random() * (MAX_PORCENTAJE_ROBO - MIN_PORCENTAJE_ROBO);
             const montoRobado = Math.floor(bancoVictima * porcentaje);
 
-            // Aplicar robo
             victima.banco -= montoRobado;
             hacker.dinero += montoRobado;
 
@@ -218,11 +196,10 @@ export default {
             );
 
         } else {
-            // Calcular multa (15% de tu dinero en mano)
+
             const dineroHacker = hacker.dinero || 0;
             const multa = Math.floor(dineroHacker * MULTA_PORCENTAJE);
 
-            // Aplicar multa
             hacker.dinero = Math.max(0, hacker.dinero - multa);
 
             guardarUsuario(sender, hacker);
