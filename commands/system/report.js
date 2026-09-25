@@ -1,26 +1,7 @@
-// ============================================================
-// BOT-API
-// COMANDO: REPORT
-// ============================================================
-// Permite a los usuarios reportar errores o problemas del bot.
-//
-// Uso:
-// .report <mensaje>
-//
-// Los reportes son enviados automáticamente al grupo definido
-// en REPORT_GROUP_JID.
-// ============================================================
 
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
 
 const REPORT_GROUP_JID =
     '120363429140811226@g.us';
-
-// ============================================================
-// FUNCIONES AUXILIARES
-// ============================================================
 
 function obtenerUsuario(msg, isGroup) {
 
@@ -42,10 +23,6 @@ function obtenerUsuario(msg, isGroup) {
     );
 }
 
-// ============================================================
-// NORMALIZAR JID
-// ============================================================
-
 function obtenerNumero(jid) {
 
     if (!jid) {
@@ -61,10 +38,6 @@ function obtenerNumero(jid) {
     return numero || 'Desconocido';
 }
 
-// ============================================================
-// OBTENER NOMBRE
-// ============================================================
-
 function obtenerNombre(msg) {
 
     return (
@@ -73,10 +46,6 @@ function obtenerNombre(msg) {
         'Usuario'
     );
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
 
@@ -103,10 +72,6 @@ export default {
 
         try {
 
-            // ==================================================
-            // COMPROBAR REPORTE
-            // ==================================================
-
             const reporte =
                 String(
                     argumento || ''
@@ -129,10 +94,6 @@ export default {
 
                 return;
             }
-
-            // ==================================================
-            // DATOS DEL USUARIO
-            // ==================================================
 
             const usuario =
                 obtenerUsuario(
@@ -159,10 +120,6 @@ export default {
                     ? 'Grupo'
                     : 'Privado';
 
-            // ==================================================
-            // MENCIÓN
-            // ==================================================
-
             const mentionJid =
                 usuario &&
                 String(usuario)
@@ -176,10 +133,6 @@ export default {
                 mentionJid
                     ? `@${numero}`
                     : nombre;
-
-            // ==================================================
-            // MENSAJE DEL REPORTE
-            // ==================================================
 
             const mensajeReporte =
 
@@ -195,10 +148,6 @@ export default {
                 `┃\n` +
                 `╰━━━━━━━━━━━━━━━━⬣\n\n` +
                 `╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`;
-
-            // ==================================================
-            // ENVIAR AL GRUPO DE REPORTES
-            // ==================================================
 
             const opciones = {};
 
@@ -217,10 +166,6 @@ export default {
                     ...opciones
                 }
             );
-
-            // ==================================================
-            // CONFIRMACIÓN AL USUARIO
-            // ==================================================
 
             await responder.texto(
                 `╭〔 ✅ 𝐑𝐄𝐏𝐎𝐑𝐓𝐄 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕⬣\n` +
