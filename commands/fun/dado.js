@@ -1,4 +1,4 @@
-// commands/fun/dado.js
+
 export default {
     nombre: 'dado',
     categoria: 'Diversión',
