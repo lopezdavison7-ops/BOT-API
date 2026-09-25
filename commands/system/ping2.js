@@ -1,10 +1,10 @@
-// commands/system/ping2.js — ⚡ Diagnóstico 100% real (mediciones verdaderas)
+
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
+import { safe } from '../../lib/helpers.js';
 
-function safe(fn, def) { try { return fn(); } catch (e) { return def; } }
 function fmtDur(s) {
     s = Math.floor(s);
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -27,7 +27,7 @@ function contarComandos(dir) {
     } catch (e) {}
     return n;
 }
-// Convierte el timestamp de WhatsApp (número o Long de protobuf) a ms reales
+
 function tsAMs(ts) {
     try {
         if (ts && typeof ts === 'object' && typeof ts.toNumber === 'function') return ts.toNumber() * 1000;
@@ -47,11 +47,9 @@ export default {
             const from = msg.key.remoteJid;
             const tHandler = Date.now();
 
-            // 1) RECEPCIÓN REAL: timestamp del server de WA → inicio del handler
             const tsMsg = tsAMs(msg.messageTimestamp);
             const recv = tsMsg > 0 ? Math.max(0, tHandler - tsMsg) : 0;
 
-            // 2) SONDAS RTT REALES al server de WhatsApp (3 muestras, solo lectura)
             const muestras = [];
             for (let i = 0; i < 3; i++) {
                 const a = Date.now();
@@ -64,7 +62,6 @@ export default {
             const rttMin = muestras.length ? Math.min(...muestras) : 0;
             const rttMax = muestras.length ? Math.max(...muestras) : 0;
 
-            // 3) STATS REALES del proceso/server
             const mem = safe(() => process.memoryUsage(), { rss: 0 });
             const ramTotal = safe(() => os.totalmem(), 1);
             const ramUsada = ramTotal - safe(() => os.freemem(), 0);
@@ -83,11 +80,9 @@ export default {
             const plat = safe(() => (os.platform() + ' ' + os.arch()).replace(/'/g, ''), '—');
             const hora = safe(() => new Date().toLocaleString('es-MX', { hour12: false }), '—');
 
-            // 4) PROCESO REAL: handler → payload listo
             const serverNow = Date.now();
             const proc = serverNow - tHandler;
 
-            // 5) TOTAL REAL = recepción + proceso + RTT de red
             const total = recv + proc + rttAvg;
             const color = total < 300 ? '#22c55e' : (total < 800 ? '#eab308' : '#ef4444');
             const calidad = total < 300 ? 'EXCELENTE' : (total < 800 ? 'ESTABLE' : 'SATURADO');
