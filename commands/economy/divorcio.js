@@ -8,7 +8,7 @@ export default {
     alias: ['divorciarme', 'divorce'],
     descripcion: 'Termina tu matrimonio actual. Uso:.divorcio',
 
-    ejecutar: async ({ msg, responder, sock }) => { // <- agregué sock
+    ejecutar: async ({ msg, responder, sock }) => {
         const s = sock || global.conns?.[0] || Object.values(global.conns)[0];
         const chatJid = msg.key.remoteJid;
         const id = msg.key.participant || msg.key.remoteJid;
@@ -33,7 +33,6 @@ export default {
         text += '┃\n';
         text += '╰━━━━━━━━⬣';
 
-        // FIX: usar sendMessage para que mencione
         await s.sendMessage(chatJid, { text, mentions: [exPareja, id] }, { quoted: msg });
     }
 };
