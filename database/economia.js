@@ -8,27 +8,14 @@ const __filename =
 const __dirname =
     path.dirname(__filename);
 
-// ============================================================
-// ARCHIVO DE ECONOMÍA
-// ============================================================
-
 const ARCHIVO =
     path.join(
         __dirname,
         'economia.json'
     );
 
-// ============================================================
-// CONFIGURACIÓN RW
-// ============================================================
-
-// 4 horas en milisegundos
 export const COOLDOWN_RW =
     4 * 60 * 60 * 1000;
-
-// ============================================================
-// ACCESO A DATOS (ahora en memoria, no toca disco cada vez)
-// ============================================================
 
 function datos() {
 
@@ -38,14 +25,9 @@ function datos() {
 
 function guardar() {
 
-    // Escritura en disco agrupada (debounce), no bloquea el bot.
     guardarStore(ARCHIVO);
 
 }
-
-// ============================================================
-// CREAR USUARIO
-// ============================================================
 
 function crearUsuario() {
 
@@ -53,31 +35,21 @@ function crearUsuario() {
 
         dinero: 0,
 
-        // Dinero guardado en el banco. NO se puede robar con
-        // .rob (solo el dinero en mano/wallet es vulnerable).
         banco: 0,
 
         personajes: [],
 
-        // Items comprados en .shop (ids repetidos si compra
-        // varios del mismo).
         items: [],
 
         ultimoTrabajo: 0,
 
-        // Última vez que utilizó .rw
         ultimoRW: 0,
 
-        // Última vez que usó .rob (intento o éxito, ambos cuentan)
         ultimoRobo: 0
 
     };
 
 }
-
-// ============================================================
-// OBTENER USUARIO
-// ============================================================
 
 export function obtenerUsuario(id) {
 
@@ -94,10 +66,6 @@ export function obtenerUsuario(id) {
         return db[id];
 
     }
-
-    // --------------------------------------------------------
-    // Compatibilidad con usuarios existentes
-    // --------------------------------------------------------
 
     let cambiado = false;
 
@@ -178,10 +146,6 @@ export function obtenerUsuario(id) {
 
 }
 
-// ============================================================
-// MODIFICAR DINERO
-// ============================================================
-
 export function modificarDinero(
     id,
     cantidad
@@ -214,10 +178,6 @@ export function modificarDinero(
 
 }
 
-// ============================================================
-// GUARDAR USUARIO
-// ============================================================
-
 export function guardarUsuario(
     id,
     usuario
@@ -234,10 +194,6 @@ export function guardarUsuario(
     return usuario;
 
 }
-
-// ============================================================
-// COMPROBAR COOLDOWN DE RW
-// ============================================================
 
 export function puedeUsarRW(id) {
 
@@ -264,10 +220,6 @@ export function puedeUsarRW(id) {
     );
 
 }
-
-// ============================================================
-// TIEMPO RESTANTE DE RW
-// ============================================================
 
 export function tiempoRestanteRW(id) {
 
@@ -299,10 +251,6 @@ export function tiempoRestanteRW(id) {
 
 }
 
-// ============================================================
-// REGISTRAR USO DE RW
-// ============================================================
-
 export function registrarRW(id) {
 
     const db =
@@ -324,11 +272,6 @@ export function registrarRW(id) {
 
 }
 
-// ============================================================
-// COOLDOWN DE ROBO
-// ============================================================
-
-// 8 minutos entre intentos de robo
 export const COOLDOWN_ROBO =
     8 * 60 * 1000;
 
@@ -409,13 +352,6 @@ export function registrarRobo(id) {
 
 }
 
-// ============================================================
-// BANCO
-// ============================================================
-// El dinero en el banco está protegido de .rob. Solo el
-// dinero "en mano" (campo `dinero`) es robable.
-// ============================================================
-
 export function depositar(
     id,
     cantidad
@@ -474,10 +410,6 @@ export function retirar(
 
 }
 
-// ============================================================
-// INVENTARIO (items comprados en .shop)
-// ============================================================
-
 export function agregarItem(
     id,
     itemId
@@ -501,10 +433,6 @@ export function obtenerInventario(id) {
     return obtenerUsuario(id).items;
 
 }
-
-// ============================================================
-// OBTENER TODOS
-// ============================================================
 
 export function obtenerTodos() {
 
