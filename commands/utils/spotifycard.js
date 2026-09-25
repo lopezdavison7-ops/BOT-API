@@ -1,8 +1,5 @@
-// commands/utils/spotifycard.js — 🎵 Tarjeta estilo Spotify "reproduciendo ahora"
-// ============================================================
-// API: api.siputzx.my.id/api/canvas/spotify
-// Uso: .spotifycard título | artista | [url_imagen] | [#color]
-// ============================================================
+
+
 import fetch from 'node-fetch';
 
 const API = 'https://api.siputzx.my.id/api/canvas/spotify';
@@ -34,7 +31,6 @@ export default {
         let image = partes[2] || '';
         let border = partes[3] || '#1DB954';
 
-        // ---------- AYUDA ----------
         if (!title) {
             return await responder.texto(
                 '╭━━〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 𝐂𝐀𝐑𝐃 〕━━⬣\n' +
@@ -55,11 +51,9 @@ export default {
             );
         }
 
-        // ---------- VALIDACIONES ----------
         if (title.length > 60) return await responder.texto('❌ Título muy largo (máx 60 caracteres).');
         if (artist.length > 60) return await responder.texto('❌ Artista muy largo (máx 60 caracteres).');
 
-        // Si puso el color en el slot de imagen, corregir
         if (image && image.startsWith('#')) {
             border = image;
             image = '';
@@ -70,11 +64,9 @@ export default {
         if (border && !border.startsWith('#')) border = '#' + border;
         if (!/^#[0-9a-fA-F]{6}$/.test(border)) border = '#1DB954';
 
-        // ---------- TIEMPOS ALEATORIOS (progreso de reproducción) ----------
-        const start = Math.floor(Math.random() * 150000);              // 0:00 - 2:30
-        const end = start + 30000 + Math.floor(Math.random() * 120000); // +30s a +2:00
+        const start = Math.floor(Math.random() * 150000);
+        const end = start + 30000 + Math.floor(Math.random() * 120000);
 
-        // ---------- CONSTRUIR PARÁMETROS ----------
         const params = new URLSearchParams({
             title,
             artist,
@@ -86,7 +78,6 @@ export default {
 
         await responder.texto('🎵 Generando tarjeta Spotify...\n┃ 🎼 ' + title + ' — ' + artist);
 
-        // ---------- INTENTAR (con imagen → sin imagen → con default) ----------
         const urls = [API + '?' + params.toString()];
         if (image) {
             const p2 = new URLSearchParams(params);
@@ -109,7 +100,7 @@ export default {
                     const buf = Buffer.from(await res.arrayBuffer());
                     if (buf.length > 500) { buffer = buf; break; }
                 } else {
-                    // Respuesta JSON con URL de imagen
+
                     const json = await res.json().catch(() => null);
                     const imgUrl = json?.result || json?.url || json?.data?.url || json?.image;
                     if (imgUrl) {
@@ -129,7 +120,6 @@ export default {
             return await responder.texto('❌ No pude generar la tarjeta Spotify. Intenta con otra imagen o más tarde.');
         }
 
-        // ---------- ENVIAR ----------
         const caption =
             '╭━━〔 🎵 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 𝐂𝐀𝐑𝐃 〕━━⬣\n' +
             '┃\n' +
