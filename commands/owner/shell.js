@@ -1,4 +1,4 @@
-// commands/owner/shell.js
+
 import {
     exec
 } from 'child_process';
