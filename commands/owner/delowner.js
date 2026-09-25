@@ -1,29 +1,9 @@
-// commands/owner/delowner.js
-// ============================================================
-// BOT-API
-// COMANDO: DELOWNER
-// ============================================================
-// Elimina un propietario del bot.
-//
-// Formas:
-//
-// .delowner @usuario
-// .delowner 50512345678
-//
-// También permite responder al mensaje del usuario.
-//
-// Compatible con Baileys 7.
-// Soporta LID y PN.
-// ============================================================
+
 
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { jidNormalizedUser } from 'baileys';
-
-// ============================================================
-// RUTA CORRECTA
-// ============================================================
 
 const __filename =
     fileURLToPath(
@@ -40,10 +20,6 @@ const OWNER_FILE =
         __dirname,
         '../../database/owner.json'
     );
-
-// ============================================================
-// ASEGURAR ARCHIVO
-// ============================================================
 
 async function asegurarOwnerFile() {
 
@@ -79,10 +55,6 @@ async function asegurarOwnerFile() {
     }
 }
 
-// ============================================================
-// LIMPIAR JID
-// ============================================================
-
 function limpiarJid(valor) {
 
     if (!valor) {
@@ -111,10 +83,6 @@ function limpiarJid(valor) {
     return texto || null;
 }
 
-// ============================================================
-// NORMALIZAR PN
-// ============================================================
-
 function normalizarPN(valor) {
 
     if (!valor) {
@@ -141,7 +109,7 @@ function normalizarPN(valor) {
             );
 
         } catch {
-            // Continuar.
+
         }
     }
 
@@ -157,10 +125,6 @@ function normalizarPN(valor) {
 
     return `${numero}@s.whatsapp.net`;
 }
-
-// ============================================================
-// OBTENER LID JID
-// ============================================================
 
 function obtenerLidJid(valor) {
 
@@ -193,10 +157,6 @@ function obtenerLidJid(valor) {
     return `${numero}@lid`;
 }
 
-// ============================================================
-// OBTENER NÚMERO DE UN JID
-// ============================================================
-
 function obtenerNumero(valor) {
 
     if (!valor) {
@@ -216,10 +176,6 @@ function obtenerNumero(valor) {
     return numero || null;
 }
 
-// ============================================================
-// RESOLVER LID -> PN
-// ============================================================
-
 async function resolverPN(
     sock,
     owner
@@ -234,7 +190,6 @@ async function resolverPN(
         return null;
     }
 
-    // Ya es PN.
     if (
         valor.endsWith(
             '@s.whatsapp.net'
@@ -294,10 +249,6 @@ async function resolverPN(
     }
 }
 
-// ============================================================
-// LEER OWNERS
-// ============================================================
-
 async function leerOwners() {
 
     await asegurarOwnerFile();
@@ -317,7 +268,6 @@ async function leerOwners() {
             raw
         );
 
-    // Array directo.
     if (
         Array.isArray(data)
     ) {
@@ -328,7 +278,6 @@ async function leerOwners() {
         };
     }
 
-    // { owners: [] }
     if (
         Array.isArray(
             data?.owners
@@ -341,7 +290,6 @@ async function leerOwners() {
         };
     }
 
-    // { owner: [] }
     if (
         Array.isArray(
             data?.owner
@@ -354,7 +302,6 @@ async function leerOwners() {
         };
     }
 
-    // Objeto.
     if (
         data &&
         typeof data === 'object'
@@ -381,10 +328,6 @@ async function leerOwners() {
     };
 }
 
-// ============================================================
-// GUARDAR OWNERS
-// ============================================================
-
 async function guardarOwners(
     owners,
     formato
@@ -410,8 +353,6 @@ async function guardarOwners(
 
     } else {
 
-        // Usamos array para evitar
-        // estructuras innecesarias.
         data = owners;
     }
 
@@ -426,10 +367,6 @@ async function guardarOwners(
     );
 }
 
-// ============================================================
-// OBTENER TARGET
-// ============================================================
-
 function obtenerTarget(
     msg,
     argumento
@@ -438,10 +375,6 @@ function obtenerTarget(
     const contextInfo =
         msg.message?.extendedTextMessage
             ?.contextInfo;
-
-    // --------------------------------------------------------
-    // 1. RESPUESTA A UN MENSAJE
-    // --------------------------------------------------------
 
     const quotedParticipant =
         contextInfo?.participant ||
@@ -457,10 +390,6 @@ function obtenerTarget(
         };
     }
 
-    // --------------------------------------------------------
-    // 2. MENCIÓN
-    // --------------------------------------------------------
-
     const mentioned =
         contextInfo?.mentionedJid ||
         [];
@@ -474,10 +403,6 @@ function obtenerTarget(
             tipo: 'mencion'
         };
     }
-
-    // --------------------------------------------------------
-    // 3. NÚMERO ESCRITO
-    // --------------------------------------------------------
 
     if (
         argumento
@@ -505,10 +430,6 @@ function obtenerTarget(
     return null;
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
-
 export default {
 
     nombre: 'delowner',
@@ -532,10 +453,6 @@ export default {
 
         try {
 
-            // =================================================
-            // OBTENER OBJETIVO
-            // =================================================
-
             const target =
                 obtenerTarget(
                     msg,
@@ -558,10 +475,6 @@ export default {
                 return;
             }
 
-            // =================================================
-            // DATOS DEL OBJETIVO
-            // =================================================
-
             const targetJid =
                 limpiarJid(
                     target.jid
@@ -579,10 +492,6 @@ export default {
                     : obtenerLidJid(
                         targetJid
                     );
-
-            // =================================================
-            // LEER OWNERS
-            // =================================================
 
             let resultado;
 
@@ -622,10 +531,6 @@ export default {
                 return;
             }
 
-            // =================================================
-            // BUSCAR OWNER
-            // =================================================
-
             let foundIndex = -1;
 
             for (
@@ -646,10 +551,6 @@ export default {
                     continue;
                 }
 
-                // ---------------------------------------------
-                // COMPARAR JID EXACTO
-                // ---------------------------------------------
-
                 if (
                     targetJid &&
                     ownerTexto === targetJid
@@ -658,10 +559,6 @@ export default {
                     foundIndex = i;
                     break;
                 }
-
-                // ---------------------------------------------
-                // COMPARAR LID
-                // ---------------------------------------------
 
                 const ownerLid =
                     obtenerLidJid(
@@ -678,10 +575,6 @@ export default {
                     break;
                 }
 
-                // ---------------------------------------------
-                // COMPARAR NÚMERO DIRECTAMENTE
-                // ---------------------------------------------
-
                 const ownerNumero =
                     obtenerNumero(
                         ownerTexto
@@ -696,10 +589,6 @@ export default {
                     foundIndex = i;
                     break;
                 }
-
-                // ---------------------------------------------
-                // SI OWNER ES LID, RESOLVER A PN
-                // ---------------------------------------------
 
                 if (
                     targetNumero
@@ -728,10 +617,6 @@ export default {
                 }
             }
 
-            // =================================================
-            // OWNER NO ENCONTRADO
-            // =================================================
-
             if (
                 foundIndex === -1
             ) {
@@ -743,36 +628,20 @@ export default {
                 return;
             }
 
-            // =================================================
-            // GUARDAR OWNER ORIGINAL
-            // =================================================
-
             const ownerEliminado =
                 owners[
                     foundIndex
                 ];
-
-            // =================================================
-            // ELIMINAR
-            // =================================================
 
             owners.splice(
                 foundIndex,
                 1
             );
 
-            // =================================================
-            // GUARDAR
-            // =================================================
-
             await guardarOwners(
                 owners,
                 resultado.formato
             );
-
-            // =================================================
-            // RESOLVER NÚMERO PARA MOSTRAR
-            // =================================================
 
             let numeroMostrar =
                 targetNumero;
@@ -793,7 +662,6 @@ export default {
                     numeroOwner;
             }
 
-            // Si era LID, intentar obtener PN.
             if (
                 String(
                     ownerEliminado
@@ -817,10 +685,6 @@ export default {
                         pnNumero;
                 }
             }
-
-            // =================================================
-            // JID PARA MENCIÓN
-            // =================================================
 
             let mentionJid =
                 targetJid;
@@ -850,10 +714,6 @@ export default {
                     `${numeroMostrar}@s.whatsapp.net`;
             }
 
-            // =================================================
-            // RESPUESTA
-            // =================================================
-
             const respuesta = `
 ╭〔 ✅ 𝐎𝐖𝐍𝐄𝐑 𝐄𝐋𝐈𝐌𝐈𝐍𝐀𝐃𝐎 〕⬣
 ┃
@@ -881,10 +741,6 @@ export default {
                     quoted: msg
                 }
             );
-
-            // =================================================
-            // LOG
-            // =================================================
 
             console.log(
                 '================================================'
