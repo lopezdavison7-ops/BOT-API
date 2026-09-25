@@ -1,13 +1,8 @@
-// commands/interaction/reacciones.js — 🎭 Reacciones anime (SOLO AlyaCore)
-// ============================================================
-// Fuente única: api.alyacore.xyz/sfw/interaction
-// 67 reacciones oficiales de AlyaCore
-// ============================================================
+
 
 const ALYA_BASE = 'https://api.alyacore.xyz/sfw/interaction';
 const ALYA_KEY = 'oboe';
 
-// ---------- BOLD UNICODE (𝐀𝐁𝐂) ----------
 function bold(texto) {
     return String(texto).replace(/[A-Za-z]/g, c => {
         const base = c <= 'Z' ? 0x1D400 - 65 : 0x1D41A - 97;
@@ -15,7 +10,6 @@ function bold(texto) {
     });
 }
 
-// ---------- CATÁLOGO: LAS 67 REACCIONES DE ALYACORE ----------
 const REACCIONES = {
     peek:       { alias: ['chismear', 'fisgonear'],   con: 'esta fisgoneando a',          solo: 'chismea por ahi',              emoji: '👀' },
     comfort:    { alias: ['consolar'],                con: 'consolo a',                   solo: 'necesita consuelo',            emoji: '🫂' },
@@ -86,7 +80,6 @@ const REACCIONES = {
     cuddle:     { alias: ['acurrucar', 'mimar'],      con: 'se acurruco con',             solo: 'quiere mimitos',               emoji: '🤗' }
 };
 
-// ---------- MAPEO ALIAS → TIPO ----------
 const MAPA = {};
 for (const [tipo, d] of Object.entries(REACCIONES)) {
     MAPA[tipo] = tipo;
@@ -94,7 +87,6 @@ for (const [tipo, d] of Object.entries(REACCIONES)) {
 }
 const TIPOS = Object.keys(REACCIONES);
 
-// ---------- MENCION LIMPIA (resuelve @lid) ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -108,7 +100,6 @@ async function datosMencion(sock, jid) {
     return { token: '@' + jid.split('@')[0], jids: [jid] };
 }
 
-// ---------- SACAR URL DE CUALQUIER FORMATO DE RESPUESTA ----------
 function sacarUrl(json) {
     if (!json || typeof json !== 'object') return null;
     if (json.status === false) return null;
@@ -126,7 +117,6 @@ function sacarUrl(json) {
     return null;
 }
 
-// ---------- PEDIR A ALYACORE ----------
 async function pedirAlyaCore(tipo) {
     try {
         const url = `${ALYA_BASE}?inter=${encodeURIComponent(tipo)}&key=${ALYA_KEY}`;
@@ -142,16 +132,13 @@ async function pedirAlyaCore(tipo) {
     }
 }
 
-// ---------- EXTRAER COMANDO (acepta .kiss y . kiss) ----------
 function extraerComando(msg) {
     const texto = msg.message?.extendedTextMessage?.text
                || msg.message?.conversation || '';
     const limpio = texto.trim().replace(/^\.+\s*/, '');
     return (limpio.split(/\s+/)[0] || '').toLowerCase();
 }
-// ============================================================
-// COMANDO PRINCIPAL
-// ============================================================
+
 export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
@@ -166,7 +153,6 @@ export default {
 
             const invocado = extraerComando(msg);
 
-            // ---------- AYUDA ----------
             if (invocado === 'reacciones' || invocado === 'reaction' || invocado === 'reaccion') {
                 let lista = '';
                 for (let i = 0; i < TIPOS.length; i += 4) {
@@ -179,7 +165,6 @@ export default {
                 );
             }
 
-            // ---------- DETECTAR TIPO ----------
             const tipo = MAPA[invocado] || null;
             if (!tipo) {
                 return await responder.texto('❌ Reaccion no valida. Usa .reacciones para ver las ' + TIPOS.length + ' disponibles.');
@@ -187,7 +172,6 @@ export default {
 
             const d = REACCIONES[tipo];
 
-            // ---------- OBJETIVO ----------
             const ctx = msg.message?.extendedTextMessage?.contextInfo;
             let target = ctx?.participant || ctx?.mentionedJid?.[0] || null;
             if (target === sender) target = null;
@@ -203,14 +187,12 @@ export default {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            // ---------- PEDIR VIDEO A ALYACORE ----------
             const video = await pedirAlyaCore(tipo);
 
             if (!video) {
                 return await responder.texto('❌ AlyaCore no tiene: *' + tipo + '*');
             }
 
-            // ---------- ENVIAR VIDEO ANIMADO ----------
             try {
                 await sock.sendMessage(jid, {
                     video: { url: video.url },
