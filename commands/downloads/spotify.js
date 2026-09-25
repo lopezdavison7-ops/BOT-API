@@ -1,15 +1,4 @@
-// commands/downloads/spotify.js
-// ============================================================
-// COMANDO: SPOTIFY — Lempi API Edition
-// BOT-API
-//
-// Búsqueda + descarga directa de MP3 desde Spotify.
-// Usa Lempi API para todo. Sin intermediarios.
-//
-// Uso:
-//   .spotify <nombre>
-//   .spotify <url de spotify>
-// ============================================================
+
 
 import axios from 'axios';
 import config from '../../config.js';
@@ -41,10 +30,6 @@ function formatearDuracion(segundos) {
     return `${min}:${seg.toString().padStart(2, '0')}`;
 }
 
-// ============================================================
-// BÚSQUEDA EN LEMPI
-// ============================================================
-
 async function buscarEnLempi(query, apikey) {
     try {
         const url = `${LEMPI_API}/s/sp?q=${encodeURIComponent(query)}&limit=5&apikey=${apikey}`;
@@ -67,10 +52,6 @@ async function buscarEnLempi(query, apikey) {
     }
 }
 
-// ============================================================
-// DESCARGA DIRECTA DESDE LEMPI
-// ============================================================
-
 async function descargarDesdeLempi(spotifyUrl, apikey) {
     try {
         const url = `${LEMPI_API}/dl/spotify?url=${encodeURIComponent(spotifyUrl)}&apikey=${apikey}`;
@@ -84,7 +65,6 @@ async function descargarDesdeLempi(spotifyUrl, apikey) {
             };
         }
 
-        // Descargar el MP3 directo
         const mp3Res = await axios.get(data.datos.url, {
             responseType: 'arraybuffer',
             headers: { 'User-Agent': USER_AGENT },
@@ -107,10 +87,6 @@ async function descargarDesdeLempi(spotifyUrl, apikey) {
         return { exito: false, error: e.message };
     }
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
     nombre: 'spotify',
@@ -157,10 +133,6 @@ export default {
         const input = argumento.trim();
         let spotifyUrl = null;
 
-        // -------------------------------------------------------
-        // DETERMINAR URL DE SPOTIFY
-        // -------------------------------------------------------
-
         if (esUrlSpotify(input)) {
             spotifyUrl = input;
             await responder.texto(
@@ -171,7 +143,7 @@ export default {
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
         } else {
-            // BÚSQUEDA POR NOMBRE
+
             await responder.texto(
                 '╭〔 🔍 𝐒𝐏𝐎𝐓𝐈𝐅𝐘 〕⬣\n' +
                 '┃\n' +
@@ -210,10 +182,6 @@ export default {
             );
         }
 
-        // -------------------------------------------------------
-        // DESCARGAR
-        // -------------------------------------------------------
-
         const resultado = await descargarDesdeLempi(spotifyUrl, apikey);
 
         if (!resultado.exito) {
@@ -227,10 +195,6 @@ export default {
             );
             return;
         }
-
-        // -------------------------------------------------------
-        // ENVIAR
-        // -------------------------------------------------------
 
         try {
             await sock.sendMessage(chatJid, {
