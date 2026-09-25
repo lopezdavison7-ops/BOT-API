@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    >
+
+    <title>🎰 Selector Gacha</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background:
+                radial-gradient(circle at top, #39206b, transparent 40%),
+                #090912;
+            color: white;
+            padding: 18px;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px 10px;
+        }
+
+        .header h1 {
+            font-size: 30px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #aaaabd;
+            font-size: 14px;
+        }
+
+        .upload {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px dashed #8b5cf6;
+            background: rgba(139, 92, 246, 0.12);
+            text-align: center;
+            cursor: pointer;
+            margin: 15px 0;
+        }
+
+        .upload strong {
+            display: block;
+            font-size: 17px;
+            margin-bottom: 6px;
+        }
+
+        .upload span {
+            color: #aaaabd;
+            font-size: 13px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .counter {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 18px 0 12px;
+        }
+
+        .counter strong {
+            font-size: 16px;
+        }
+
+        .counter span {
+            color: #a78bfa;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 9px;
+        }
+
+        .photo {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #151522;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .photo.selected {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, .25);
+        }
+
+        .check {
+            position: absolute;
+            top: 7px;
+            right: 7px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: #8b5cf6;
+            font-weight: bold;
+        }
+
+        .photo.selected .check {
+            display: flex;
+        }
+
+        .number {
+            position: absolute;
+            left: 7px;
+            bottom: 7px;
+            background: rgba(0, 0, 0, .65);
+            border-radius: 8px;
+            padding: 4px 7px;
+            font-size: 11px;
+        }
+
+        .actions {
+            position: sticky;
+            bottom: 10px;
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 14px;
+            padding: 15px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #clearBtn {
+            width: 35%;
+            background: #252536;
+            color: white;
+        }
+
+        #saveBtn {
+            width: 65%;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+        }
+
+        button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 15px;
+            min-height: 24px;
+            color: #a7f3d0;
+            font-size: 14px;
+        }
+
+        .empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #858599;
+            padding: 50px 15px;
+        }
+
+        @media (min-width: 600px) {
+            .gallery {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <header class="header">
+        <h1>🎰 Gacha</h1>
+        <p>Selecciona las fotos que quieres usar en tu Gacha.</p>
+    </header>
+
+    <label class="upload">
+        <strong>📸 Elegir fotos de la galería</strong>
+        <span>Puedes seleccionar varias imágenes</span>
+        <input
+            id="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/*"
+            multiple
+        >
+    </label>
+
+    <div class="counter">
+        <strong>Fotos seleccionadas</strong>
+        <span id="counter">0</span>
+    </div>
+
+    <div id="gallery" class="gallery">
+        <div class="empty">
+            Primero selecciona algunas fotos.
+        </div>
+    </div>
+
+    <div class="actions">
+        <button id="clearBtn" type="button">
+            🗑️ Limpiar
+        </button>
+
+        <button id="saveBtn" type="button" disabled>
+            ✅ LISTO
+        </button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const gallery = document.getElementById('gallery');
+    const counter = document.getElementById('counter');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const status = document.getElementById('status');
+
+    let fotos = [];
+
+    fileInput.addEventListener('change', () => {
+
+        const archivos = Array.from(fileInput.files || []);
+
+        if (!archivos.length) {
+            return;
+        }
+
+        fotos = archivos.map((archivo, index) => ({
+            id: index,
+            archivo,
+            seleccionada: true,
+            url: URL.createObjectURL(archivo)
+        }));
+
+        mostrarFotos();
+    });
+
+    function mostrarFotos() {
+
+        gallery.innerHTML = '';
+
+        if (fotos.length === 0) {
+
+            gallery.innerHTML = `
+                <div class="empty">
+                    Primero selecciona algunas fotos.
+                </div>
+            `;
+
+            actualizarContador();
+            return;
+        }
+
+        fotos.forEach((foto, index) => {
+
+            const elemento = document.createElement('div');
+
+            elemento.className =
+                'photo' + (foto.seleccionada ? ' selected' : '');
+
+            elemento.innerHTML = `
+                <img src="${foto.url}" alt="Foto ${index + 1}">
+                <div class="check">✓</div>
+                <div class="number">${index + 1}</div>
+            `;
+
+            elemento.addEventListener('click', () => {
+
+                foto.seleccionada = !foto.seleccionada;
+
+                elemento.classList.toggle(
+                    'selected',
+                    foto.seleccionada
+                );
+
+                actualizarContador();
+            });
+
+            gallery.appendChild(elemento);
+        });
+
+        actualizarContador();
+    }
+
+    function actualizarContador() {
+
+        const cantidad = fotos.filter(
+            foto => foto.seleccionada
+        ).length;
+
+        counter.textContent = cantidad;
+
+        saveBtn.disabled = cantidad === 0;
+    }
+
+    clearBtn.addEventListener('click', () => {
+
+        fotos.forEach(foto => {
+            URL.revokeObjectURL(foto.url);
+        });
+
+        fotos = [];
+
+        fileInput.value = '';
+
+        status.textContent = '';
+
+        mostrarFotos();
+    });
+
+    saveBtn.addEventListener('click', async () => {
+
+        const seleccionadas = fotos.filter(
+            foto => foto.seleccionada
+        );
+
+        if (!seleccionadas.length) {
+            return;
+        }
+
+        saveBtn.disabled = true;
+        clearBtn.disabled = true;
+
+        status.textContent =
+            '⏳ Preparando imágenes...';
+
+        try {
+
+            const imagenes = [];
+
+            for (let i = 0; i < seleccionadas.length; i++) {
+
+                status.textContent =
+                    `⏳ Procesando ${i + 1}/${seleccionadas.length}...`;
+
+                const jpeg = await convertirAJpeg(
+                    seleccionadas[i].archivo
+                );
+
+                imagenes.push({
+                    nombre: `gacha_${Date.now()}_${i + 1}.jpg`,
+                    data: jpeg
+                });
+            }
+
+            status.textContent =
+                '📤 Guardando fotos...';
+
+            const respuesta = await fetch('/guardar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    imagenes
+                })
+            });
+
+            const resultado = await respuesta.json();
+
+            if (!respuesta.ok || !resultado.ok) {
+                throw new Error(
+                    resultado.error ||
+                    'No se pudieron guardar las imágenes.'
+                );
+            }
+
+            status.textContent =
+                `✅ Listo. ${resultado.cantidad} fotos guardadas en el Gacha.`;
+
+        } catch (error) {
+
+            console.error(error);
+
+            status.textContent =
+                '❌ ' + error.message;
+
+        } finally {
+
+            saveBtn.disabled = false;
+            clearBtn.disabled = false;
+        }
+    });
+
+    function convertirAJpeg(archivo) {
+
+        return new Promise((resolve, reject) => {
+
+            const imagen = new Image();
+
+            imagen.onload = () => {
+
+                const MAX = 1280;
+
+                let ancho = imagen.width;
+                let alto = imagen.height;
+
+                if (ancho > MAX || alto > MAX) {
+
+                    const escala =
+                        Math.min(MAX / ancho, MAX / alto);
+
+                    ancho = Math.round(ancho * escala);
+                    alto = Math.round(alto * escala);
+                }
+
+                const canvas =
+                    document.createElement('canvas');
+
+                canvas.width = ancho;
+                canvas.height = alto;
+
+                const ctx =
+                    canvas.getContext('2d');
+
+                ctx.drawImage(
+                    imagen,
+                    0,
+                    0,
+                    ancho,
+                    alto
+                );
+
+                canvas.toBlob(
+                    blob => {
+
+                        if (!blob) {
+                            reject(
+                                new Error(
+                                    'No se pudo convertir la imagen.'
+                                )
+                            );
+                            return;
+                        }
+
+                        const reader =
+                            new FileReader();
+
+                        reader.onloadend = () => {
+
+                            const base64 =
+                                reader.result.split(',')[1];
+
+                            resolve(base64);
+                        };
+
+                        reader.onerror = reject;
+
+                        reader.readAsDataURL(blob);
+                    },
+                    'image/jpeg',
+                    0.90
+                );
+
+                URL.revokeObjectURL(imagen.src);
+            };
+
+            imagen.onerror = () => {
+                reject(
+                    new Error(
+                        'No se pudo leer una de las imágenes.'
+                    )
+                );
+            };
+
+            imagen.src = URL.createObjectURL(archivo);
+        });
+    }
+</script>
+
+</body>
+</html>
