@@ -1,4 +1,4 @@
-// commands/group/degradar.js
+
 import {
     esGrupo,
     verificarPermisosAdmin,
@@ -14,19 +14,11 @@ export default {
     ejecutar: async ({ sock, msg, responder, argumento }) => {
         const chatId = msg.key.remoteJid;
 
-        // ============================================================
-        // VERIFICAR GRUPO
-        // ============================================================
-
         if (!esGrupo(chatId)) {
             return responder.texto(
                 '❌ Este comando solo funciona dentro de un grupo.'
             );
         }
-
-        // ============================================================
-        // VERIFICAR PERMISOS DEL USUARIO
-        // ============================================================
 
         const permiso = await verificarPermisosAdmin(
             sock,
@@ -38,11 +30,6 @@ export default {
             return responder.texto(permiso.motivo);
         }
 
-        // ============================================================
-        // OBTENER OBJETIVO
-        // SOLO MENCIONADO O MENSAJE RESPONDIDO
-        // ============================================================
-
         const objetivo = obtenerObjetivo(msg, '');
 
         if (!objetivo) {
@@ -53,10 +40,6 @@ export default {
                 '• Responde al mensaje del usuario y escribe .degradar'
             );
         }
-
-        // ============================================================
-        // QUITAR ADMINISTRACIÓN
-        // ============================================================
 
         try {
             await sock.groupParticipantsUpdate(
