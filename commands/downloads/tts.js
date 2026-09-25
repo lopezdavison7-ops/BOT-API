@@ -1,13 +1,4 @@
-// commands/downloads/tts.js
-// ============================================================
-// COMANDO: TTS (texto a voz, con speaker seleccionable)
-// Usa /s/ttsmp3 de la API de Lempi.
-//
-// Uso: .tts <texto>
-// Uso con otra voz: .tts <texto> | <speaker>
-// Ejemplo: .tts Hola amiguita, qué tal
-// Ejemplo: .tts Hola que tal | Diego (Mexican)
-// ============================================================
+
 
 import axios from 'axios';
 import config from '../../config.js';
@@ -57,7 +48,6 @@ export default {
             return;
         }
 
-        // Se puede pasar "texto | speaker" para elegir voz.
         const [textoCrudo, speakerCrudo] = entrada.split('|');
         const texto = textoCrudo?.trim();
         const speaker = speakerCrudo?.trim() || SPEAKER_DEFECTO;
