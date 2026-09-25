@@ -1,4 +1,4 @@
-// commands/fun/8ball.js
+
 export default {
     nombre: '8ball',
     categoria: 'Diversión',
@@ -19,7 +19,7 @@ export default {
             }
 
             const respuestas = [
-                // Afirmativas
+
                 '✅ Sí, definitivamente.',
                 '✅ Sin duda alguna.',
                 '✅ ¡Claro que sí!',
@@ -27,7 +27,6 @@ export default {
                 '✅ Todo apunta a que sí.',
                 '✅ Sin lugar a dudas.',
 
-                // Negativas
                 '❌ No, ni lo pienses.',
                 '❌ No cuentes con ello.',
                 '❌ Muy improbable.',
@@ -35,13 +34,11 @@ export default {
                 '❌ Mejor no preguntes eso.',
                 '❌ Yo diría que no.',
 
-                // Positivas
                 '✨ Parece que sí.',
                 '✨ Las estrellas dicen que sí.',
                 '✨ ¡Sorpresa! Sí.',
                 '✨ Tiene buena pinta.',
 
-                // Neutrales / chistosas
                 '🤔 Pregunta de nuevo más tarde.',
                 '🤔 No lo sé, pregúntale a tu mamá.',
                 '🤔 Me estás mareando, pregúntame después.',
