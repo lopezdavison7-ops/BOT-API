@@ -1,18 +1,9 @@
-// ============================================================
-// BOT-API
-// COMANDO: CHTGPT
-// ChatGPT mediante API LEMPI
-// API Key leída desde config.js
-// ============================================================
+
 
 import fetch from 'node-fetch';
 import config from '../../config.js';
 
 const API_URL = 'https://api.lempi.lat/ai/chatgpt';
-
-// ============================================================
-// OBTENER API KEY
-// ============================================================
 
 function obtenerApiKey() {
     return (
@@ -23,17 +14,12 @@ function obtenerApiKey() {
     );
 }
 
-// ============================================================
-// BUSCAR TEXTO DENTRO DE LA RESPUESTA
-// ============================================================
-
 function buscarTexto(data, profundidad = 0) {
 
     if (profundidad > 8 || data == null) {
         return null;
     }
 
-    // Si ya es texto
     if (typeof data === 'string') {
 
         const texto = data.trim();
@@ -45,7 +31,6 @@ function buscarTexto(data, profundidad = 0) {
         return texto;
     }
 
-    // Números / booleanos no son respuestas
     if (
         typeof data === 'number' ||
         typeof data === 'boolean'
@@ -53,7 +38,6 @@ function buscarTexto(data, profundidad = 0) {
         return null;
     }
 
-    // Arrays
     if (Array.isArray(data)) {
 
         for (const elemento of data) {
@@ -71,11 +55,8 @@ function buscarTexto(data, profundidad = 0) {
         return null;
     }
 
-    // Objetos
     if (typeof data === 'object') {
 
-        // Primero buscamos las propiedades que normalmente
-        // contienen la respuesta de una IA.
         const propiedadesPrioritarias = [
             'answer',
             'respuesta',
@@ -111,12 +92,8 @@ function buscarTexto(data, profundidad = 0) {
             }
         }
 
-        // Si no encontramos ninguna propiedad conocida,
-        // buscamos dentro de todas las propiedades.
         for (const [clave, valor] of Object.entries(data)) {
 
-            // Ignorar campos que normalmente no contienen
-            // la respuesta de la IA.
             if (
                 clave === 'status' ||
                 clave === 'success' ||
@@ -143,10 +120,6 @@ function buscarTexto(data, profundidad = 0) {
     return null;
 }
 
-// ============================================================
-// LIMPIAR RESPUESTA
-// ============================================================
-
 function limpiarRespuesta(texto) {
 
     if (!texto) {
@@ -155,7 +128,6 @@ function limpiarRespuesta(texto) {
 
     let resultado = String(texto).trim();
 
-    // Evitar que llegue [object Object]
     if (
         resultado === '[object Object]' ||
         resultado === '[object object]'
@@ -165,10 +137,6 @@ function limpiarRespuesta(texto) {
 
     return resultado;
 }
-
-// ============================================================
-// COMANDO
-// ============================================================
 
 export default {
 
@@ -195,10 +163,6 @@ export default {
 
         try {
 
-            // ==================================================
-            // PREGUNTA
-            // ==================================================
-
             const pregunta =
                 String(argumento || '').trim();
 
@@ -217,10 +181,6 @@ export default {
 
                 return;
             }
-
-            // ==================================================
-            // API KEY
-            // ==================================================
 
             const apiKey = obtenerApiKey();
 
@@ -244,17 +204,9 @@ export default {
                 return;
             }
 
-            // ==================================================
-            // REACCIÓN
-            // ==================================================
-
             try {
                 await responder.reaccion('🤖');
             } catch {}
-
-            // ==================================================
-            // URL
-            // ==================================================
 
             const url =
                 `${API_URL}` +
@@ -264,10 +216,6 @@ export default {
             console.log(
                 `[CHTGPT] 🤖 Pregunta: ${pregunta}`
             );
-
-            // ==================================================
-            // REQUEST
-            // ==================================================
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -281,10 +229,6 @@ export default {
             const textoCrudo =
                 await response.text();
 
-            // ==================================================
-            // PARSEAR RESPUESTA
-            // ==================================================
-
             let data;
 
             try {
@@ -295,10 +239,6 @@ export default {
 
                 data = textoCrudo;
             }
-
-            // ==================================================
-            // ERROR HTTP
-            // ==================================================
 
             if (!response.ok) {
 
@@ -313,19 +253,11 @@ export default {
                 );
             }
 
-            // ==================================================
-            // EXTRAER RESPUESTA
-            // ==================================================
-
             let respuesta =
                 buscarTexto(data);
 
             respuesta =
                 limpiarRespuesta(respuesta);
-
-            // ==================================================
-            // SI NO SE ENCONTRÓ
-            // ==================================================
 
             if (!respuesta) {
 
@@ -339,10 +271,6 @@ export default {
                 );
             }
 
-            // ==================================================
-            // ENVIAR
-            // ==================================================
-
             await responder.texto(
                 '╭━━〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
                 '┃\n' +
@@ -350,10 +278,6 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
-
-            // ==================================================
-            // REACCIÓN FINAL
-            // ==================================================
 
             try {
                 await responder.reaccion('✅');
