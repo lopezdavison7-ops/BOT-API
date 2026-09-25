@@ -1,12 +1,4 @@
-// commands/fun/verdad.js
-// ============================================================
-// COMANDO: VERDAD
-// Suelta una pregunta random de "verdad" (estilo verdad o reto,
-// pero solo la parte de verdad) para que la responda quien usó
-// el comando, o la persona mencionada.
-// Uso: .verdad
-// Uso: .verdad @alguien
-// ============================================================
+
 
 const PREGUNTAS = [
     '¿Cuál es la mentira más grande que le has dicho a tus papás?',
