@@ -1,46 +1,34 @@
-// commands/economy/roulette.js
-// ============================================================
-// BOT-API — RULETA (casino)
-// ============================================================
-// .rt <cantidad> <apuesta> → apuesta en la ruleta
-// ============================================================
+
 
 import { obtenerUsuario, guardarUsuario } from '../../database/economia.js';
 
-const COOLDOWN_RULETA = 2 * 60 * 1000; // 2 minutos
+const COOLDOWN_RULETA = 2 * 60 * 1000;
 
-// ---------- NÚMEROS DE LA RULETA ----------
 const ROJOS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const NEGROS = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
 const VERDE = [0];
 
-// ---------- PARSEAR APUESTA ----------
 function parsearApuesta(input) {
     const apuesta = input.toLowerCase().trim();
-    
-    // Colores
+
     if (['red', 'rojo', 'r'].includes(apuesta)) return { tipo: 'color', valor: 'rojo' };
     if (['black', 'negro', 'n'].includes(apuesta)) return { tipo: 'color', valor: 'negro' };
     if (['green', 'verde', 'g'].includes(apuesta)) return { tipo: 'color', valor: 'verde' };
-    
-    // Par/Impar
+
     if (['par', 'even', 'p'].includes(apuesta)) return { tipo: 'paridad', valor: 'par' };
     if (['impar', 'odd', 'i'].includes(apuesta)) return { tipo: 'paridad', valor: 'impar' };
-    
-    // Rangos
+
     if (['1-18', 'bajo', 'low'].includes(apuesta)) return { tipo: 'rango', valor: '1-18' };
     if (['19-36', 'alto', 'high'].includes(apuesta)) return { tipo: 'rango', valor: '19-36' };
-    
-    // Número específico
+
     const num = parseInt(apuesta);
     if (!isNaN(num) && num >= 0 && num <= 36) {
         return { tipo: 'numero', valor: num };
     }
-    
+
     return null;
 }
 
-// ---------- CALCULAR PAGO ----------
 function calcularMultiplicador(tipoApuesta) {
     switch (tipoApuesta.tipo) {
         case 'color':
@@ -55,7 +43,6 @@ function calcularMultiplicador(tipoApuesta) {
     }
 }
 
-// ---------- VERIFICAR SI GANÓ ----------
 function verificarGanancia(numeroRuleta, tipoApuesta) {
     switch (tipoApuesta.tipo) {
         case 'color':
@@ -63,26 +50,25 @@ function verificarGanancia(numeroRuleta, tipoApuesta) {
             if (tipoApuesta.valor === 'negro') return NEGROS.includes(numeroRuleta);
             if (tipoApuesta.valor === 'verde') return VERDE.includes(numeroRuleta);
             return false;
-            
+
         case 'numero':
             return numeroRuleta === tipoApuesta.valor;
-            
+
         case 'paridad':
             if (tipoApuesta.valor === 'par') return numeroRuleta % 2 === 0 && numeroRuleta !== 0;
             if (tipoApuesta.valor === 'impar') return numeroRuleta % 2 !== 0;
             return false;
-            
+
         case 'rango':
             if (tipoApuesta.valor === '1-18') return numeroRuleta >= 1 && numeroRuleta <= 18;
             if (tipoApuesta.valor === '19-36') return numeroRuleta >= 19 && numeroRuleta <= 36;
             return false;
-            
+
         default:
             return false;
     }
 }
 
-// ---------- FORMATEAR TIEMPO ----------
 function fmtTiempo(ms) {
     const minutos = Math.ceil(ms / 60000);
     return `${minutos}m`;
@@ -98,11 +84,9 @@ export default {
         const chatJid = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
 
-        // Parsear argumentos
         const cantidad = parseInt(args[0]);
         const apuestaInput = args.slice(1).join(' ');
 
-        // Validar cantidad
         if (isNaN(cantidad) || cantidad <= 0) {
             return await responder.texto(
                 '╭━━〔 🎰 𝐑𝐔𝐋𝐄𝐓𝐀 〕━━⬣\n' +
@@ -118,7 +102,6 @@ export default {
             );
         }
 
-        // Validar apuesta
         if (!apuestaInput) {
             return await responder.texto(
                 '╭━━〔 🎰 𝐑𝐔𝐋𝐄𝐓𝐀 〕━━⬣\n' +
@@ -141,7 +124,7 @@ export default {
         }
 
         const tipoApuesta = parsearApuesta(apuestaInput);
-        
+
         if (!tipoApuesta) {
             return await responder.texto(
                 '╭━━〔 🎰 𝐑𝐔𝐋𝐄𝐓𝐀 〕━━⬣\n' +
@@ -158,7 +141,6 @@ export default {
             );
         }
 
-        // Validar mínimo
         if (cantidad < 100) {
             return await responder.texto(
                 '╭━━〔 🎰 𝐑𝐔𝐋𝐄𝐓𝐀 〕━━⬣\n' +
@@ -169,11 +151,9 @@ export default {
             );
         }
 
-        // Obtener usuario
         const usuario = obtenerUsuario(sender);
         const saldo = usuario.dinero || 0;
 
-        // Validar saldo
         if (saldo < cantidad) {
             return await responder.texto(
                 '╭━━〔 🎰 𝐑𝐔𝐋𝐄𝐓𝐀 〕━━⬣\n' +
@@ -187,7 +167,6 @@ export default {
             );
         }
 
-        // Validar cooldown
         const ahora = Date.now();
         const ultimaRuleta = usuario.ultimaRuleta || 0;
         const tiempoTranscurrido = ahora - ultimaRuleta;
@@ -206,22 +185,18 @@ export default {
             );
         }
 
-        // Registrar uso
         usuario.ultimaRuleta = ahora;
 
-        // Girar la ruleta
-        const numeroRuleta = Math.floor(Math.random() * 37); // 0-36
+        const numeroRuleta = Math.floor(Math.random() * 37);
         const multiplicador = calcularMultiplicador(tipoApuesta);
         const gano = verificarGanancia(numeroRuleta, tipoApuesta);
 
-        // Determinar color del número
         let colorNumero = 'verde';
         if (ROJOS.includes(numeroRuleta)) colorNumero = 'rojo';
         else if (NEGROS.includes(numeroRuleta)) colorNumero = 'negro';
 
         const emojiColor = colorNumero === 'rojo' ? '🔴' : colorNumero === 'negro' ? '⚫' : '🟢';
 
-        // Aplicar resultado
         let ganancia = 0;
         if (gano) {
             ganancia = cantidad * multiplicador;
@@ -229,12 +204,11 @@ export default {
         } else {
             usuario.dinero -= cantidad;
         }
-        
+
         guardarUsuario(sender, usuario);
 
         const nuevoSaldo = usuario.dinero;
 
-        // Formatear apuesta para mostrar
         let apuestaTexto = '';
         switch (tipoApuesta.tipo) {
             case 'color':
