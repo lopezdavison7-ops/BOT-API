@@ -1,7 +1,8 @@
+
 // commands/utils/sms.js
 // ============================================================
 // BOT-API — SMS VIRTUAL (API Gohan)
-// Obtiene números temporales y verifica SMS recibidos
+// Con debug para ver qué responde la API realmente
 // ============================================================
 
 import fs from 'node:fs';
@@ -11,7 +12,6 @@ import fetch from 'node-fetch';
 const API_BASE = 'https://api-gohan-v1.onrender.com';
 const RUTA_DB = path.join(process.cwd(), 'database', 'smsUsers.json');
 
-// ───────────── BASE DE DATOS ─────────────
 function leerDB() {
     try {
         if (!fs.existsSync(RUTA_DB)) return {};
@@ -30,9 +30,13 @@ function jidANumero(jid) {
     return String(jid || '').split('@')[0].replace(/\D/g, '');
 }
 
-// ───────────── API FUNCTIONS ─────────────
-async function getVirtualNumber() {
-    const res = await fetch(`${API_BASE}/sms/number`, {
+// ───────────── API CON DEBUG ─────────────
+async function getVirtualNumber(debug = false) {
+    const url = `${API_BASE}/sms/number`;
+    
+    if (debug) console.log('[SMS] Llamando:', url);
+    
+    const res = await fetch(url, {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(20000)
     });
@@ -40,17 +44,28 @@ async function getVirtualNumber() {
     if (!res.ok) throw new Error(`API respondió ${res.status}`);
 
     const data = await res.json();
+    
+    if (debug) {
+        console.log('[SMS] Respuesta completa:', JSON.stringify(data, null, 2));
+    }
 
     if (!data.status || !data.result) {
         throw new Error(data.message || 'API no devolvió número');
     }
 
-    return data.result;
+    return {
+        ...data.result,
+        _raw: debug ? data : null
+    };
 }
 
-async function checkSMS(number) {
+async function checkSMS(number, debug = false) {
     const encoded = encodeURIComponent(number);
-    const res = await fetch(`${API_BASE}/sms/check?number=${encoded}`, {
+    const url = `${API_BASE}/sms/check?number=${encoded}`;
+    
+    if (debug) console.log('[SMS] Verificando:', url);
+    
+    const res = await fetch(url, {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(20000)
     });
@@ -58,33 +73,16 @@ async function checkSMS(number) {
     if (!res.ok) throw new Error(`API respondió ${res.status}`);
 
     const data = await res.json();
+    
+    if (debug) {
+        console.log('[SMS] Respuesta SMS:', JSON.stringify(data, null, 2));
+    }
 
     if (!data.status) {
         throw new Error(data.message || 'No se pudo verificar SMS');
     }
 
-    return data.result || data.messages || [];
-}
-
-// ───────────── AYUDA ─────────────
-function generarAyuda() {
-    return (
-        '╭━━〔 📱 𝐒𝐌𝐒 𝐕𝐈𝐑𝐓𝐔𝐀𝐋 〕━━⬣\n' +
-        '┃\n' +
-        '┃ 📋 Obtener un número temporal:\n' +
-        '┃ ➪ .sms\n' +
-        '┃ ➪ .sms new\n' +
-        '┃ ➪ .sms get\n' +
-        '┃\n' +
-        '┃ 📥 Ver SMS recibidos:\n' +
-        '┃ ➪ .sms check (usa tu último número)\n' +
-        '┃ ➪ .sms check +1589908420\n' +
-        '┃\n' +
-        '┃ ⚠️ Los números duran 15-30 min\n' +
-        '┃    y WhatsApp puede bloquearlos.\n' +
-        '┃\n' +
-        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-    );
+    return data.result || data.messages || data.data || [];
 }
 
 // ───────────── COMANDO ─────────────
@@ -93,7 +91,7 @@ export default {
     categoria: 'utils',
     alias: ['virtualsms', 'tempsms', 'smsvirtual', 'numerovirtual', 'fakenumber'],
     descripcion: 'Obtén números virtuales temporales y verifica SMS recibidos.',
-    uso: '.sms | .sms check [+número]',
+    uso: '.sms | .sms check | .sms debug',
 
     ejecutar: async ({ sock, msg, args, responder }) => {
         const subcomando = (args[0] || '').toLowerCase();
@@ -101,13 +99,35 @@ export default {
         const numero = jidANumero(jid);
 
         try {
-            // ───────────── MODO 1: OBTENER NÚMERO NUEVO ─────────────
+            // ───────────── MODO DEBUG ─────────────
+            if (subcomando === 'debug' || subcomando === 'test') {
+                await responder.texto('🔍 Probando API Gohan...');
+                
+                const result = await getVirtualNumber(true);
+                
+                const texto = 
+                    '╭━━〔 🔍 𝐃𝐄𝐁𝐔𝐆 𝐀𝐏𝐈 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ 📞 Número: ' + result.number + '\n' +
+                    '┃ 🌎 País: ' + result.country + '\n' +
+                    '┃ 📦 Source: ' + result.source + '\n' +
+                    '┃ ⏱️ Expira: ' + result.expires_in + '\n' +
+                    '┃\n' +
+                    '┃ 📋 Endpoint check:\n' +
+                    '┃ ' + result.sms_check + '\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+                
+                await responder.texto(texto);
+                return;
+            }
+
+            // ───────────── MODO 1: OBTENER NÚMERO ─────────────
             if (!subcomando || subcomando === 'new' || subcomando === 'get' || subcomando === 'numero') {
                 await responder.texto('📡 Obteniendo número virtual...');
 
-                const result = await getVirtualNumber();
+                const result = await getVirtualNumber(false);
 
-                // Guardar en base de datos del usuario
                 const db = leerDB();
                 db[numero] = {
                     number: result.number,
@@ -116,8 +136,6 @@ export default {
                     expira: result.expires_in
                 };
                 guardarDB(db);
-
-                const smsCheckUrl = `${API_BASE}${result.sms_check}`;
 
                 const texto =
                     '╭━━〔 📱 𝐒𝐌𝐒 𝐕𝐈𝐑𝐓𝐔𝐀𝐋 〕━━⬣\n' +
@@ -133,8 +151,11 @@ export default {
                     '┃\n' +
                     '┣━━〔 💡 𝐔𝐒𝐎 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ 📥 Para ver SMS recibidos:\n' +
+                    '┃ 📥 Ver SMS recibidos:\n' +
                     '┃ ➪ *.sms check*\n' +
+                    '┃\n' +
+                    '┃ 🔍 Ver info de la API:\n' +
+                    '┃ ➪ *.sms debug*\n' +
                     '┃\n' +
                     '┃ ⚠️ ' + (result.warning || 'Número temporal') + '\n' +
                     '┃\n' +
@@ -144,11 +165,10 @@ export default {
                 return;
             }
 
-            // ───────────── MODO 2: VERIFICAR SMS ─────────────
+            // ───────────── MODO 2: VER SMS ─────────────
             if (subcomando === 'check' || subcomando === 'ver' || subcomando === 'leer') {
                 let targetNumber = args[1] || '';
 
-                // Si no especificó número, usar el último guardado
                 if (!targetNumber) {
                     const db = leerDB();
                     const userData = db[numero];
@@ -162,9 +182,6 @@ export default {
                             '┃ 💡 Primero obtén uno:\n' +
                             '┃ ➪ *.sms*\n' +
                             '┃\n' +
-                            '┃ O especifica el número:\n' +
-                            '┃ ➪ *.sms check +1589908420*\n' +
-                            '┃\n' +
                             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                         );
                     }
@@ -174,9 +191,9 @@ export default {
 
                 await responder.texto('📡 Verificando SMS de ' + targetNumber + '...');
 
-                const mensajes = await checkSMS(targetNumber);
+                const mensajes = await checkSMS(targetNumber, false);
 
-                if (!mensajes || !mensajes.length) {
+                if (!mensajes || !mensajes.length || (Array.isArray(mensajes) && mensajes.length === 0)) {
                     return await responder.texto(
                         '╭━━〔 📭 𝐒𝐈𝐍 𝐌𝐄𝐍𝐒𝐀𝐉𝐄𝐒 〕━━⬣\n' +
                         '┃\n' +
@@ -184,39 +201,42 @@ export default {
                         '┃\n' +
                         '┃ 📭 No hay SMS recibidos aún.\n' +
                         '┃\n' +
-                        '┃ 💡 Intenta de nuevo en unos\n' +
-                        '┃    segundos si acabas de\n' +
-                        '┃    enviar la verificación.\n' +
+                        '┃ 💡 Esta API parece ser de\n' +
+                        '┃    demostración y puede no\n' +
+                        '┃    recibir SMS reales.\n' +
+                        '┃\n' +
+                        '┃ 🔍 Usa *.sms debug* para\n' +
+                        '┃    ver más info de la API.\n' +
                         '┃\n' +
                         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     );
                 }
 
-                // Construir mensaje con los SMS
+                const lista = Array.isArray(mensajes) ? mensajes : [mensajes];
+                
                 let texto =
                     '╭━━〔 📬 𝐒𝐌𝐒 𝐑𝐄𝐂𝐈𝐁𝐈𝐃𝐎𝐒 〕━━⬣\n' +
                     '┃\n' +
                     '┃ 📞 Número: ' + targetNumber + '\n' +
-                    '┃ 📊 Total: *' + mensajes.length + '* mensaje(s)\n' +
+                    '┃ 📊 Total: *' + lista.length + '* mensaje(s)\n' +
                     '┃\n';
 
-                // Mostrar hasta 5 mensajes
-                const maxShow = Math.min(mensajes.length, 5);
+                const maxShow = Math.min(lista.length, 5);
                 for (let i = 0; i < maxShow; i++) {
-                    const sms = mensajes[i];
+                    const sms = lista[i];
                     const from = sms.from || sms.sender || 'Desconocido';
-                    const body = sms.body || sms.message || sms.text || 'Sin contenido';
+                    const body = sms.body || sms.message || sms.text || JSON.stringify(sms);
                     const time = sms.date || sms.time || sms.timestamp || '';
 
                     texto +=
                         '┣━━〔 📩 SMS #' + (i + 1) + ' 〕━━⬣\n' +
                         '┃ 👤 De: ' + from + '\n' +
                         (time ? '┃ 🕐 ' + time + '\n' : '') +
-                        '┃ 💬 ' + body.slice(0, 200) + (body.length > 200 ? '...' : '') + '\n';
+                        '┃ 💬 ' + String(body).slice(0, 200) + (String(body).length > 200 ? '...' : '') + '\n';
                 }
 
-                if (mensajes.length > 5) {
-                    texto += '┃\n┃ … y ' + (mensajes.length - 5) + ' más\n';
+                if (lista.length > 5) {
+                    texto += '┃\n┃ … y ' + (lista.length - 5) + ' más\n';
                 }
 
                 texto += '┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
@@ -225,26 +245,24 @@ export default {
                 return;
             }
 
-            // ───────────── MODO 3: AYUDA ─────────────
-            if (subcomando === 'help' || subcomando === 'ayuda' || subcomando === '?') {
-                return await responder.texto(generarAyuda());
-            }
-
-            // Comando no reconocido
-            return await responder.texto(generarAyuda());
+            // Ayuda por defecto
+            return await responder.texto(
+                '╭━━〔 📱 𝐒𝐌𝐒 𝐕𝐈𝐑𝐓𝐔𝐀𝐋 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ➪ *.sms* — Obtener número\n' +
+                '┃ ➪ *.sms check* — Ver SMS\n' +
+                '┃ ➪ *.sms debug* — Info API\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
 
         } catch (error) {
-            console.error('[SMS] Error:', error?.message || error);
+            console.error('[SMS] Error:', error);
 
             await responder.texto(
                 '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃\n' +
-                '┃ No se pudo completar la acción.\n' +
-                '┃\n' +
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
-                '┃\n' +
-                '┃ 💡 La API puede estar saturada,\n' +
-                '┃    intenta en unos segundos.\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
