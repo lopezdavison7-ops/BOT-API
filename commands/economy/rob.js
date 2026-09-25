@@ -1,12 +1,4 @@
-// commands/economy/rob.js
-// ============================================================
-// COMANDO: ROB
-// BOT-API
-//
-// Intenta robarle dinero a otro usuario. Riesgo real: si falla,
-// paga una multa. Tiene cooldown propio (COOLDOWN_ROBO) para
-// no dejarlo spamear.
-// ============================================================
+
 
 import {
     obtenerUsuario,
@@ -16,20 +8,15 @@ import {
     registrarRobo
 } from '../../database/economia.js';
 
-// Probabilidad de éxito del robo (0.45 = 45%)
 const PROBABILIDAD_EXITO = 0.45;
 
-// Porcentaje del dinero de la víctima que se roba si sale bien
 const PORCENTAJE_MIN = 0.10;
 const PORCENTAJE_MAX = 0.25;
 
-// Tope máximo de dinero robado en un solo golpe
 const TOPE_ROBO = 5000;
 
-// La víctima necesita al menos esto para que valga la pena robarle
 const MINIMO_VICTIMA = 200;
 
-// Multa fija si el robo sale mal (rango aleatorio)
 const MULTA_MIN = 100;
 const MULTA_MAX = 300;
 
@@ -118,10 +105,6 @@ export default {
 
         }
 
-        // -------------------------------------------------------
-        // COOLDOWN
-        // -------------------------------------------------------
-
         if (!puedeRobar(ladron)) {
 
             const restante =
@@ -140,10 +123,6 @@ export default {
             return;
 
         }
-
-        // -------------------------------------------------------
-        // VALIDAR DINERO DE LA VÍCTIMA
-        // -------------------------------------------------------
 
         const cuentaVictima =
             obtenerUsuario(victima);
@@ -174,10 +153,6 @@ export default {
 
         }
 
-        // -------------------------------------------------------
-        // INTENTO DE ROBO
-        // -------------------------------------------------------
-
         registrarRobo(
             ladron
         );
@@ -201,7 +176,6 @@ export default {
                     cuentaLadron.dinero || 0
                 );
 
-            // No puede quedar en negativo por la multa.
             const multaReal =
                 Math.min(
                     multa,
@@ -233,10 +207,6 @@ export default {
             return;
 
         }
-
-        // -------------------------------------------------------
-        // ROBO EXITOSO
-        // -------------------------------------------------------
 
         const porcentaje =
             PORCENTAJE_MIN +
