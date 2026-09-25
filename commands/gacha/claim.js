@@ -1,4 +1,4 @@
-// commands/gacha/claim.js
+
 import {
     obtenerUsuario,
     guardarUsuario
@@ -29,10 +29,6 @@ export default {
         const usuario =
             obtenerUsuario(id);
 
-        // ----------------------------------------------------
-        // COMPROBAR CARTA PENDIENTE
-        // ----------------------------------------------------
-
         if (!usuario.cartaPendiente) {
 
             await responder.texto(
@@ -46,23 +42,11 @@ export default {
         const carta =
             usuario.cartaPendiente;
 
-        // ----------------------------------------------------
-        // ASEGURAR COLECCIÓN
-        // ----------------------------------------------------
-
         if (!Array.isArray(usuario.personajes)) {
             usuario.personajes = [];
         }
 
-        // ----------------------------------------------------
-        // AGREGAR CARTA
-        // ----------------------------------------------------
-
         usuario.personajes.push(carta);
-
-        // ----------------------------------------------------
-        // ELIMINAR PENDIENTE
-        // ----------------------------------------------------
 
         delete usuario.cartaPendiente;
 
@@ -70,10 +54,6 @@ export default {
             id,
             usuario
         );
-
-        // ----------------------------------------------------
-        // RESPUESTA
-        // ----------------------------------------------------
 
         await responder.texto(
             `╭〔 ✨ 𝐂𝐀𝐑𝐓𝐀 𝐑𝐄𝐂𝐋𝐀𝐌𝐀𝐃𝐀 〕⬣\n` +
