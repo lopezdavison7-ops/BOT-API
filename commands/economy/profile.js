@@ -1,20 +1,4 @@
-// commands/economy/profile.js
-// ============================================================
-// BOT-API
-// COMANDO: PROFILE
-// ============================================================
-// Muestra:
-// - Usuario
-// - Dinero
-// - Cartas
-// - Nivel
-// - XP
-// - Progreso de XP
-// - Edad
-// - Género
-// - Pareja
-// - Foto de perfil
-// ============================================================
+
 
 import {
     obtenerUsuario
@@ -53,10 +37,6 @@ export default {
         responder
     }) => {
 
-        // -------------------------------------------------------
-        // IDENTIFICAR USUARIO
-        // -------------------------------------------------------
-
         const id =
             msg.key.participant ||
             msg.key.participantAlt ||
@@ -70,23 +50,11 @@ export default {
             return;
         }
 
-        // -------------------------------------------------------
-        // DATOS DE ECONOMÍA
-        // -------------------------------------------------------
-
         const usuario =
             obtenerUsuario(id);
 
-        // -------------------------------------------------------
-        // DATOS DEL PERFIL
-        // -------------------------------------------------------
-
         const perfil =
             obtenerPerfil(id);
-
-        // -------------------------------------------------------
-        // DATOS DE NIVEL
-        // -------------------------------------------------------
 
         const nivel =
             obtenerNivel(
@@ -123,10 +91,6 @@ export default {
                 nivel?.mensajes || 0
             );
 
-        // -------------------------------------------------------
-        // PERSONAJES / CARTAS
-        // -------------------------------------------------------
-
         const personajes =
             Array.isArray(
                 usuario.personajes
@@ -139,18 +103,10 @@ export default {
                 usuario.dinero || 0
             );
 
-        // -------------------------------------------------------
-        // NÚMERO
-        // -------------------------------------------------------
-
         const numero =
             String(id)
                 .split('@')[0]
                 .split(':')[0];
-
-        // -------------------------------------------------------
-        // OBTENER FOTO DE PERFIL
-        // -------------------------------------------------------
 
         let fotoBuffer = null;
         let tieneFoto = false;
@@ -183,22 +139,14 @@ export default {
             }
 
         } catch {
-            // Si no tiene foto, continuamos sin ella.
-        }
 
-        // -------------------------------------------------------
-        // LÍNEAS OPCIONALES
-        // -------------------------------------------------------
+        }
 
         let lineaEdad = '';
         let lineaGenero = '';
         let lineaPareja = '';
 
         const mentions = [id];
-
-        // -------------------------------------------------------
-        // EDAD
-        // -------------------------------------------------------
 
         if (
             perfil.fechaNacimiento
@@ -217,10 +165,6 @@ export default {
             lineaEdad =
                 '┃ 🎂 Edad › *No definida*\n';
         }
-
-        // -------------------------------------------------------
-        // GÉNERO
-        // -------------------------------------------------------
 
         if (
             perfil.genero &&
@@ -243,10 +187,6 @@ export default {
                 '┃ ⚧️ Género › *No definido*\n';
         }
 
-        // -------------------------------------------------------
-        // PAREJA
-        // -------------------------------------------------------
-
         if (
             perfil.pareja
         ) {
@@ -263,10 +203,6 @@ export default {
             lineaPareja =
                 '┃ 💍 Pareja › *No definida*\n';
         }
-
-        // -------------------------------------------------------
-        // CONSTRUIR PERFIL
-        // -------------------------------------------------------
 
         const texto =
 `
@@ -289,10 +225,6 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
-        // -------------------------------------------------------
-        // ENVIAR CON FOTO
-        // -------------------------------------------------------
-
         if (
             tieneFoto &&
             fotoBuffer
@@ -311,10 +243,6 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
             );
 
         } else {
-
-            // ---------------------------------------------------
-            // ENVIAR SIN FOTO
-            // ---------------------------------------------------
 
             await sock.sendMessage(
                 chatJid,
