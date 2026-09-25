@@ -1,9 +1,4 @@
-// commands/descargas/facebook.js
-// ============================================================
-// BOT-API — FACEBOOK DOWNLOADER
-// ============================================================
-// .fb <url> - Descarga videos de Facebook
-// ============================================================
+
 
 export default {
     nombre: 'facebook',
@@ -27,7 +22,6 @@ export default {
             );
         }
 
-        // Validar que sea URL de Facebook
         if (!/facebook\.com|fb\.watch/i.test(url)) {
             return await responder.texto('❌ La URL debe ser de Facebook');
         }
@@ -46,12 +40,10 @@ export default {
                 return await responder.texto('❌ No se pudo procesar el video. Verifica que la URL sea correcta.');
             }
 
-            // Obtener la mejor calidad (primera disponible)
             const mejorCalidad = json.list[0];
             const videoUrl = mejorCalidad.url;
             const calidad = mejorCalidad.quality || 'Desconocida';
 
-            // Enviar thumbnail con info
             if (json.thumb) {
                 await responder.imagen(
                     { url: json.thumb },
@@ -66,14 +58,13 @@ export default {
                 );
             }
 
-            // Intentar enviar el video
             try {
                 await responder.video(
                     { url: videoUrl },
                     `📘 *Facebook Video*\n🎥 Calidad: ${calidad}`
                 );
             } catch (e) {
-                // Si el video es muy grande, enviar link
+
                 await responder.texto(
                     '╭━━〔 📘 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐋 〕━━⬣\n' +
                     '┃\n' +
