@@ -1,17 +1,4 @@
-// commands/sticker/hd.js
-// ============================================================
-// COMANDO: HD
-// Aumenta la resolución de una imagen citada (upscale) usando
-// la API de Lempi. Uso: responde a una imagen con .hd <2 a 4>
-// Ejemplo: .hd 2  |  .hd 4  (si no pones nada, usa 2 por defecto)
-//
-// La API se documenta solo con multiplier + apikey por query,
-// así que la imagen se manda por POST multipart (campo "image",
-// con "file" como respaldo automático si la API rechaza el
-// primer nombre de campo). La respuesta puede venir como imagen
-// binaria directa o como JSON con la URL del resultado — este
-// comando maneja ambos casos.
-// ============================================================
+
 
 import { downloadMediaMessage } from 'baileys';
 import config from '../../config.js';
@@ -22,9 +9,6 @@ const MULTIPLIER_MIN = 2;
 const MULTIPLIER_MAX = 4;
 const MULTIPLIER_DEFAULT = 2;
 
-// ============================================================
-// SACAR EL MENSAJE CITADO (imagen)
-// ============================================================
 function obtenerMensajeCitado(msg) {
     return msg?.message
         ?.extendedTextMessage
@@ -66,14 +50,6 @@ function parsearMultiplicador(argumento) {
     return numero;
 }
 
-// ============================================================
-// BUSCAR CUALQUIER URL DENTRO DE UN OBJETO (recursivo)
-// ============================================================
-// La API puede llamar al campo de distintas formas (image_url,
-// output, link, hd, enhanced...). En vez de adivinar cada
-// nombre posible, se recorre todo el JSON y se toma el primer
-// valor que sea un string con pinta de URL de imagen.
-// ============================================================
 function buscarUrlEnObjeto(objeto, profundidad = 0) {
     if (!objeto || profundidad > 4) return null;
 
@@ -99,9 +75,6 @@ function buscarUrlEnObjeto(objeto, profundidad = 0) {
     return null;
 }
 
-// ============================================================
-// LLAMAR A LA API (intenta el campo "image", y si falla "file")
-// ============================================================
 async function llamarUpscaler(buffer, multiplier, apiKey) {
     const url =
         `${API_URL}?multiplier=${multiplier}&apikey=${encodeURIComponent(apiKey)}`;
@@ -130,13 +103,11 @@ async function llamarUpscaler(buffer, multiplier, apiKey) {
 
             const contentType = respuesta.headers.get('content-type') || '';
 
-            // Caso 1: la API devuelve la imagen ya procesada, directo.
             if (contentType.startsWith('image/')) {
                 const arrayBuffer = await respuesta.arrayBuffer();
                 return { buffer: Buffer.from(arrayBuffer) };
             }
 
-            // Caso 2: la API devuelve JSON con la URL del resultado.
             const data = await respuesta.json();
 
             if (data?.status === false) {
@@ -144,23 +115,18 @@ async function llamarUpscaler(buffer, multiplier, apiKey) {
                 continue;
             }
 
-            // Primero se intenta con los nombres más comunes...
             const urlResultado =
                 data?.resultado?.url ||
                 data?.result?.url ||
                 data?.data?.url ||
                 data?.url ||
-                // ...y si no, se busca CUALQUIER URL dentro de todo
-                // el JSON, sin importar cómo se llame el campo.
+
                 buscarUrlEnObjeto(data);
 
             if (urlResultado) {
                 return { url: urlResultado };
             }
 
-            // No se encontró ninguna URL: se deja constancia de la
-            // respuesta completa en la consola del servidor para
-            // poder ajustar el nombre del campo si hace falta.
             console.error(
                 `[HD] Respuesta sin URL reconocible (campo "${campo}"):`,
                 JSON.stringify(data)
