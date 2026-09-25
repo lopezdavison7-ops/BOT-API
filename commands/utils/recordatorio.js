@@ -1,18 +1,17 @@
-// commands/utils/recordatorio.js
+
 export default {
     nombre: 'recordatorio',
     categoria: 'utilidades',
     alias: ['recordar'],
     descripcion: 'Te manda un recordatorio en X minutos. Uso: .recordatorio minutos|mensaje',
     ejecutar: async ({ sock, msg, responder, argumento }) => {
-        // Separar minutos y mensaje
+
         const partes = String(argumento || '').split('|').map(p => p.trim());
         const minutosStr = partes[0];
         const mensaje = partes.slice(1).join('|').trim();
 
         const minutos = parseFloat(minutosStr);
 
-        // Validaciones
         if (!minutosStr || isNaN(minutos) || minutos <= 0 || !mensaje) {
             return responder.texto(
                 `❌ *RECORDATORIO*\n\n` +
@@ -26,7 +25,6 @@ export default {
             return responder.texto('❌ Máximo 1440 minutos (24 horas).');
         }
 
-        // Confirmación
         const confirmacion = `
 ╭〔 ⏰ 𝐑𝐄𝐂𝐎𝐑𝐃𝐀𝐓𝐎𝐑𝐈𝐎 〕⬣
 ┃
@@ -42,7 +40,6 @@ export default {
 `;
         await responder.texto(confirmacion);
 
-        // Configurar el temporizador
         setTimeout(() => {
             const aviso = `
 ╭〔 ⏰ 𝐑𝐄𝐂𝐎𝐑𝐃𝐀𝐓𝐎𝐑𝐈𝐎 〕⬣
