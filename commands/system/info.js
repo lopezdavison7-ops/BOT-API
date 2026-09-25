@@ -1,4 +1,4 @@
-// commands/system/info.js
+
 export default {
     nombre: 'info',
 
@@ -18,19 +18,11 @@ export default {
 
         try {
 
-            // ------------------------------------------------
-            // INFORMACIÓN DEL BOT
-            // ------------------------------------------------
-
             const nombreBot =
                 process.env.BOT_NAME || 'BOT-API';
 
             const versionBot =
                 process.env.BOT_VERSION || '1.0.0';
-
-            // ------------------------------------------------
-            // INFORMACIÓN DEL USUARIO
-            // ------------------------------------------------
 
             const jidUsuario =
                 msg.key?.participant ||
@@ -46,10 +38,6 @@ export default {
                 msg.pushName ||
                 'Usuario';
 
-            // ------------------------------------------------
-            // INFORMACIÓN DEL CHAT
-            // ------------------------------------------------
-
             const jidChat =
                 msg.key?.remoteJid || '';
 
@@ -60,10 +48,6 @@ export default {
                 esGrupo
                     ? 'Grupo'
                     : 'Privado';
-
-            // ------------------------------------------------
-            // UPTIME
-            // ------------------------------------------------
 
             const segundos =
                 Math.floor(process.uptime());
@@ -87,10 +71,6 @@ export default {
             const uptime =
                 `${dias}d ${horas}h ${minutos}m ${segundosRestantes}s`;
 
-            // ------------------------------------------------
-            // MEMORIA
-            // ------------------------------------------------
-
             const memoria =
                 process.memoryUsage();
 
@@ -98,19 +78,11 @@ export default {
                 (memoria.rss / 1024 / 1024)
                     .toFixed(1);
 
-            // ------------------------------------------------
-            // SISTEMA
-            // ------------------------------------------------
-
             const nodeVersion =
                 process.version;
 
             const plataforma =
                 process.platform;
-
-            // ------------------------------------------------
-            // RESPUESTA
-            // ------------------------------------------------
 
             const texto =
                 '╭〔 🤖 𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐂𝐈𝐎𝐍 𝐃𝐄𝐋 𝐁𝐎𝐓 〕⬣\n' +
