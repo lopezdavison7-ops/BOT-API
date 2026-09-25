@@ -1,4 +1,4 @@
-// commands/economy/bal.js
+
 import {
     obtenerUsuario
 } from '../../database/economia.js';
