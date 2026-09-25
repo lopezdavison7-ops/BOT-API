@@ -1,4 +1,4 @@
-// commands/system/categorias.js — 🔧 Activar/desactivar categorías POR CHAT
+
 import {
     categoriaActiva,
     setCategoria,
@@ -30,7 +30,6 @@ export default {
         const categoria = partes[0] || '';
         const esGlobal = partes.includes('global') || partes.includes('todo');
 
-        // ---------- LISTAR ----------
         if (!categoria || categoria === 'lista' || categoria === 'all') {
             const estados = listarEstados(jid);
 
@@ -68,7 +67,6 @@ export default {
             return await responder.texto(texto);
         }
 
-        // ---------- ACTIVAR / DESACTIVAR ----------
         const activar = nombreCmd === 'activar';
         const chatObjetivo = esGlobal ? null : jid;
 
