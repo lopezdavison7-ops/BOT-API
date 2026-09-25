@@ -1,14 +1,11 @@
-// ============================================================
-// BOT-API
-// COMANDO: R34 (completo: fuentes + álbum)
-// ============================================================
+
+
 import fetch from 'node-fetch';
 
 const STELLAR_URL = 'https://api.stellarwa.xyz';
 const STELLAR_KEY = 'proyectsV2';
 const R34_DIRECTO = 'https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&limit=25&tags=';
 
-// ---------- HELPERS ----------
 function obtenerTipo(msg) {
     const texto =
         msg?.message?.conversation ||
@@ -45,7 +42,6 @@ function extraerMedia(json) {
     return [...new Set(urls)];
 }
 
-// ---------- FUENTES ----------
 async function buscarStellar(tag) {
     const rutas = [
         '/nsfw/search/rule34?query=',
@@ -98,7 +94,6 @@ async function buscarBooru(host, tag) {
     }
 }
 
-// ---------- COMANDO ----------
 export default {
     nombre: 'r34',
     categoria: 'NSFW',
