@@ -1,4 +1,4 @@
-// commands/economy/setbirth.js
+
 import {
     validarFechaNacimiento,
     setFechaNacimiento
