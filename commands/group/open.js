@@ -1,4 +1,4 @@
-// commands/group/open.js
+
 import {
     esGrupo,
     verificarPermisosAdmin
