@@ -1,11 +1,4 @@
-// commands/downloads/play.js
-// ============================================================
-// COMANDO: PLAY
-// BOT-API
-//
-// Busca y descarga música de YouTube en MP3/M4A.
-// Usa Lempi API para búsqueda y descarga.
-// ============================================================
+
 
 import 'dotenv/config';
 import config from '../../config.js';
@@ -58,10 +51,6 @@ async function reaccionar(sock, jid, key, emoji) {
     } catch {}
 }
 
-// ============================================================
-// CACHÉ DE BÚSQUEDAS
-// ============================================================
-
 const CACHE_BUSQUEDA_TTL_MS = 10 * 60 * 1000;
 const cacheBusquedas = new Map();
 const busquedasEnCurso = new Map();
@@ -89,10 +78,6 @@ function guardarEnCache(consulta, resultado) {
         cacheBusquedas.delete(primeraClave);
     }
 }
-
-// ============================================================
-// BUSCAR YOUTUBE (LEMPI API)
-// ============================================================
 
 async function buscarYouTube(consulta) {
     const enCache = obtenerDeCache(consulta);
@@ -158,10 +143,6 @@ async function buscarYouTubeEnApi(consulta) {
     return resultado;
 }
 
-// ============================================================
-// OBTENER MP3 (LEMPI API)
-// ============================================================
-
 async function obtenerMP3(videoUrl) {
     if (!API_KEY) {
         throw new Error('LEMPI_API_KEY no está configurada.');
@@ -196,10 +177,6 @@ async function obtenerMP3(videoUrl) {
     };
 }
 
-// ============================================================
-// OBTENER STREAM DEL AUDIO
-// ============================================================
-
 async function obtenerStream(url) {
     console.log('[PLAY] 🚀 Abriendo stream del audio...');
 
@@ -221,10 +198,6 @@ async function obtenerStream(url) {
     return Readable.fromWeb(respuesta.body);
 }
 
-// ============================================================
-// DESCARGAR THUMBNAIL
-// ============================================================
-
 async function obtenerThumbnail(url) {
     if (!url) return null;
 
@@ -241,10 +214,6 @@ async function obtenerThumbnail(url) {
         return null;
     }
 }
-
-// ============================================================
-// INFORMACIÓN
-// ============================================================
 
 function crearInformacion(resultado) {
     return (
@@ -263,15 +232,7 @@ function crearInformacion(resultado) {
     );
 }
 
-// ============================================================
-// DESCARGAS ACTIVAS POR USUARIO
-// ============================================================
-
 const descargasActivas = new Map();
-
-// ============================================================
-// COMANDO PLAY
-// ============================================================
 
 export default {
 
