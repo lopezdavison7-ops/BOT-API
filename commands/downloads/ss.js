@@ -1,4 +1,4 @@
-// commands/downloads/ss.js
+
 import 'dotenv/config';
 import axios from 'axios';
 import config from '../../config.js';
@@ -24,10 +24,6 @@ export default {
         argumento
     }) => {
 
-        // =========================================================
-        // LEER API KEY (config.js primero, .env como respaldo)
-        // =========================================================
-
         const apiKey =
             config.YOSOYYO_API_KEY?.trim() ||
             process.env.YOSOYYO_API_KEY?.trim();
@@ -47,10 +43,6 @@ export default {
         console.log(
             `[SS] 🔑 API Key cargada desde .env (${apiKey.length} caracteres)`
         );
-
-        // =========================================================
-        // VALIDAR URL
-        // =========================================================
 
         const targetUrl =
             argumento?.trim();
@@ -89,10 +81,6 @@ export default {
                 '❌ Solo se permiten URLs HTTP o HTTPS.'
             );
         }
-
-        // =========================================================
-        // SOLICITAR CAPTURA
-        // =========================================================
 
         try {
 
@@ -141,10 +129,6 @@ export default {
                 contentType
             );
 
-            // =====================================================
-            // API RESPONDIÓ CON ERROR
-            // =====================================================
-
             if (
                 response.status < 200 ||
                 response.status >= 300
@@ -169,7 +153,7 @@ export default {
                     }
 
                 } catch {
-                    // La respuesta no era JSON.
+
                 }
 
                 console.error(
@@ -181,10 +165,6 @@ export default {
                     mensaje
                 );
             }
-
-            // =====================================================
-            // VALIDAR QUE SEA UNA IMAGEN
-            // =====================================================
 
             if (
                 !contentType
@@ -216,17 +196,13 @@ export default {
                     }
 
                 } catch {
-                    // No era JSON.
+
                 }
 
                 return responder.texto(
                     mensaje
                 );
             }
-
-            // =====================================================
-            // CONVERTIR RESPUESTA A BUFFER
-            // =====================================================
 
             const buffer =
                 Buffer.from(
@@ -243,10 +219,6 @@ export default {
             console.log(
                 `[SS] 📦 Imagen recibida: ${buffer.length} bytes`
             );
-
-            // =====================================================
-            // ENVIAR CAPTURA
-            // =====================================================
 
             const caption = `
 ╭〔 📸 𝐂𝐀𝐏𝐓𝐔𝐑𝐀 𝐖𝐄𝐁 〕⬣
