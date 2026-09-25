@@ -1,4 +1,4 @@
-// commands/fun/spam.js
+
 export default {
     nombre: 'spam',
     categoria: 'Utilidades',
@@ -6,7 +6,7 @@ export default {
     descripcion: 'Spam de texto, stickers, imágenes, videos y audios',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
         try {
-            // 1. Separar argumentos
+
             const args = String(argumento || '').trim().split(' ');
 
             if (args.length < 1) {
@@ -23,31 +23,26 @@ export default {
                 return;
             }
 
-            // 2. Obtener cantidad
             const cantidad = parseInt(args[0]);
             if (isNaN(cantidad) || cantidad < 1 || cantidad > 50) {
                 await responder.texto('❌ La cantidad debe ser entre 1 y 50.');
                 return;
             }
 
-            // 3. Detectar si respondió a un mensaje con archivo
             const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             let tipoArchivo = 'texto';
             let bufferArchivo = null;
             let mimeArchivo = null;
             let captionArchivo = null;
 
-            // Si respondió a un sticker
             if (quotedMsg?.stickerMessage) {
                 tipoArchivo = 'sticker';
-                // Para sticker, Baileys no envía buffer directo, pero podemos enviar el mismo sticker usando el ID del mensaje original o el buffer si lo tenemos
-                // Esta versión mejorada usa el buffer desde el mensaje citado si es posible
+
                 if (quotedMsg.stickerMessage.file) {
                     bufferArchivo = quotedMsg.stickerMessage.file;
                 }
             }
 
-            // Si respondió a una imagen
             if (quotedMsg?.imageMessage) {
                 tipoArchivo = 'imagen';
                 if (quotedMsg.imageMessage.file) {
@@ -56,7 +51,6 @@ export default {
                 }
             }
 
-            // Si respondió a un video
             if (quotedMsg?.videoMessage) {
                 tipoArchivo = 'video';
                 if (quotedMsg.videoMessage.file) {
@@ -65,7 +59,6 @@ export default {
                 }
             }
 
-            // Si respondió a un audio
             if (quotedMsg?.audioMessage) {
                 tipoArchivo = 'audio';
                 if (quotedMsg.audioMessage.file) {
@@ -74,11 +67,9 @@ export default {
                 }
             }
 
-            // 4. Texto adicional (para acompañar el spam de archivos)
             let textoAdicional = args.slice(1).join(' ');
             let mentions = [];
 
-            // Detectar menciones en el texto adicional
             if (textoAdicional) {
                 const mentionPattern = /@(\d+)/g;
                 const matches = textoAdicional.match(mentionPattern);
@@ -87,16 +78,15 @@ export default {
                 }
             }
 
-            // 5. Si es spam de texto normal (no respondió a un archivo)
             if (tipoArchivo === 'texto' && !quotedMsg) {
-                // Si no hay texto escrito, error
+
                 if (!textoAdicional && !args.slice(1).join(' ')) {
                     await responder.texto('❌ Escribe un texto para spamear.');
                     return;
                 }
-                // Si hay texto, usar el texto
+
                 if (textoAdicional) {
-                    // Ya está en textoAdicional
+
                 } else {
                     textoAdicional = args.slice(1).join(' ');
                 }
@@ -112,19 +102,16 @@ export default {
                 return;
             }
 
-            // 6. Si es spam de archivo (sticker/imagen/video/audio)
             if (!bufferArchivo) {
                 await responder.texto('❌ No se pudo obtener el archivo del mensaje citado.');
                 return;
             }
 
-            // Límite más estricto para archivos (evita saturar)
             if (cantidad > 30) {
                 await responder.texto('❌ Para archivos, el máximo es 30 repeticiones.');
                 return;
             }
 
-            // 7. Enviar el spam de archivo
             for (let i = 0; i < cantidad; i++) {
                 if (tipoArchivo === 'sticker') {
                     await sock.sendMessage(msg.key.remoteJid, {
@@ -148,10 +135,9 @@ export default {
                         mimetype: mimeArchivo || 'audio/mpeg'
                     }, { quoted: msg });
                 }
-                await new Promise(resolve => setTimeout(resolve, 800)); // Pausa más larga para archivos
+                await new Promise(resolve => setTimeout(resolve, 800));
             }
 
-            // 8. Mensaje de confirmación
             const tipoNombre = {
                 sticker: 'Sticker',
                 imagen: 'Imagen',
