@@ -1,10 +1,4 @@
-// commands/fun/animefrase.js
-// ============================================================
-// COMANDO: ANIME FRASE
-// Obtiene una frase aleatoria de anime desde Alex API.
-// Uso: .animefrase
-// Alias: .frase
-// ============================================================
+
 
 import { llamarApi } from '../../lib/api.js';
 
