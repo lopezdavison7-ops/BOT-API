@@ -1,4 +1,4 @@
-// commands/economy/w.js
+
 import {
     obtenerUsuario,
     guardarUsuario
@@ -40,23 +40,6 @@ function numeroAleatorio(minimo, maximo) {
     ) + minimo;
 }
 
-/*
- * ============================================================
- * OBTENER ID REAL DEL USUARIO
- * ============================================================
- *
- * En grupos NO debemos usar:
- *
- * msg.key.remoteJid
- *
- * porque eso es el ID del GRUPO.
- *
- * Para grupos usamos:
- *
- * msg.key.participant
- *
- * Así cada usuario tiene su propio dinero.
- */
 function obtenerIdUsuario(msg) {
 
     const remoteJid =
@@ -98,10 +81,6 @@ export default {
 
         try {
 
-            // ====================================================
-            // OBTENER USUARIO
-            // ====================================================
-
             const id =
                 obtenerIdUsuario(msg);
 
@@ -119,16 +98,8 @@ export default {
                 `[COMANDO w] Usuario: ${id}`
             );
 
-            // ====================================================
-            // OBTENER CUENTA PERSONAL
-            // ====================================================
-
             const usuario =
                 obtenerUsuario(id);
-
-            // ====================================================
-            // COOLDOWN PERSONAL
-            // ====================================================
 
             const ahora =
                 Date.now();
@@ -157,10 +128,6 @@ export default {
                 return;
             }
 
-            // ====================================================
-            // ELEGIR TRABAJO
-            // ====================================================
-
             const trabajo =
                 TRABAJOS[
                     Math.floor(
@@ -169,19 +136,11 @@ export default {
                     )
                 ];
 
-            // ====================================================
-            // CALCULAR GANANCIA
-            // ====================================================
-
             const ganado =
                 numeroAleatorio(
                     trabajo.minimo,
                     trabajo.maximo
                 );
-
-            // ====================================================
-            // ACTUALIZAR SALDO
-            // ====================================================
 
             usuario.dinero =
                 Number(usuario.dinero || 0) +
@@ -189,10 +148,6 @@ export default {
 
             usuario.ultimoTrabajo =
                 ahora;
-
-            // ====================================================
-            // GUARDAR CUENTA DEL USUARIO
-            // ====================================================
 
             guardarUsuario(
                 id,
@@ -202,10 +157,6 @@ export default {
             console.log(
                 `[COMANDO w] ✓ ${id} ganó ${ganado}. Saldo: ${usuario.dinero}`
             );
-
-            // ====================================================
-            // RESPUESTA
-            // ====================================================
 
             await responder.texto(
 
