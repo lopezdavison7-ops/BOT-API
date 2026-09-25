@@ -1,13 +1,7 @@
-// commands/fun/slut.js
-// ============================================================
-// BOT-API — SLUT ADVENTURE (narrativa + economía)
-// ============================================================
-// .slut → aventura nocturna con dinero y XP
-// ============================================================
+
 
 import { obtenerUsuario, modificarDinero, guardarUsuario } from '../../database/economia.js';
 
-// ---------- ESCENARIOS ALEATORIOS ----------
 const ESCENARIOS = [
     {
         lugar: '🍸 Bar de mala muerte',
@@ -88,7 +82,6 @@ const ESCENARIOS = [
     }
 ];
 
-// ---------- CONSEJO FINAL ----------
 function getConsejo(porcentaje, dineroPerdido) {
     if (dineroPerdido > 3000) return '💀 Te recomiendo no salir un rato, estás en banca rota';
     if (dineroPerdido > 1500) return '😅 La próxima vez lleva menos dinero... o más cordura';
@@ -97,7 +90,6 @@ function getConsejo(porcentaje, dineroPerdido) {
     return '🤑 Hasta ganaste dinero, ¿eres prostitut@ o qué?';
 }
 
-// ---------- REPUTACIÓN ----------
 function getReputacion(porcentaje) {
     if (porcentaje === 0) return '👼 "No sale nunca, es un/una sant@"';
     if (porcentaje <= 20) return '🙂 "Es tranquilit@, no da problema"';
@@ -108,7 +100,6 @@ function getReputacion(porcentaje) {
     return '👑 "Si no está en la fiesta, la fiesta no existe"';
 }
 
-// ---------- BARRA DE PROGRESO ----------
 function getBarra(porcentaje) {
     const total = 10;
     const llenos = Math.round(porcentaje / 10);
@@ -127,15 +118,12 @@ export default {
         const sender = msg.key.participant || msg.key.remoteJid;
         const s = sock || global.conns?.[0];
 
-        // Obtener usuario de la economía
         const usuario = obtenerUsuario(sender);
         const saldoAnterior = usuario.dinero || 0;
 
-        // Seleccionar escenario aleatorio
         const escenario = ESCENARIOS[Math.floor(Math.random() * ESCENARIOS.length)];
         const evento = escenario.eventos[Math.floor(Math.random() * escenario.eventos.length)];
 
-        // Calcular porcentaje (consistente por usuario)
         const seed = sender.split('@')[0];
         let hash = 0;
         for (let i = 0; i < seed.length; i++) {
@@ -144,7 +132,6 @@ export default {
         }
         const porcentaje = Math.abs(hash % 101);
 
-        // Aplicar cambios a la economía
         const dineroCambio = evento.dinero;
         const xpGanado = evento.xp;
 
@@ -155,7 +142,6 @@ export default {
         const saldoNuevo = usuario.dinero;
         const dineroPerdido = Math.abs(dineroCambio);
 
-        // Construir mensaje
         const emojiEstado = dineroCambio < 0 ? '💔' : '🎉';
         const tituloEstado = dineroCambio < 0 ? '𝐌𝐀𝐋𝐀 𝐒𝐔𝐄𝐑𝐓𝐄' : '𝐁𝐔𝐄𝐍𝐀 𝐒𝐔𝐄𝐑𝐓𝐄';
         const subtitulo = dineroCambio < 0 ? '𝐍𝐎𝐂𝐇𝐄 𝐓𝐄𝐑𝐑𝐈𝐁𝐋𝐄' : '𝐍𝐎𝐂𝐇𝐄 𝐄𝐏𝐈𝐂𝐀';
