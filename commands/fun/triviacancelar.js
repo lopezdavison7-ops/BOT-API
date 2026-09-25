@@ -1,4 +1,4 @@
-// commands/fun/triviacancelar.js
+
 import {
     cancelarPartida
 } from '../../lib/trivia.js';
