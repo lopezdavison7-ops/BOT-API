@@ -1,4 +1,4 @@
-// commands/utils/ping.js
+
 export default {
     nombre: 'ping',
 
