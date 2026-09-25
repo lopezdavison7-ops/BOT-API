@@ -1,4 +1,4 @@
-// commands/economy/give.js
+
 import {
     obtenerUsuario,
     modificarDinero
@@ -105,10 +105,6 @@ export default {
 
             return;
         }
-
-        // ----------------------------------------------------
-        // TRANSFERENCIA
-        // ----------------------------------------------------
 
         modificarDinero(
             emisor,
