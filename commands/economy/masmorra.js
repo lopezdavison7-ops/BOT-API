@@ -1,18 +1,12 @@
-// commands/rpg/mazmorra.js
-// ============================================================
-// BOT-API — MAZMORRA (combate automático, 1 solo comando)
-// ============================================================
-// .mazmorra → pelea solo, muestra resultado
-// .mazmorra stats → ver perfil RPG
-// ============================================================
+
+
 import fs from 'fs';
 import path from 'path';
 
 const RUTA_RPG = path.join(process.cwd(), 'database', 'mazmorra.json');
 const RUTA_ECONOMIA = path.join(process.cwd(), 'database', 'economia.json');
-const COOLDOWN = 15 * 1000; // 15s
+const COOLDOWN = 15 * 1000;
 
-// ---------- DB ----------
 function leer(ruta, def) {
     try { return JSON.parse(fs.readFileSync(ruta, 'utf8')); } catch (e) { return def; }
 }
@@ -30,7 +24,6 @@ function barra(v, m = 100, s = 10) {
     return c.repeat(f) + '⬛'.repeat(s - f);
 }
 
-// ---------- PISOS ----------
 const PISOS = [
     {
         nombre: '🕸️ Catacumbas',
@@ -79,7 +72,6 @@ const PISOS = [
     }
 ];
 
-// ---------- Helpers ----------
 function perfilDefault() {
     return {
         hp: 100, hpMax: 100,
@@ -113,7 +105,6 @@ function darOro(jid, cantidad) {
     guardar(RUTA_ECONOMIA, eco);
 }
 
-// ---------- Combate automático ----------
 function simularCombate(p, enemigo) {
     let pHp = p.hp;
     let eHp = enemigo.hp;
@@ -121,7 +112,7 @@ function simularCombate(p, enemigo) {
     let turno = 1;
 
     while (pHp > 0 && eHp > 0 && turno <= 30) {
-        // Turno del jugador
+
         const criticoP = Math.random() < 0.15;
         let dmgP = Math.max(1, p.atk - enemigo.def + rand(-3, 5));
         if (criticoP) dmgP = Math.floor(dmgP * 1.8);
@@ -133,7 +124,6 @@ function simularCombate(p, enemigo) {
 
         if (eHp <= 0) break;
 
-        // Turno del enemigo
         const criticoE = Math.random() < 0.08;
         let dmgE = Math.max(1, enemigo.atk - p.def + rand(-3, 4));
         if (criticoE) dmgE = Math.floor(dmgE * 1.5);
@@ -151,13 +141,10 @@ function simularCombate(p, enemigo) {
         pHp: Math.max(0, pHp),
         eHp: Math.max(0, eHp),
         turnos: turno,
-        log: log.slice(-8) // Solo últimos 8 turnos para no saturar
+        log: log.slice(-8)
     };
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'mazmorra',
     categoria: 'economy',
@@ -173,9 +160,6 @@ export default {
         let p = db[jid];
         p.nombre = msg.pushName || 'Aventurero';
 
-        // ============================================
-        // STATS
-        // ============================================
         if (accion === 'stats' || accion === 'perfil') {
             const pisoInfo = PISOS[Math.min(p.piso - 1, PISOS.length - 1)];
             await responder.texto(
@@ -197,32 +181,25 @@ export default {
             return;
         }
 
-        // ============================================
-        // ENTRAR A LA MAZMORRA
-        // ============================================
         const ahora = Date.now();
         if (ahora - p.ultimaEntrada < COOLDOWN) {
             const rest = Math.ceil((COOLDOWN - (ahora - p.ultimaEntrada)) / 1000);
             return await responder.texto('⏳ Espera *' + rest + 's* para explorar de nuevo.');
         }
 
-        // Si murió, revivir con 30% HP
         if (p.hp <= 0) {
             p.hp = Math.floor(p.hpMax * 0.3);
         }
 
         p.ultimaEntrada = ahora;
 
-        // Generar enemigo
         const pisoInfo = PISOS[Math.min(p.piso - 1, PISOS.length - 1)];
         const esJefe = Math.random() < 0.15;
         const base = esJefe ? pisoInfo.jefe : pisoInfo.enemigos[rand(0, pisoInfo.enemigos.length - 1)];
         const enemigo = { ...base, esJefe };
 
-        // Simular combate
         const resultado = simularCombate(p, enemigo);
 
-        // Aplicar resultado
         p.hp = resultado.pHp;
 
         if (resultado.gano) {
