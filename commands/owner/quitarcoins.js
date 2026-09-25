@@ -1,11 +1,10 @@
-// commands/owner/quitarcoins.js — 💸 Quitar coins (SOLO OWNER)
+
 import fs from 'fs';
 import path from 'path';
 
 const RUTA_DB = path.join(process.cwd(), 'database', 'economia.json');
 const RUTA_OWNERS = path.join(process.cwd(), 'database', 'owner.json');
 
-// ---------- CARGAR / GUARDAR ECONOMÍA ----------
 function cargarDB() {
     try {
         if (!fs.existsSync(RUTA_DB)) return {};
@@ -23,7 +22,6 @@ function guardarDB(db) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 const fmt = n => '$' + Math.abs(n).toLocaleString('en-US');
 
-// ---------- FILTRO DE OWNER (multi-fuente) ----------
 function esOwner(fromMe, senderJid) {
     if (fromMe) return true;
 
@@ -48,7 +46,6 @@ function esOwner(fromMe, senderJid) {
     return owners.has(senderNum);
 }
 
-// ---------- MENCION LIMPIA ----------
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -71,7 +68,6 @@ export default {
     ejecutar: async ({ sock, msg, argumento, responder, fromMe }) => {
         const senderJid = msg.key.participant || msg.key.remoteJid;
 
-        // ---------- FILTRO: SOLO OWNER ----------
         if (!esOwner(fromMe, senderJid)) {
             return await responder.texto(
                 '╭━━〔 🛡️ 𝐄𝐓𝐈𝐆𝐃 〕━━\n' +
@@ -83,7 +79,6 @@ export default {
             );
         }
 
-        // ---------- PARSEAR ARGUMENTOS ----------
         const texto = (argumento || '').trim();
         const ctx = msg.message?.extendedTextMessage?.contextInfo;
         let target = ctx?.mentionedJid?.[0] || ctx?.participant || null;
@@ -118,7 +113,6 @@ export default {
             );
         }
 
-        // ---------- APLICAR DESCUENTO ----------
         try {
             const db = cargarDB();
             if (!db[target] || typeof db[target] !== 'object') {
@@ -126,8 +120,7 @@ export default {
             }
 
             const antes = num(db[target].dinero);
-            
-            // No dejar en negativo
+
             const quitar = Math.min(cantidad, antes);
             db[target].dinero = antes - quitar;
             const despues = num(db[target].dinero);
