@@ -1,5 +1,5 @@
 
-// commands/economy/daily.js
+
 import {
     obtenerUsuario,
     modificarDinero,
@@ -66,10 +66,6 @@ export default {
         const transcurrido =
             ahora - ultimoDaily;
 
-        // ----------------------------------------------------
-        // COMPROBAR COOLDOWN
-        // ----------------------------------------------------
-
         if (
             ultimoDaily &&
             transcurrido < COOLDOWN_DAILY
@@ -89,10 +85,6 @@ export default {
             return;
         }
 
-        // ----------------------------------------------------
-        // RECOMPENSA
-        // ----------------------------------------------------
-
         const cantidad =
             Math.floor(
                 Math.random() * 5001
@@ -110,10 +102,6 @@ export default {
             id,
             cantidad
         );
-
-        // ----------------------------------------------------
-        // RESPUESTA
-        // ----------------------------------------------------
 
         await responder.texto(
             `╭〔 🎁 𝐃𝐀𝐈𝐋𝐘 〕⬣\n` +
