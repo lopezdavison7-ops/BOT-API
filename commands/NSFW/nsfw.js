@@ -1,24 +1,5 @@
-// ============================================================
-// BOT-API
-// COMANDO: NSFW
-// ============================================================
-// Reacciones NSFW usando URLs directas del CDN.
-//
-// Ejemplos:
-// .spank @usuario
-// .blowjob
-// .69 respondiendo un mensaje
-// .yuri
-//
-// Compatible con:
-// - Nueva estructura recursiva de comandos
-// - Baileys 7
-// - Node.js moderno
-// ============================================================
 
-// ============================================================
-// COMANDOS DISPONIBLES (LAS CLAVES DE ESTE OBJETO SON LOS COMANDOS)
-// ============================================================
+
 const nsfwData = {
     spank: [
         "https://cdn.yuki-wabot.my.id/files/1Sve.mp4",
@@ -418,9 +399,6 @@ const nsfwData = {
     ]
 };
 
- // ============================================================
-// MENSAJES
-// ============================================================
 const messages = {
     spank: { target: '🔥 @user1 le dio una buena nalgada a @user2 🍑', solo: '😳 @user1 se dio una nalgada a sí mismo/a...' },
     undress: { target: '😳 @user1 le está quitando la ropa a @user2 👀', solo: '👀 @user1 se quitó la ropa solo/a...' },
@@ -457,9 +435,6 @@ const messages = {
     69: { target: '⚡ @user1 y @user2 están haciendo el 69 🥵', solo: '🤸 @user1 intentó hacer el 69 solo/a...' }
 };
 
-// ============================================================
-// OBTENER COMANDO REAL (LÓGICA DE TU BOT)
-// ============================================================
 function obtenerTipo(msg) {
     const texto =
         msg?.message?.conversation ||
@@ -477,9 +452,6 @@ function obtenerTipo(msg) {
     return comando || 'hug';
 }
 
-// ============================================================
-// OBTENER AUTOR Y MENCIÓN (LÓGICA DE TU BOT)
-// ============================================================
 function obtenerAutor(msg) {
     const key = msg?.key || {};
     const candidatos = [key.participant, key.senderPn, key.participantAlt, key.remoteJid];
@@ -519,9 +491,6 @@ function crearMencion(jid) {
     return `@${numero}`;
 }
 
-// ============================================================
-// COMANDO PRINCIPAL
-// ============================================================
 export default {
     nombre: 'nsfw',
     categoria: 'NSFW',
@@ -566,7 +535,7 @@ export default {
                 caption += `💫 ${messages[tipo].solo.replace('@user1', textoAutor)}`;
             }
 
-            const content = isImage 
+            const content = isImage
                 ? { image: { url: randomUrl }, caption, mentions: menciones }
                 : { video: { url: randomUrl }, gifPlayback: true, caption, mentions: menciones };
 
@@ -578,4 +547,3 @@ export default {
         }
     }
 };
-             
