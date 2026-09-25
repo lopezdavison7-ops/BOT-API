@@ -1,13 +1,4 @@
-// commands/fun/preguntashot.js
-// ============================================================
-// COMANDO: PREGUNTAS HOT
-// Suelta una pregunta atrevida para quien usó el comando, o
-// para la persona mencionada. Cuando esa persona responda con
-// su siguiente mensaje (sin el punto del bot), el bot reacciona
-// como asustado/en shock.
-// Uso: .preguntashot
-// Uso: .preguntashot @alguien
-// ============================================================
+
 
 import {
     haySesionActiva,
