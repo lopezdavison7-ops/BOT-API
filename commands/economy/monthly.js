@@ -1,9 +1,4 @@
-// commands/economy/monthly.js
-// ============================================================
-// BOT-API — MONTHLY (recompensa mensual)
-// ============================================================
-// .monthly → Obtén tu recompensa mensual (cada 30 días)
-// ============================================================
+
 
 import {
     obtenerUsuario,
@@ -11,7 +6,7 @@ import {
     guardarUsuario
 } from '../../database/economia.js';
 
-const COOLDOWN_MONTHLY = 30 * 24 * 60 * 60 * 1000; // 30 días en milisegundos
+const COOLDOWN_MONTHLY = 30 * 24 * 60 * 60 * 1000;
 
 function formatearTiempo(ms) {
     const totalMinutos = Math.ceil(ms / 60000);
@@ -50,9 +45,6 @@ export default {
         const ultimoMonthly = Number(usuario.ultimoMonthly || 0);
         const transcurrido = ahora - ultimoMonthly;
 
-        // ----------------------------------------------------
-        // COMPROBAR COOLDOWN
-        // ----------------------------------------------------
         if (ultimoMonthly && transcurrido < COOLDOWN_MONTHLY) {
             const restante = COOLDOWN_MONTHLY - transcurrido;
 
@@ -69,18 +61,12 @@ export default {
             return;
         }
 
-        // ----------------------------------------------------
-        // RECOMPENSA (entre $50,000 y $100,000)
-        // ----------------------------------------------------
         const cantidad = Math.floor(Math.random() * 50001) + 50000;
 
         usuario.ultimoMonthly = ahora;
         guardarUsuario(id, usuario);
         modificarDinero(id, cantidad);
 
-        // ----------------------------------------------------
-        // RESPUESTA
-        // ----------------------------------------------------
         await responder.texto(
             `╭〔 🎁 𝐌𝐎𝐍𝐓𝐇𝐋𝐘 〕⬣\n` +
             `┃\n` +
