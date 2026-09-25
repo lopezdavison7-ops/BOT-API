@@ -1,10 +1,7 @@
-// commands/descargas/mediafire.js
-// ============================================================
-// BOT-API — MEDIAFIRE DOWNLOADER (carpetas + archivos)
-// ============================================================
+
 
 const API = 'https://api.delirius.online/download/mediafire?url=';
-const MAX_BYTES = 390 * 1024 * 1024; // 150 MB límite (aumentado)
+const MAX_BYTES = 390 * 1024 * 1024;
 
 function fmtSize(bytes) {
     const b = Number(bytes) || 0;
@@ -54,12 +51,11 @@ async function descargarYEnviar(sock, msg, jid, item, responder) {
         );
     }
 
-    // Si el link ya es directo (de la API), úsalo directamente
     let linkDirecto = item.link;
     if (linkDirecto && linkDirecto.includes('download') && linkDirecto.includes('mediafire.com')) {
-        // Ya es directo, no hacer scraping
+
     } else {
-        // Intentar obtener link directo
+
         linkDirecto = await obtenerLinkDirecto(item.link);
         if (!linkDirecto) {
             return await responder.texto('❌ No se pudo obtener el link directo.\n🔗 Página: ' + item.link);
@@ -124,7 +120,6 @@ export default {
             );
         }
 
-        // NÚMERO → descargar de la lista
         if (/^\d+$/.test(q)) {
             const mapa = global.mfMap?.[jid];
             const item = mapa?.[Number(q)];
@@ -140,7 +135,6 @@ export default {
             return;
         }
 
-        // URL → consultar API
         if (!/mediafire\.com/i.test(q)) {
             return await responder.texto('❌ La URL debe ser de MediaFire');
         }
@@ -149,7 +143,6 @@ export default {
             const res = await fetch(API + encodeURIComponent(q));
             const json = await res.json();
 
-            // ---------- CASO 1: CARPETA (array en data) ----------
             if (Array.isArray(json.data) && json.data.length > 0) {
                 const datos = json.data;
 
@@ -178,7 +171,6 @@ export default {
                 }
             }
 
-            // ---------- CASO 2: ARCHIVO INDIVIDUAL (objeto en data) ----------
             if (json.data && typeof json.data === 'object' && !Array.isArray(json.data)) {
                 if (json.data.link) {
                     await responder.texto('⏳ Descargando *' + (json.data.filename || json.data['nombre de archivo'] || 'archivo') + '*...');
@@ -187,7 +179,6 @@ export default {
                 }
             }
 
-            // ---------- Fallback: mostrar JSON para debug ----------
             return await responder.texto(
                 '❌ No se encontraron archivos.\n\n' +
                 '📡 Respuesta de la API:\n```\n' + JSON.stringify(json, null, 2).substring(0, 500) + '\n```'
