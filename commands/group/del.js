@@ -1,17 +1,4 @@
-// ============================================================
-// BOT-API
-// COMANDO: DEL
-// ============================================================
-// Elimina un mensaje al que se está respondiendo.
-//
-// Uso:
-// Responde al mensaje y escribe:
-// .del
-//
-// Solo los administradores del grupo pueden utilizarlo.
-// El bot también debe ser administrador para poder eliminar
-// el mensaje.
-// ============================================================
+
 
 import {
     esGrupo,
@@ -42,20 +29,12 @@ export default {
         const chatId =
             msg?.key?.remoteJid;
 
-        // ====================================================
-        // VERIFICAR GRUPO
-        // ====================================================
-
         if (!esGrupo(chatId)) {
 
             return responder.texto(
                 '❌ Este comando solo funciona dentro de un grupo.'
             );
         }
-
-        // ====================================================
-        // VERIFICAR ADMIN
-        // ====================================================
 
         const permiso =
             await verificarPermisosAdmin(
@@ -71,10 +50,6 @@ export default {
             );
         }
 
-        // ====================================================
-        // OBTENER MENSAJE RESPONDIDO
-        // ====================================================
-
         const contexto =
             msg?.message
                 ?.extendedTextMessage
@@ -88,10 +63,6 @@ export default {
 
         const stanzaId =
             contexto?.stanzaId;
-
-        // ====================================================
-        // COMPROBAR RESPUESTA
-        // ====================================================
 
         if (
             !mensajeCitado ||
@@ -114,15 +85,9 @@ export default {
             );
         }
 
-        // ====================================================
-        // DETERMINAR AUTOR DEL MENSAJE
-        // ====================================================
-
         let autor =
             participant;
 
-        // En algunos mensajes puede venir el autor mediante
-        // participantAlt.
         const participantAlt =
             contexto?.participantAlt;
 
@@ -143,10 +108,6 @@ export default {
             );
         }
 
-        // ====================================================
-        // CONSTRUIR KEY DEL MENSAJE
-        // ====================================================
-
         const keyMensaje = {
 
             remoteJid:
@@ -161,10 +122,6 @@ export default {
             participant:
                 autor
         };
-
-        // ====================================================
-        // INTENTAR ELIMINAR
-        // ====================================================
 
         try {
 
