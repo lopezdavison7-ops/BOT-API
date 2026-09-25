@@ -1,16 +1,8 @@
-// commands/downloads/applemusic.js
-// ============================================================
-// BOT-API — APPLE MUSIC (búsqueda + descarga combinadas)
-// ============================================================
-// .applemusic <título>   → busca y lista canciones
-// .applemusic <número>   → descarga la elegida
-// .applemusic <url>      → descarga directa con link
-// ============================================================
+
 
 const API_BUSCAR = 'https://api.delirius.online/search/applemusic?query=';
 const API_DESCARGAR = 'https://api.delirius.online/download/applemusic?url=';
 
-// ---------- DESCARGAR Y ENVIAR AUDIO ----------
 async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
     const res = await fetch(API_DESCARGAR + encodeURIComponent(urlCancion));
     const json = await res.json();
@@ -21,7 +13,6 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         return await responder.texto('❌ No se pudo procesar la canción.\nVerifica que el enlace sea válido.');
     }
 
-    // Normalizar claves (ES / EN)
     const titulo = d.title || d.título || 'Sin título';
     const artista = d.artist || d.artista || 'Desconocido';
     const album = d.album || d.álbum || null;
@@ -32,7 +23,6 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         return await responder.texto('❌ La API no devolvió link de descarga.');
     }
 
-    // ---------- INFO CON PORTADA ----------
     const caption =
         '╭━━〔 🎵 𝐀𝐏𝐏𝐋𝐄 𝐌𝐔𝐒𝐈𝐂 〕━━⬣\n' +
         '┃\n' +
@@ -54,7 +44,6 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         await responder.texto(caption);
     }
 
-    // ---------- ENVIAR AUDIO (URL → buffer fallback) ----------
     try {
         await sock.sendMessage(
             jid,
@@ -88,9 +77,6 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
     }
 }
 
-// ============================================================
-// COMANDO
-// ============================================================
 export default {
     nombre: 'applemusic',
     categoria: 'descargas',
@@ -117,9 +103,6 @@ export default {
             );
         }
 
-        // ============================================
-        // CASO 1: NÚMERO → descargar de la lista
-        // ============================================
         if (/^\d+$/.test(q)) {
             const mapa = global.amMap?.[jid];
             const cancion = mapa?.[Number(q)];
@@ -137,9 +120,6 @@ export default {
             return;
         }
 
-        // ============================================
-        // CASO 2: URL → descarga directa
-        // ============================================
         if (/music\.apple\.com/i.test(q)) {
             try {
                 await descargarYEnviar(s, msg, chatJid, q, responder);
@@ -150,9 +130,6 @@ export default {
             return;
         }
 
-        // ============================================
-        // CASO 3: BÚSQUEDA POR TÍTULO
-        // ============================================
         try {
             const res = await fetch(API_BUSCAR + encodeURIComponent(q));
             const json = await res.json();
@@ -165,7 +142,6 @@ export default {
 
             const lista = datos.slice(0, 10);
 
-            // Si solo hay 1 resultado, descargar directo
             if (lista.length === 1) {
                 const unica = lista[0];
                 const urlUnica = unica.url || unica.enlace;
@@ -174,7 +150,6 @@ export default {
                 }
             }
 
-            // Guardar mapa para elegir por número
             global.amMap = global.amMap || {};
             global.amMap[jid] = {};
 
@@ -198,7 +173,6 @@ export default {
 
             txt += '┃ 📥 Descarga: .applemusic <número>\n┃    Ej: .applemusic 1\n┃\n╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Mandar lista con la portada del primer resultado
             const primeraImg = lista[0]?.image || lista[0]?.imagen;
 
             if (primeraImg) {
