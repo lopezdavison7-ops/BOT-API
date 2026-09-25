@@ -1,4 +1,4 @@
-// commands/utils/reloj.js
+
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
