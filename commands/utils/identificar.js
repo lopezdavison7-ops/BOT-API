@@ -1,4 +1,4 @@
-// commands/utils/identificar.js
+
 import { llamarApi } from '../../lib/api.js';
 
 export default {
@@ -15,10 +15,10 @@ export default {
                 `*.identificar https://vm.tiktok.com/xxxx*`
             );
         }
-        
+
         const data = await llamarApi('/api/v1/identify', { url: argumento });
         if (!data.status) return responder.texto('❌ ' + data.message);
-        
+
         const respuesta = `
 ╭〔 🔎 𝐈𝐃𝐄𝐍𝐓𝐈𝐅𝐈𝐂𝐀𝐃𝐎𝐑 〕⬣
 ┃
@@ -32,7 +32,7 @@ export default {
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
 `;
-        
+
         await responder.texto(respuesta);
     }
 };
