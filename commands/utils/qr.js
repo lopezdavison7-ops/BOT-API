@@ -1,4 +1,4 @@
-// commands/utils/qr.js
+
 import { llamarApi } from '../../lib/api.js';
 
 export default {
