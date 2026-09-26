@@ -1,3 +1,4 @@
+
 import { loadCommands } from './lib/cmdManager.js';
 import { revisarAntilink, estaActivo as antilinkActivo } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
@@ -148,6 +149,76 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
         else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
+        }
+
+        // ============================================
+        // 🎵 PLAY SESSIONS - Detectar respuestas a .play
+        // ============================================
+        if (!fromMe && texto) {
+            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
+            const textoLimpio = texto.trim().toLowerCase();
+
+            // Detectar respuesta numérica (1 = audio, 2 = video)
+            if (/^[12]$/.test(textoLimpio) && global.playSessions?.[sender]) {
+                const session = global.playSessions[sender];
+
+                // Verificar que la sesión no sea muy vieja (10 min)
+                if (Date.now() - session.timestamp < 600000) {
+                    try {
+                        const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
+
+                        const responder = {
+                            texto: async (text) => {
+                                await sock.sendMessage(jid, { text }, { quoted: session.msgQuoted });
+                            }
+                        };
+
+                        if (textoLimpio === '1') {
+                            await procesarAudio(sock, msg, session.video, responder);
+                        } else if (textoLimpio === '2') {
+                            await procesarVideo(sock, msg, session.video, responder);
+                        }
+
+                        delete global.playSessions[sender];
+                        return;
+                    } catch (e) {
+                        console.error('[PLAY-SESSION] Error:', e.message);
+                    }
+                } else {
+                    delete global.playSessions[sender];
+                }
+            }
+
+            // Detectar botón presionado (play_audio, play_video)
+            const buttonId = msg.message?.buttonsResponseMessage?.selectedButtonId ||
+                            msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
+
+            if (buttonId && global.playSessions?.[sender]) {
+                const session = global.playSessions[sender];
+
+                if (Date.now() - session.timestamp < 600000) {
+                    try {
+                        const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
+
+                        const responder = {
+                            texto: async (text) => {
+                                await sock.sendMessage(jid, { text }, { quoted: session.msgQuoted });
+                            }
+                        };
+
+                        if (buttonId === 'play_audio') {
+                            await procesarAudio(sock, msg, session.video, responder);
+                        } else if (buttonId === 'play_video') {
+                            await procesarVideo(sock, msg, session.video, responder);
+                        }
+
+                        delete global.playSessions[sender];
+                        return;
+                    } catch (e) {
+                        console.error('[PLAY-BUTTON] Error:', e.message);
+                    }
+                }
+            }
         }
 
         if (!texto) return;
