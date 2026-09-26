@@ -84,8 +84,8 @@ function extraerButtonId(msg) {
 // ============================================================
 function buscarArchivoPlay() {
     const rutas = [
-        './commands/downloader/play.js',
-        './commands/downloader/play2.js',
+        './commands/downloads/play.js',
+        './commands/downloads/play2.js',
         './commands/play/play.js',
         './commands/musica/play.js',
         './commands/music/play.js',
