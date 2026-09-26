@@ -13,7 +13,7 @@ const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 // ─────────────────────────────────────────
 
-// Sesiones activas de play (para detectar respuestas)
+// Sesiones activas de play
 if (!global.playSessions) global.playSessions = {};
 
 function formatearVistas(vistas) {
@@ -53,7 +53,7 @@ async function buscarYouTube(query) {
         thumbnail: video.imagen || video.miniatura || video.thumbnail,
         duracion: video.duración || video.duration,
         vistas: video.vistas || video.views,
-        publicado: video.publicadoEn || video.uploaded,
+        publicado: video.publicadoEn || video.uploaded || 'Desconocido',
         autor: video.autor?.nombre || video.autor?.name || 'Desconocido'
     };
 }
@@ -156,7 +156,6 @@ async function procesarVideo(sock, msg, video, responder) {
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
 
         if (buffer.length > 16 * 1024 * 1024) {
-            // Muy pesado, enviar como documento
             await sock.sendMessage(msg.key.remoteJid, {
                 document: buffer,
                 mimetype: 'video/mp4',
@@ -238,7 +237,7 @@ export default {
                 }
             }
 
-            // PASO 3: Enviar preview con botones
+            // PASO 3: Enviar preview con botones interactivos
             const caption =
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
@@ -251,37 +250,62 @@ export default {
                 '┃\n' +
                 '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 𝐄𝐋 𝐅𝐎𝐑𝐌𝐀𝐓𝐎 〕━━⬣\n' +
                 '┃\n' +
-                '┃ 📲 Responde con un número:\n' +
-                '┃\n' +
-                '┃  *1* → 🎵 Audio (MP3)\n' +
-                '┃  *2* → 🎬 Video (MP4)\n' +
-                '┃\n' +
-                '┃ 💡 O presiona los botones\n' +
+                '┃ 💡 Presiona un botón para elegir\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Intentar enviar con botones nativos
-            try {
-                await sock.sendMessage(msg.key.remoteJid, {
-                    image: { url: video.thumbnail },
-                    caption,
-                    footer: '🎵 BOT-API • Selecciona el formato',
-                    buttons: [
-                        { buttonId: 'play_audio', buttonText: { displayText: '🎵 Audio' }, type: 1 },
-                        { buttonId: 'play_video', buttonText: { displayText: '🎬 Video' }, type: 1 }
-                    ],
-                    headerType: 4,
-                    viewOnce: false
-                }, { quoted: msg });
-            } catch (e) {
-                // Fallback sin botones
-                if (video.thumbnail) {
+            // Enviar con botones interactivos
+            if (video.thumbnail) {
+                try {
                     await sock.sendMessage(msg.key.remoteJid, {
                         image: { url: video.thumbnail },
-                        caption
+                        caption,
+                        footer: '🎵 BOT-API • Selecciona el formato',
+                        interactiveButtons: [
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎵 Audio',
+                                    id: 'play_audio'
+                                })
+                            },
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎬 Video',
+                                    id: 'play_video'
+                                })
+                            }
+                        ]
                     }, { quoted: msg });
-                } else {
-                    await responder.texto(caption);
+                } catch (e) {
+                    // Fallback sin botones
+                    await responder.texto(caption + '\n\n📲 Responde con *1* (audio) o *2* (video)');
+                }
+            } else {
+                try {
+                    await sock.sendMessage(msg.key.remoteJid, {
+                        text: caption,
+                        footer: '🎵 BOT-API • Selecciona el formato',
+                        interactiveButtons: [
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎵 Audio',
+                                    id: 'play_audio'
+                                })
+                            },
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎬 Video',
+                                    id: 'play_video'
+                                })
+                            }
+                        ]
+                    }, { quoted: msg });
+                } catch (e) {
+                    await responder.texto(caption + '\n\n📲 Responde con *1* (audio) o *2* (video)');
                 }
             }
 
