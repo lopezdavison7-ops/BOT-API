@@ -24,6 +24,56 @@ export async function cargarComandosHandler() {
     return comandos;
 }
 
+// ============================================================
+// 🔑 BUSCAR SESIÓN DE PLAY (por cualquier JID del sender)
+// ============================================================
+function buscarSesionPlay(msg) {
+    const sessions = global.playSessions;
+    if (!sessions) return null;
+
+    const candidatos = [
+        msg.key?.participant,
+        msg.key?.senderPn,
+        msg.key?.participantAlt,
+        msg.key?.remoteJidAlt,
+        msg.key?.sender,
+        msg.key?.remoteJid
+    ];
+
+    for (const c of candidatos) {
+        if (c && sessions[c]) {
+            return { clave: c, session: sessions[c] };
+        }
+    }
+    return null;
+}
+
+// ============================================================
+// 🔑 EXTRAER ID DE BOTÓN (todas las fuentes posibles)
+// ============================================================
+function extraerButtonId(msg) {
+    try {
+        if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
+            return msg.message.buttonsResponseMessage.selectedButtonId;
+        }
+
+        if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+            const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+            return json.id || json.selected_row_id || null;
+        }
+
+        if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
+            return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
+        }
+
+        if (msg.message?.templateButtonReplyMessage?.selectedId) {
+            return msg.message.templateButtonReplyMessage.selectedId;
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []) {
     try {
         if (!comandos) {
@@ -39,6 +89,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
+        // ============================================
+        // AFK
+        // ============================================
         if (!fromMe) {
             try {
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
@@ -91,6 +144,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
+        // ============================================
+        // ANTILINK
+        // ============================================
         if (isGroup && !fromMe && antilinkActivo(jid)) {
             let esAdmin = false;
 
@@ -106,25 +162,9 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (bloqueado) return;
         }
 
-        if (!fromMe) {
-            const fueTrivia = await manejarMensajeTrivia(sock, msg);
-            if (fueTrivia) return;
-
-            const fueTetris = await manejarMensajeTetris(sock, msg);
-            if (fueTetris) return;
-
-            const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
-            if (fueAdivinanza) return;
-
-            const fueTTT = await manejarMensajeTTT(sock, msg);
-            if (fueTTT) return;
-        }
-
-        if (!fromMe) {
-            const fueMemoria = await manejarMemoriaIA(sock, msg);
-            if (fueMemoria) return;
-        }
-
+        // ============================================
+        //  SACAR TEXTO (movido ANTES de juegos y play)
+        // ============================================
         let texto = '';
 
         if (msg.message?.conversation) {
@@ -144,90 +184,101 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 const json = JSON.parse(
                     msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson
                 );
-                texto = json.id || '';
+                texto = json.id || json.display_text || '';
             } catch {}
         }
         else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
+        // 🔑 ID del botón presionado (cualquier formato)
+        const buttonId = extraerButtonId(msg);
+
         // ============================================
-        // 🎵 PLAY SESSIONS - Detectar respuestas a .play
+        // 🎵 PLAY SESSIONS (ANTES que juegos/memoria)
         // ============================================
-        if (!fromMe && texto) {
-            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
-            const textoLimpio = texto.trim().toLowerCase();
+        if (!fromMe && (texto || buttonId)) {
+            const textoLimpio = String(texto || '').trim().toLowerCase();
 
-            // 🔑 NUEVO: Detectar respuesta de botón (texto enviado como mensaje normal)
-            const esRespuestaBoton = 
-                textoLimpio === '🎵 audio' || textoLimpio === 'audio' ||
-                textoLimpio === '🎬 video' || textoLimpio === 'video';
+            const esAudio =
+                buttonId === 'play_audio' ||
+                textoLimpio === 'play_audio' ||
+                textoLimpio === '1' ||
+                textoLimpio === '🎵 audio' ||
+                textoLimpio === 'audio';
 
-            // Detectar respuesta numérica (1 = audio, 2 = video) O botón
-            if ((/^[12]$/.test(textoLimpio) || esRespuestaBoton) && global.playSessions?.[sender]) {
-                const session = global.playSessions[sender];
+            const esVideo =
+                buttonId === 'play_video' ||
+                textoLimpio === 'play_video' ||
+                textoLimpio === '2' ||
+                textoLimpio === '🎬 video' ||
+                textoLimpio === 'video';
 
-                // Verificar que la sesión no sea muy vieja (10 min)
-                if (Date.now() - session.timestamp < 600000) {
-                    try {
-                        const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
+            if (esAudio || esVideo) {
+                const encontrada = buscarSesionPlay(msg);
 
-                        const responder = {
-                            texto: async (text) => {
-                                await sock.sendMessage(jid, { text }, { quoted: session.msgQuoted });
+                // Debug: ver qué llegó
+                console.log(
+                    '[PLAY-DEBUG] texto:', JSON.stringify(texto),
+                    '| buttonId:', buttonId,
+                    '| sesión:', encontrada ? 'SÍ' : 'NO',
+                    '| keys:', Object.keys(msg.message || {}).join(',')
+                );
+
+                if (encontrada) {
+                    const { clave, session } = encontrada;
+
+                    if (Date.now() - session.timestamp < 600000) {
+                        try {
+                            const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
+
+                            const responder = {
+                                texto: async (t) => {
+                                    await sock.sendMessage(jid, { text: t }, { quoted: msg });
+                                }
+                            };
+
+                            if (esAudio) {
+                                await procesarAudio(sock, msg, session.video, responder);
+                            } else {
+                                await procesarVideo(sock, msg, session.video, responder);
                             }
-                        };
 
-                        // Determinar qué procesar
-                        const esAudio = textoLimpio === '1' || textoLimpio === '🎵 audio' || textoLimpio === 'audio';
-                        const esVideo = textoLimpio === '2' || textoLimpio === '🎬 video' || textoLimpio === 'video';
-
-                        if (esAudio) {
-                            await procesarAudio(sock, msg, session.video, responder);
-                        } else if (esVideo) {
-                            await procesarVideo(sock, msg, session.video, responder);
+                            delete global.playSessions[clave];
+                            return;
+                        } catch (e) {
+                            console.error('[PLAY-SESSION] Error:', e?.message || e);
                         }
-
-                        delete global.playSessions[sender];
-                        return;
-                    } catch (e) {
-                        console.error('[PLAY-SESSION] Error:', e.message);
-                    }
-                } else {
-                    delete global.playSessions[sender];
-                }
-            }
-
-            // Detectar botón presionado (método tradicional)
-            const buttonId = msg.message?.buttonsResponseMessage?.selectedButtonId ||
-                            msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
-
-            if (buttonId && global.playSessions?.[sender]) {
-                const session = global.playSessions[sender];
-
-                if (Date.now() - session.timestamp < 600000) {
-                    try {
-                        const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
-
-                        const responder = {
-                            texto: async (text) => {
-                                await sock.sendMessage(jid, { text }, { quoted: session.msgQuoted });
-                            }
-                        };
-
-                        if (buttonId === 'play_audio') {
-                            await procesarAudio(sock, msg, session.video, responder);
-                        } else if (buttonId === 'play_video') {
-                            await procesarVideo(sock, msg, session.video, responder);
-                        }
-
-                        delete global.playSessions[sender];
-                        return;
-                    } catch (e) {
-                        console.error('[PLAY-BUTTON] Error:', e.message);
+                    } else {
+                        delete global.playSessions[clave];
                     }
                 }
             }
+        }
+
+        // ============================================
+        // 🎮 JUEGOS ACTIVADOS
+        // ============================================
+        if (!fromMe) {
+            const fueTrivia = await manejarMensajeTrivia(sock, msg);
+            if (fueTrivia) return;
+
+            const fueTetris = await manejarMensajeTetris(sock, msg);
+            if (fueTetris) return;
+
+            const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
+            if (fueAdivinanza) return;
+
+            const fueTTT = await manejarMensajeTTT(sock, msg);
+            if (fueTTT) return;
+        }
+
+        // ============================================
+        // 🧠 MEMORIA IA
+        // ============================================
+        if (!fromMe) {
+            const fueMemoria = await manejarMemoriaIA(sock, msg);
+            if (fueMemoria) return;
         }
 
         if (!texto) return;
