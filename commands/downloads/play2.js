@@ -1,363 +1,258 @@
 
 
-import 'dotenv/config';
-import config from '../../config.js';
-import { Readable } from 'stream';
+import fetch from 'node-fetch';
 
-const LEMPI_API = 'https://api.lempi.lat';
-const API_KEY = config.LEMPI_API_KEY || '';
-
-const TIMEOUT_BUSQUEDA = 30000;
-const TIMEOUT_API = 45000;
-const MEDIA_TIMEOUT = 300000;
-
-const MAX_INTENTOS_STREAM = 3;
-
-const HEADERS_MEDIA = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'video/mp4,video/*,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    'Referer': 'https://www.youtube.com/',
-    'Sec-Fetch-Mode': 'no-cors',
-    'Sec-Fetch-Site': 'cross-site',
-    'Sec-Fetch-Dest': 'video',
-    'Connection': 'keep-alive'
-};
-
-async function fetchConTimeout(url, opciones = {}, timeout = 30000) {
-    const controller = new AbortController();
-    const temporizador = setTimeout(() => controller.abort(), timeout);
-    try {
-        return await fetch(url, { ...opciones, signal: controller.signal });
-    } finally {
-        clearTimeout(temporizador);
-    }
-}
-
-function limpiarTexto(texto = '') {
-    return String(texto).replace(/\s+/g, ' ').trim();
-}
-
-function limpiarNombre(nombre = 'Video') {
-    return String(nombre)
-        .replace(/[/:*?"<>|]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 80) || 'Video';
-}
+// ───────────── CONFIGURACIÓN ─────────────
+const API_BUSQUEDA = 'https://api.delirius.online/search/ytsearch';
+const API_DESCARGA = 'https://api.delirius.online/download/ytmp4';
+const FORMATO_VIDEO = '360p'; // 360p, 480p, 720p, 1080p
+// ─────────────────────────────────────────
 
 function formatearVistas(vistas) {
-    const str = String(vistas || '0').replace(/[^\d.]/g, '');
-    const numero = Number(str);
-    if (!Number.isFinite(numero)) return 'No disponible';
-    if (numero >= 1000000000) return `${(numero / 1000000000).toFixed(1)}B`;
-    if (numero >= 1000000) return `${(numero / 1000000).toFixed(1)}M`;
-    if (numero >= 1000) return `${(numero / 1000).toFixed(1)}K`;
-    return numero.toLocaleString('es-ES');
+    const num = parseInt(String(vistas).replace(/\D/g, '')) || 0;
+    if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return String(num);
 }
 
-async function reaccionar(sock, jid, key, emoji) {
-    try {
-        await sock.sendMessage(jid, { react: { text: emoji, key } });
-    } catch {}
-}
+// ───────────── BUSCAR EN YOUTUBE ─────────────
+async function buscarYouTube(query) {
+    const url = `${API_BUSQUEDA}?q=${encodeURIComponent(query)}`;
 
-const CACHE_BUSQUEDA_TTL_MS = 10 * 60 * 1000;
-const cacheBusquedas = new Map();
-const busquedasEnCurso = new Map();
-
-function normalizarConsulta(consulta) {
-    return String(consulta).trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function obtenerDeCache(consulta) {
-    const clave = normalizarConsulta(consulta);
-    const entrada = cacheBusquedas.get(clave);
-    if (!entrada) return null;
-    if (Date.now() > entrada.expira) {
-        cacheBusquedas.delete(clave);
-        return null;
-    }
-    return entrada.resultado;
-}
-
-function guardarEnCache(consulta, resultado) {
-    const clave = normalizarConsulta(consulta);
-    cacheBusquedas.set(clave, { resultado, expira: Date.now() + CACHE_BUSQUEDA_TTL_MS });
-    if (cacheBusquedas.size > 300) {
-        const primeraClave = cacheBusquedas.keys().next().value;
-        cacheBusquedas.delete(primeraClave);
-    }
-}
-
-async function buscarYouTube(consulta) {
-    const enCache = obtenerDeCache(consulta);
-    if (enCache) {
-        console.log(`[PLAY2] ⚡ Búsqueda desde caché: ${consulta}`);
-        return enCache;
-    }
-
-    const clave = normalizarConsulta(consulta);
-    if (busquedasEnCurso.has(clave)) {
-        console.log(`[PLAY2] 🔗 Enganchado a búsqueda en curso: ${consulta}`);
-        return busquedasEnCurso.get(clave);
-    }
-
-    const promesa = buscarYouTubeEnApi(consulta).finally(() => {
-        busquedasEnCurso.delete(clave);
+    const res = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(20000)
     });
 
-    busquedasEnCurso.set(clave, promesa);
-    return promesa;
-}
+    if (!res.ok) throw new Error(`Búsqueda falló: ${res.status}`);
 
-async function buscarYouTubeEnApi(consulta) {
-    if (!API_KEY) throw new Error('LEMPI_API_KEY no está configurada.');
+    const data = await res.json();
 
-    const endpoint = `${LEMPI_API}/s/youtube?query=${encodeURIComponent(consulta)}&apikey=${API_KEY}`;
-    console.log(`[PLAY2] 🔎 Buscando: ${consulta}`);
-
-    const respuesta = await fetchConTimeout(endpoint, {
-        headers: { Accept: 'application/json', 'User-Agent': 'BOT-API/2.0' }
-    }, TIMEOUT_BUSQUEDA);
-
-    if (!respuesta.ok) throw new Error(`Búsqueda HTTP ${respuesta.status}`);
-
-    const datos = await respuesta.json();
-    if (!datos?.status || !datos?.datos?.ok) {
-        throw new Error(datos?.message || 'La búsqueda fue rechazada.');
+    if (!data.estado && !data.status) {
+        throw new Error(data.message || 'No se pudo buscar');
     }
 
-    const videos = datos.datos?.results?.videos;
-    if (!Array.isArray(videos) || videos.length === 0) {
-        throw new Error('No encontré resultados.');
+    const resultados = data.datos || data.data || [];
+
+    if (!Array.isArray(resultados) || resultados.length === 0) {
+        throw new Error('No se encontraron resultados para: ' + query);
     }
 
-    const primero = videos[0];
-    const resultado = {
-        titulo: limpiarTexto(primero.title || 'Video'),
-        videoUrl: primero.url,
-        thumbnail: `https://img.youtube.com/vi/${primero.id}/maxresdefault.jpg`,
-        canal: limpiarTexto(primero.channel || 'No disponible'),
-        duracion: limpiarTexto(primero.duration || 'No disponible'),
-        vistas: primero.views,
-        publicado: limpiarTexto(primero.published || 'No disponible')
-    };
-
-    guardarEnCache(consulta, resultado);
-    return resultado;
-}
-
-async function obtenerVideo(videoUrl) {
-    if (!API_KEY) throw new Error('LEMPI_API_KEY no está configurada.');
-
-    const endpoint = `${LEMPI_API}/dl/ytv?url=${encodeURIComponent(videoUrl)}&apikey=${API_KEY}`;
-    console.log('[PLAY2] 🎬 Solicitando video...');
-
-    const respuesta = await fetchConTimeout(endpoint, {
-        headers: { Accept: 'application/json', 'User-Agent': 'BOT-API/2.0' }
-    }, TIMEOUT_API);
-
-    if (!respuesta.ok) throw new Error(`API Download HTTP ${respuesta.status}`);
-
-    const datos = await respuesta.json();
-    if (!datos?.status || !datos?.datos?.url) {
-        throw new Error(datos?.message || 'La API no pudo generar el video.');
-    }
-
-    console.log(`[PLAY2] 🎬 Video: ${datos.datos.calidad || 'MP4'}`);
+    // Tomar el primer video (filtrando lives si existen)
+    const video = resultados.find(v => !v.isLive && !v.enVivo) || resultados[0];
 
     return {
-        download: datos.datos.url,
-        titulo: datos.titulo || 'Video',
-        calidad: datos.datos.calidad || 'MP4',
-        tamaño: datos.datos.tamaño || 'Desconocido',
-        thumbnail: datos.miniatura || null,
-        canal: datos.canal || null
+        videoId: video.videoId,
+        url: video.url || `https://www.youtube.com/watch?v=${video.videoId}`,
+        titulo: video.título || video.title,
+        descripcion: video.descripción || video.description,
+        thumbnail: video.imagen || video.miniatura || video.thumbnail,
+        duracion: video.duración || video.duration,
+        vistas: video.vistas || video.views,
+        publicado: video.publicadoEn || video.uploaded,
+        autor: {
+            nombre: video.autor?.nombre || video.autor?.name || 'Desconocido',
+            url: video.autor?.url
+        }
     };
 }
 
-async function abrirStream(url) {
-    const respuesta = await fetchConTimeout(url, {
-        headers: HEADERS_MEDIA
-    }, MEDIA_TIMEOUT);
+// ───────────── DESCARGAR MP4 ─────────────
+async function descargarMP4(youtubeUrl, formato = FORMATO_VIDEO) {
+    const url = `${API_DESCARGA}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`;
 
-    if (!respuesta.ok) {
-        throw new Error(`Servidor video HTTP ${respuesta.status}`);
+    const res = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(60000)
+    });
+
+    if (!res.ok) throw new Error(`Descarga falló: ${res.status}`);
+
+    const data = await res.json();
+
+    if (!data.status && !data.estado) {
+        throw new Error(data.message || 'No se pudo obtener el video');
     }
 
-    if (!respuesta.body) {
-        throw new Error('El servidor no devolvió un stream.');
-    }
+    const info = data.data || data.datos || {};
 
-    return Readable.fromWeb(respuesta.body);
+    return {
+        titulo: info.title || info.titulo,
+        autor: info.author || info.autor,
+        canal: info.channel || info.canal,
+        vistas: info.views || info.vistas,
+        likes: info.likes,
+        thumbnail: info.image || info.imagen,
+        formato: info.format || info.formato || formato,
+        downloadUrl: info.download || info.descarga
+    };
 }
 
-async function obtenerStreamConReintentos(videoUrlApi) {
-    let video = await obtenerVideo(videoUrlApi);
-    let ultimoError = null;
-
-    for (let intento = 1; intento <= MAX_INTENTOS_STREAM; intento++) {
-        try {
-            console.log(`[PLAY2] 🚀 Abriendo stream (intento ${intento}/${MAX_INTENTOS_STREAM})...`);
-            return {
-                stream: await abrirStream(video.download),
-                video
-            };
-        } catch (error) {
-            ultimoError = error;
-            console.error(
-                `[PLAY2] ⚠️ Intento ${intento} falló:`,
-                error?.message || error
-            );
-
-            if (intento < MAX_INTENTOS_STREAM) {
-                console.log('[PLAY2] 🔁 Pidiendo URL nueva a la API...');
-                await new Promise(r => setTimeout(r, 1000 * intento));
-                video = await obtenerVideo(videoUrlApi);
-            }
-        }
-    }
-
-    throw ultimoError;
-}
-
-async function obtenerThumbnail(url) {
-    if (!url) return null;
-    try {
-        const respuesta = await fetchConTimeout(url, {
-            headers: { 'User-Agent': 'BOT-API/2.0' }
-        }, 15000);
-        if (!respuesta.ok) return null;
-        const arrayBuffer = await respuesta.arrayBuffer();
-        return Buffer.from(arrayBuffer);
-    } catch {
-        return null;
-    }
-}
-
-function crearInformacion(resultado) {
-    return (
-        '╭━━〔 🎬 𝐏𝐋𝐀𝐘 〕━━\n' +
-        '┃\n' +
-        `┃ 🎬 *${resultado.titulo}*\n` +
-        '┃\n' +
-        `┃ 👤 ${resultado.canal}\n` +
-        `┃ 👁️ ${formatearVistas(resultado.vistas)} vistas\n` +
-        `┃ ⏱️ ${resultado.duracion}\n` +
-        `┃ 📅 ${resultado.publicado}\n` +
-        '┃\n' +
-        '┃ ⚡ *Enviando video...*\n' +
-        '┃\n' +
-        '╰━━━━━━━━━━━━━━━━⬣'
-    );
-}
-
-const descargasActivas = new Map();
-
+// ───────────── COMANDO ─────────────
 export default {
     nombre: 'play2',
-    categoria: 'Descargas',
-    alias: ['ytv', 'ytmp4', 'mp4', 'video'],
-    descripcion: 'Busca un video de YouTube y lo envía como MP4.',
+    categoria: 'downloader',
+    alias: ['playvideo', 'video', 'ytmp4', 'descargarvideo'],
+    descripcion: 'Busca en YouTube y descarga el VIDEO del primer resultado.',
+    uso: '.play2 <nombre de canción/video>',
 
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
-        const consulta = argumento?.trim();
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
+        const query = String(argumento || '').trim();
 
-        if (!consulta) {
-            await responder.texto(
-                '╭━━〔  𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
+        if (!query) {
+            return await responder.texto(
+                '╭━━〔 🎬 𝐏𝐋𝐀𝐘𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Escribe un video.\n' +
+                '┃ ❌ Escribe el nombre del video\n' +
                 '┃\n' +
-                '┃ Ejemplo:\n' +
-                '┃ › .play2 Bad Bunny\n' +
+                '┃ 💡 Ejemplos:\n' +
+                '┃ ➪ .play2 twice fancy\n' +
+                '┃ ➪ .play2 yan block 444\n' +
+                '┃ ➪ .play2 bad bunny titi me pregunto\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━'
+                '┃ 📊 Calidad: ' + FORMATO_VIDEO + '\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-            return;
         }
-
-        const jid = msg?.key?.remoteJid;
-        if (!jid) return;
-
-        const remitente = msg?.key?.participant || msg?.key?.participantAlt || jid;
-
-        if (descargasActivas.has(remitente)) {
-            await responder.texto(
-                '╭━━〔 ⏳ 𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ⚠️ Ya tienes una descarga pendiente.\n' +
-                '┃\n' +
-                `┃ 🎬 ${descargasActivas.get(remitente)}\n` +
-                '┃\n' +
-                '┃ Espera a que termine antes de pedir otra.\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
-        }
-
-        descargasActivas.set(remitente, consulta);
-        console.log('================================================');
-        console.log(`[PLAY2] 🎬 ${consulta}`);
-        await reaccionar(sock, jid, msg.key, '⏳');
 
         try {
-            const resultado = await buscarYouTube(consulta);
-            const promesaThumbnail = obtenerThumbnail(resultado.thumbnail);
+            // PASO 1: Buscar en YouTube
+            await responder.texto('🔍 [1/3] Buscando en YouTube...');
 
-            let thumbnail = await promesaThumbnail;
+            const video = await buscarYouTube(query);
 
-            if (thumbnail) {
-                await responder.imagen(thumbnail, crearInformacion(resultado));
+            console.log(`[PLAY2] Encontrado: ${video.titulo} (${video.url})`);
+
+            // PASO 2: Enviar preview con info
+            const captionPreview =
+                '╭━━〔 🎬 𝐏𝐋𝐀𝐘𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
+                '┃\n' +
+                '┃ 🎧 *' + video.titulo + '*\n' +
+                '┃\n' +
+                '┃ 👤 Autor: ' + video.autor.nombre + '\n' +
+                '┃ ⏱️ Duración: ' + video.duracion + '\n' +
+                '┃ 👀 Vistas: ' + formatearVistas(video.vistas) + '\n' +
+                '┃ 📅 Publicado: ' + video.publicado + '\n' +
+                '┃ 📊 Calidad: ' + FORMATO_VIDEO + '\n' +
+                '┃\n' +
+                '┃ ⬇️ Descargando video...\n' +
+                '┃    (puede tardar unos segundos)\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+            if (video.thumbnail) {
+                try {
+                    await sock.sendMessage(msg.key.remoteJid, {
+                        image: { url: video.thumbnail },
+                        caption: captionPreview
+                    }, { quoted: msg });
+                } catch (e) {
+                    await responder.texto(captionPreview);
+                }
             } else {
-                await responder.texto(crearInformacion(resultado));
+                await responder.texto(captionPreview);
             }
 
-            const { stream, video } = await obtenerStreamConReintentos(resultado.videoUrl);
+            // PASO 3: Descargar MP4
+            console.log('[PLAY2] Obteniendo video MP4...');
+            const mp4 = await descargarMP4(video.url, FORMATO_VIDEO);
 
-            if (!thumbnail && video.thumbnail && video.thumbnail !== resultado.thumbnail) {
-                thumbnail = await obtenerThumbnail(video.thumbnail);
+            if (!mp4.downloadUrl) {
+                throw new Error('La API no devolvió link de descarga');
             }
 
-            const titulo = limpiarNombre(video.titulo || resultado.titulo);
+            console.log('[PLAY2] Descargando video de:', mp4.downloadUrl);
 
-            console.log(`[PLAY2] 📤 Enviando: ${titulo}`);
-
-            const contenido = {
-                video: { stream },
-                mimetype: 'video/mp4',
-                fileName: `${titulo}.mp4`,
-                caption: `🎬 *${video.titulo || resultado.titulo}*\n👤 ${video.canal || resultado.canal}\n📦 ${video.tamaño}`
-            };
-
-            if (thumbnail) contenido.jpegThumbnail = thumbnail;
-
-            await sock.sendMessage(jid, contenido, {
-                quoted: msg,
-                mediaUploadTimeoutMs: MEDIA_TIMEOUT,
-                waitForAck: false
+            // Descargar el buffer del video
+            const videoRes = await fetch(mp4.downloadUrl, {
+                signal: AbortSignal.timeout(120000) // 2 minutos para videos
             });
 
-            await reaccionar(sock, jid, msg.key, '✅');
-            console.log(`[PLAY2] ✅ Video enviado: ${titulo}`);
-            console.log('================================================');
+            if (!videoRes.ok) {
+                throw new Error('No se pudo descargar el video: ' + videoRes.status);
+            }
+
+            const videoBuffer = await videoRes.arrayBuffer();
+            const buffer = Buffer.from(videoBuffer);
+
+            if (!buffer.length) {
+                throw new Error('El video está vacío');
+            }
+
+            const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
+            console.log(`[PLAY2] Video descargado: ${tamañoMB} MB`);
+
+            // Verificar tamaño (WhatsApp tiene límite de ~16MB para videos)
+            if (buffer.length > 16 * 1024 * 1024) {
+                await responder.texto(
+                    '╭━━〔 ⚠️ 𝐕𝐈𝐃𝐄𝐎 𝐌𝐔𝐘 𝐏𝐄𝐒𝐀𝐃𝐎 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ 📦 Tamaño: ' + tamañoMB + ' MB\n' +
+                    '┃\n' +
+                    '┃ ⚠️ El video supera el límite\n' +
+                    '┃    de WhatsApp (16 MB).\n' +
+                    '┃\n' +
+                    '┃ 💡 Se enviará como documento\n' +
+                    '┃    para que puedas descargarlo.\n' +
+                    '┃\n' +
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                );
+
+                // Enviar como documento
+                await sock.sendMessage(msg.key.remoteJid, {
+                    document: buffer,
+                    mimetype: 'video/mp4',
+                    fileName: `${mp4.titulo || video.titulo}.mp4`,
+                    caption:
+                        '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
+                        '┃\n' +
+                        '┃ 🎧 *' + (mp4.titulo || video.titulo) + '*\n' +
+                        '┃\n' +
+                        '┃ 👤 Autor: ' + (mp4.autor || video.autor.nombre) + '\n' +
+                        '┃ 📊 Calidad: ' + mp4.formato + '\n' +
+                        '┃ 📦 Tamaño: ' + tamañoMB + ' MB\n' +
+                        '┃\n' +
+                        '┃ 💡 Toca para descargar\n' +
+                        '┃\n' +
+                        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                }, { quoted: msg });
+            } else {
+                // Enviar como video normal
+                await sock.sendMessage(msg.key.remoteJid, {
+                    video: buffer,
+                    mimetype: 'video/mp4',
+                    caption:
+                        '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
+                        '┃\n' +
+                        '┃ 🎧 *' + (mp4.titulo || video.titulo) + '*\n' +
+                        '┃\n' +
+                        '┃ 👤 Autor: ' + (mp4.autor || video.autor.nombre) + '\n' +
+                        '┃ 📊 Calidad: ' + mp4.formato + '\n' +
+                        '┃ 📦 Tamaño: ' + tamañoMB + ' MB\n' +
+                        '┃\n' +
+                        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                }, { quoted: msg });
+            }
+
+            console.log('[PLAY2] ✅ Video enviado correctamente');
 
         } catch (error) {
-            console.error('[PLAY2] ❌ Error:', error?.stack || error?.message || error);
-            await reaccionar(sock, jid, msg.key, '❌');
+            console.error('[PLAY2] ❌ Error:', error?.message || error);
+
             await responder.texto(
-                '╭━━〔 ❌ 𝐏𝐋𝐀𝐘𝟐 〕━━⬣\n' +
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃\n' +
-                '┃ No pude obtener el video.\n' +
+                '┃ No se pudo descargar el video.\n' +
                 '┃\n' +
-                `┃ ⚠️ ${error?.message || 'Error desconocido.'}\n` +
+                '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '┃ 💡 Intenta con otro video\n' +
+                '┃    o verifica tu conexión.\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-        } finally {
-            descargasActivas.delete(remitente);
         }
     }
 };
