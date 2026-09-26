@@ -158,8 +158,13 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
             const textoLimpio = texto.trim().toLowerCase();
 
-            // Detectar respuesta numérica (1 = audio, 2 = video)
-            if (/^[12]$/.test(textoLimpio) && global.playSessions?.[sender]) {
+            // 🔑 NUEVO: Detectar respuesta de botón (texto enviado como mensaje normal)
+            const esRespuestaBoton = 
+                textoLimpio === '🎵 audio' || textoLimpio === 'audio' ||
+                textoLimpio === '🎬 video' || textoLimpio === 'video';
+
+            // Detectar respuesta numérica (1 = audio, 2 = video) O botón
+            if ((/^[12]$/.test(textoLimpio) || esRespuestaBoton) && global.playSessions?.[sender]) {
                 const session = global.playSessions[sender];
 
                 // Verificar que la sesión no sea muy vieja (10 min)
@@ -173,9 +178,13 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                             }
                         };
 
-                        if (textoLimpio === '1') {
+                        // Determinar qué procesar
+                        const esAudio = textoLimpio === '1' || textoLimpio === '🎵 audio' || textoLimpio === 'audio';
+                        const esVideo = textoLimpio === '2' || textoLimpio === '🎬 video' || textoLimpio === 'video';
+
+                        if (esAudio) {
                             await procesarAudio(sock, msg, session.video, responder);
-                        } else if (textoLimpio === '2') {
+                        } else if (esVideo) {
                             await procesarVideo(sock, msg, session.video, responder);
                         }
 
@@ -189,7 +198,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 }
             }
 
-            // Detectar botón presionado (play_audio, play_video)
+            // Detectar botón presionado (método tradicional)
             const buttonId = msg.message?.buttonsResponseMessage?.selectedButtonId ||
                             msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId;
 
