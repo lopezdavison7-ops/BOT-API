@@ -1,4 +1,3 @@
-
 import { loadCommands } from './lib/cmdManager.js';
 import { revisarAntilink, estaActivo as antilinkActivo } from './lib/antilink.js';
 import { verificarPermisosAdmin } from './lib/grupos.js';
@@ -10,6 +9,8 @@ import { manejarMemoriaIA } from './lib/memoria.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
 import { fmtTiempo } from './lib/helpers.js';
+import fs from 'fs';
+import path from 'path';
 
 const PREFIJO = '.';
 
@@ -49,28 +50,53 @@ function buscarSesionPlay(msg) {
 }
 
 // ============================================================
-// 🔑 EXTRAER ID DE BOTÓN (todas las fuentes posibles)
+// 🔑 EXTRAER ID DE BOTÓN (TODAS las fuentes posibles)
 // ============================================================
 function extraerButtonId(msg) {
     try {
+        // 1. Botones tradicionales
         if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
             return msg.message.buttonsResponseMessage.selectedButtonId;
         }
 
+        // 2. Template buttons (el que está usando tu fork)
+        if (msg.message?.templateButtonReplyMessage?.selectedId) {
+            return msg.message.templateButtonReplyMessage.selectedId;
+        }
+
+        // 3. Native flow / interactive
         if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
             return json.id || json.selected_row_id || null;
         }
 
+        // 4. Lista
         if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
-
-        if (msg.message?.templateButtonReplyMessage?.selectedId) {
-            return msg.message.templateButtonReplyMessage.selectedId;
-        }
     } catch (e) {}
 
+    return null;
+}
+
+// ============================================================
+// 🔑 BUSCAR RUTA REAL DEL ARCHIVO PLAY.JS
+// ============================================================
+function buscarArchivoPlay() {
+    const rutas = [
+        './commands/downloader/play.js',
+        './commands/downloader/play2.js',
+        './commands/play/play.js',
+        './commands/musica/play.js',
+        './commands/music/play.js',
+        './commands/youtube/play.js',
+        './commands/media/play.js'
+    ];
+
+    for (const ruta of rutas) {
+        const abs = path.resolve(process.cwd(), ruta);
+        if (fs.existsSync(abs)) return abs;
+    }
     return null;
 }
 
@@ -163,7 +189,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        //  SACAR TEXTO (movido ANTES de juegos y play)
+        // SACAR TEXTO
         // ============================================
         let texto = '';
 
@@ -191,7 +217,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
-        // 🔑 ID del botón presionado (cualquier formato)
+        // 🔑 ID del botón presionado
         const buttonId = extraerButtonId(msg);
 
         // ============================================
@@ -199,16 +225,22 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         // ============================================
         if (!fromMe && (texto || buttonId)) {
             const textoLimpio = String(texto || '').trim().toLowerCase();
+            const btnIdLimpio = String(buttonId || '').trim().toLowerCase();
 
+            // 🔑 Aceptar TODOS los formatos posibles
             const esAudio =
-                buttonId === 'play_audio' ||
+                btnIdLimpio === 'playaudio' ||      // ← el que manda tu fork
+                btnIdLimpio === 'play_audio' ||
+                textoLimpio === 'playaudio' ||
                 textoLimpio === 'play_audio' ||
                 textoLimpio === '1' ||
                 textoLimpio === '🎵 audio' ||
                 textoLimpio === 'audio';
 
             const esVideo =
-                buttonId === 'play_video' ||
+                btnIdLimpio === 'playvideo' ||      // ← el que manda tu fork
+                btnIdLimpio === 'play_video' ||
+                textoLimpio === 'playvideo' ||
                 textoLimpio === 'play_video' ||
                 textoLimpio === '2' ||
                 textoLimpio === '🎬 video' ||
@@ -217,12 +249,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (esAudio || esVideo) {
                 const encontrada = buscarSesionPlay(msg);
 
-                // Debug: ver qué llegó
                 console.log(
                     '[PLAY-DEBUG] texto:', JSON.stringify(texto),
                     '| buttonId:', buttonId,
-                    '| sesión:', encontrada ? 'SÍ' : 'NO',
-                    '| keys:', Object.keys(msg.message || {}).join(',')
+                    '| esAudio:', esAudio,
+                    '| esVideo:', esVideo,
+                    '| sesión:', encontrada ? 'SÍ' : 'NO'
                 );
 
                 if (encontrada) {
@@ -230,7 +262,32 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
                     if (Date.now() - session.timestamp < 600000) {
                         try {
-                            const { procesarAudio, procesarVideo } = await import('./commands/downloader/play.js');
+                            // 🔑 Buscar ruta real del archivo play.js
+                            const rutaPlay = buscarArchivoPlay();
+
+                            if (!rutaPlay) {
+                                console.error('[PLAY-SESSION] ❌ No se encontró play.js en ninguna ruta conocida');
+                                console.log('[PLAY-SESSION] Rutas buscadas: commands/downloader/play.js, commands/play/play.js, etc.');
+
+                                // Fallback: buscar en todos los subdirectorios de commands
+                                const dirs = fs.readdirSync(path.join(process.cwd(), 'commands'));
+                                for (const dir of dirs) {
+                                    const subDir = path.join(process.cwd(), 'commands', dir);
+                                    if (fs.statSync(subDir).isDirectory()) {
+                                        const archivos = fs.readdirSync(subDir).filter(f => f.toLowerCase().includes('play'));
+                                        if (archivos.length > 0) {
+                                            console.log(`[PLAY-SESSION] 📂 Archivos con "play" en commands/${dir}/:`, archivos);
+                                        }
+                                    }
+                                }
+
+                                delete global.playSessions[clave];
+                                return;
+                            }
+
+                            console.log('[PLAY-SESSION] 📂 Importando:', rutaPlay);
+                            const playMod = await import(rutaPlay);
+                            const { procesarAudio, procesarVideo } = playMod;
 
                             const responder = {
                                 texto: async (t) => {
@@ -248,6 +305,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                             return;
                         } catch (e) {
                             console.error('[PLAY-SESSION] Error:', e?.message || e);
+                            console.error('[PLAY-SESSION] Stack:', e?.stack);
                         }
                     } else {
                         delete global.playSessions[clave];
@@ -257,7 +315,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🎮 JUEGOS ACTIVADOS
+        // JUEGOS ACTIVADOS
         // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
@@ -274,7 +332,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         // ============================================
-        // 🧠 MEMORIA IA
+        // MEMORIA IA
         // ============================================
         if (!fromMe) {
             const fueMemoria = await manejarMemoriaIA(sock, msg);
