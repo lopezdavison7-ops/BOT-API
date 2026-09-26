@@ -2,89 +2,67 @@
 
 export default {
     nombre: 'fake',
-    categoria: 'tools',
-    alias: ['fitnah', 'fakereply', 'falsoreply', 'respuesta-falsa'],
-    descripcion: 'Crea una respuesta falsa simulando que otro usuario escribió.',
-    uso: '.fake <texto falso> @usuario <respuesta>',
-    soloGrupos: true,
+    categoria: 'fun',
+    alias: ['fakem', 'fakemessage', 'falso'],
+    descripcion: 'Envía un mensaje simulando que otro usuario lo escribió.',
+    uso: '.fake @usuario <mensaje>',
 
-    ejecutar: async ({ sock, msg, argumento, responder, jid, isGroup }) => {
-        if (!isGroup) {
-            return await responder.texto('❌ Este comando solo funciona en grupos.');
-        }
-
+    ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const texto = String(argumento || '').trim();
 
-        if (!texto) {
+        // Validar que mencionen a alguien
+        const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
+        if (mentions.length === 0) {
             return await responder.texto(
                 '╭━━〔 💬 𝐅𝐀𝐊𝐄 𝐑𝐄𝐏𝐋𝐘 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Escribe el texto del fake\n' +
+                '┃ ❌ Menciona a alguien\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplo:\n' +
-                '┃ ➪ .fake Hola @usuario Buenas\n' +
+                '┃ ➪ .fake @usuario hola gente\n' +
+                '┃    como estan\n' +
                 '┃\n' +
-                '┃ 📖 Cómo funciona:\n' +
-                '┃ 1️⃣ Escribe el texto falso\n' +
-                '┃ 2️⃣ Menciona al usuario\n' +
-                '┃ 3️⃣ Escribe la respuesta\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
+        }
+
+        const quien = mentions[0];
+
+        // Quitar la mención del texto
+        const mensaje = texto.replace(/@\d+/, '').trim();
+
+        if (!mensaje) {
+            return await responder.texto(
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃\n' +
-                '┃ 🎯 El bot simulará que ese\n' +
-                '┃    usuario escribió el primer\n' +
-                '┃    texto y responderá al segundo\n' +
+                '┃ Escribe el mensaje\n' +
+                '┃\n' +
+                '┃ 💡 Ejemplo:\n' +
+                '┃ ➪ .fake @usuario hola\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
         try {
-            // Extraer menciones del mensaje
-            const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-
-            if (mentions.length === 0) {
-                return await responder.texto('❌ Debes mencionar a un usuario con @');
-            }
-
-            const quien = mentions[0];
-
-            // Separar el texto en "fake" y "respuesta"
-            const sp = '@' + quien.split('@')[0];
-            const partes = texto.split(sp);
-
-            if (partes.length < 2) {
-                return await responder.texto(
-                    '❌ Formato incorrecto.\n\n' +
-                    '💡 Ejemplo:\n' +
-                    '.fake Hola @usuario Buenas'
-                );
-            }
-
-            const fakeText = partes[0].trimEnd();
-            const realText = partes.slice(1).join(sp).trimStart();
-
-            if (!fakeText || !realText) {
-                return await responder.texto('❌ El texto falso y la respuesta no pueden estar vacíos.');
-            }
-
-            // Crear el mensaje falso
+            // Enviar mensaje falso simulando que el mencionado lo escribió
             await sock.sendMessage(jid, {
-                text: realText,
+                text: mensaje,
                 contextInfo: {
                     participant: quien,
                     quotedMessage: {
-                        conversation: fakeText
+                        conversation: ''
                     },
-                    mentionedJid: [quien],
-                    stanzaId: msg.key.id,
-                    remoteJid: isGroup ? jid : false
+                    mentionedJid: [quien]
                 }
-            }, { quoted: msg });
+            });
 
-            console.log(`[FAKE] Fake reply creado para ${quien}`);
+            console.log(`[FAKE] Mensaje falso enviado como ${quien}`);
 
         } catch (error) {
             console.error('[FAKE] Error:', error?.message || error);
-            await responder.texto('❌ Error al crear el fake reply: ' + (error?.message || error));
+            await responder.texto('❌ Error al enviar el fake: ' + (error?.message || error));
         }
     }
 };
