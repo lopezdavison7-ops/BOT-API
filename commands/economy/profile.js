@@ -20,11 +20,11 @@ const RUTA_NIVELES =
 
 const XP_POR_NIVEL = 100;
 
-const TTL_FOTO = 5 * 60 * 1000;
-const TIMEOUT_FOTO = 2500;
+const TTL_FOTO = 10 * 60 * 1000;
+const TIMEOUT_FOTO = 3500;
 const TTL_NIVELES = 1500;
 
-if (!global.picCache) global.picCache = {};
+if (!global.picBufferCache) global.picBufferCache = {};
 
 let cacheNiveles = null;
 let cacheNivelesT = 0;
@@ -90,17 +90,45 @@ function conTimeout(promise, ms) {
     ]);
 }
 
-async function obtenerFotoUrl(sock, id) {
-    const cache = global.picCache[id];
-    if (cache && Date.now() - cache.t < TTL_FOTO) return cache.url;
-    try {
-        const url = await sock.profilePictureUrl(id, 'image');
-        if (url) {
-            global.picCache[id] = { url, t: Date.now() };
-            return url;
-        }
-    } catch {}
-    return null;
+async function descargarFoto(sock, id) {
+    const url =
+        await sock.profilePictureUrl(
+            id,
+            'image'
+        );
+
+    const respuesta =
+        await fetch(url, {
+            signal: AbortSignal.timeout(3000)
+        });
+
+    if (!respuesta.ok) {
+        throw new Error(
+            'HTTP ' + respuesta.status
+        );
+    }
+
+    const arrayBuffer =
+        await respuesta.arrayBuffer();
+
+    return Buffer.from(arrayBuffer);
+}
+
+async function obtenerFotoBuffer(sock, id) {
+    const cache = global.picBufferCache[id];
+
+    if (cache && Date.now() - cache.t < TTL_FOTO) {
+        return cache.buffer;
+    }
+
+    const buffer = await descargarFoto(sock, id);
+
+    global.picBufferCache[id] = {
+        buffer,
+        t: Date.now()
+    };
+
+    return buffer;
 }
 
 export default {
@@ -239,7 +267,7 @@ export default {
 
         const texto =
 `
-╭〔 ⚡ B𝐎𝐓-𝐀𝐏𝐈 〕⬣
+╭〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 〕⬣
 ┃
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
@@ -261,18 +289,22 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
-        const fotoUrl =
-            await conTimeout(
-                obtenerFotoUrl(sock, id),
-                TIMEOUT_FOTO
-            );
+        let fotoBuffer = null;
 
-        if (fotoUrl) {
+        try {
+            fotoBuffer =
+                await conTimeout(
+                    obtenerFotoBuffer(sock, id),
+                    TIMEOUT_FOTO
+                );
+        } catch {}
+
+        if (fotoBuffer) {
             try {
                 await sock.sendMessage(
                     chatJid,
                     {
-                        image: { url: fotoUrl },
+                        image: fotoBuffer,
                         caption: texto,
                         mentions
                     },
