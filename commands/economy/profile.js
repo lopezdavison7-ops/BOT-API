@@ -13,7 +13,7 @@ import {
     xpNecesaria,
     barraXP,
     porcentajeXP
-} from '../../lib/niveles.js';
+} from '../../database/niveles.json';
 
 const TTL_FOTO = 5 * 60 * 1000;
 const TIMEOUT_FOTO = 2500;
