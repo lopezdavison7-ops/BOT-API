@@ -1,5 +1,3 @@
-
-
 import {
     obtenerUsuario
 } from '../../database/economia.js';
@@ -142,15 +140,25 @@ export default {
 
         }
 
+        const mentions = [id];
+
+        let lineaNombre = '';
+        let lineaBio = '';
         let lineaEdad = '';
         let lineaGenero = '';
         let lineaPareja = '';
 
-        const mentions = [id];
+        if (perfil.nombre) {
+            lineaNombre =
+                `┃ 📛 Nombre › *${perfil.nombre}*\n`;
+        }
 
-        if (
-            perfil.fechaNacimiento
-        ) {
+        if (perfil.desc) {
+            lineaBio =
+                `┃ 📝 Bio › ${perfil.desc}\n`;
+        }
+
+        if (perfil.fechaNacimiento) {
 
             const edad =
                 calcularEdad(
@@ -187,9 +195,7 @@ export default {
                 '┃ ⚧️ Género › *No definido*\n';
         }
 
-        if (
-            perfil.pareja
-        ) {
+        if (perfil.pareja) {
 
             lineaPareja =
                 `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
@@ -211,7 +217,7 @@ export default {
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
 ┃ 🆔 Usuario › @${numero}
-┃
+${lineaNombre}${lineaBio}┃
 ┃ 💰 Dinero › *$${dinero.toLocaleString()}*
 ┃ 🎴 Cartas › *${personajes.length}*
 ┃
@@ -222,6 +228,9 @@ export default {
 ┃ 💬 Mensajes › *${mensajes}*
 ┃
 ${lineaEdad}${lineaGenero}${lineaPareja}┃
+┃ 💡 Edita con:
+┃ ➪ .setmyname / .setdesc
+┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
