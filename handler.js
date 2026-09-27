@@ -9,6 +9,7 @@ import { manejarMemoriaIA } from './lib/memoria.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
 import { fmtTiempo } from './lib/helpers.js';
+import { estaMuteado } from './database/mutes.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -17,9 +18,6 @@ const PREFIJO = '.';
 let comandos = null;
 let botJid = null;
 
-// ============================================================
-// 📊 STATS PARA .topmensajes (cache en memoria + guardado rápido)
-// ============================================================
 const RUTA_TOP = path.join(process.cwd(), 'database', 'topComandos.json');
 let topStats = null;
 let topSaveTimer = null;
@@ -50,7 +48,6 @@ function registrarUsoComando(nombreCmd, senderNum) {
         db.total = (db.total || 0) + 1;
         if (senderNum) db.usuarios[senderNum] = (db.usuarios[senderNum] || 0) + 1;
 
-        // Guardado con debounce (no frena el comando)
         if (!topSaveTimer) {
             topSaveTimer = setTimeout(() => {
                 topSaveTimer = null;
@@ -68,9 +65,6 @@ export async function cargarComandosHandler() {
     return comandos;
 }
 
-// ============================================================
-// 🔑 BUSCAR SESIÓN DE PLAY (por cualquier JID del sender)
-// ============================================================
 function buscarSesionPlay(msg) {
     const sessions = global.playSessions;
     if (!sessions) return null;
@@ -92,9 +86,6 @@ function buscarSesionPlay(msg) {
     return null;
 }
 
-// ============================================================
-// 🔑 EXTRAER ID DE BOTÓN (TODAS las fuentes posibles)
-// ============================================================
 function extraerButtonId(msg) {
     try {
         if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
@@ -118,9 +109,6 @@ function extraerButtonId(msg) {
     return null;
 }
 
-// ============================================================
-// 🔑 BUSCAR RUTA REAL DEL ARCHIVO PLAY.JS
-// ============================================================
 function buscarArchivoPlay() {
     const base = path.join(process.cwd(), 'commands');
 
@@ -158,9 +146,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
-        // ============================================
-        // AFK
-        // ============================================
         if (!fromMe) {
             try {
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
@@ -213,9 +198,23 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
-        // ============================================
-        // ANTILINK
-        // ============================================
+        if (!fromMe && isGroup) {
+            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt;
+            if (sender && estaMuteado(jid, sender)) {
+                try {
+                    await sock.sendMessage(jid, {
+                        delete: {
+                            remoteJid: jid,
+                            fromMe: false,
+                            id: msg.key.id,
+                            participant: sender
+                        }
+                    });
+                } catch (e) {}
+                return;
+            }
+        }
+
         if (isGroup && !fromMe && antilinkActivo(jid)) {
             let esAdmin = false;
 
@@ -231,9 +230,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (bloqueado) return;
         }
 
-        // ============================================
-        // SACAR TEXTO
-        // ============================================
         let texto = '';
 
         if (msg.message?.conversation) {
@@ -260,12 +256,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
-        // 🔑 ID del botón presionado
         const buttonId = extraerButtonId(msg);
 
-        // ============================================
-        // 🎵 PLAY SESSIONS (ANTES que juegos/memoria)
-        // ============================================
         if (!fromMe && (texto || buttonId)) {
             const textoLimpio = String(texto || '').trim().toLowerCase();
             const btnIdLimpio = String(buttonId || '').trim().toLowerCase();
@@ -327,9 +319,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
-        // ============================================
-        // JUEGOS ACTIVADOS
-        // ============================================
         if (!fromMe) {
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
             if (fueTrivia) return;
@@ -344,9 +333,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (fueTTT) return;
         }
 
-        // ============================================
-        // MEMORIA IA
-        // ============================================
         if (!fromMe) {
             const fueMemoria = await manejarMemoriaIA(sock, msg);
             if (fueMemoria) return;
@@ -406,7 +392,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
                             '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
                             '┃ 🚫 Comando: .' + nombreComando + '\n' +
@@ -423,9 +409,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             console.error('[CATEGORIAS] Error en bloqueo:', e?.message || e);
         }
 
-        // ============================================
-        // 📊 REGISTRAR USO (para .topmensajes)
-        // ============================================
         registrarUsoComando(
             cmd.nombre || nombreComando,
             String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '')
