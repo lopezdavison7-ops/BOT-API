@@ -21,7 +21,7 @@ const RUTA_NIVELES =
 const XP_POR_NIVEL = 100;
 
 const TTL_FOTO = 10 * 60 * 1000;
-const TIMEOUT_FOTO = 3500;
+const TIMEOUT_FOTO = 6000;
 const TTL_NIVELES = 1500;
 
 if (!global.picBufferCache) global.picBufferCache = {};
@@ -90,6 +90,29 @@ function conTimeout(promise, ms) {
     ]);
 }
 
+async function resolverJidReal(sock, id) {
+    if (!id || !id.endsWith('@lid')) return id;
+
+    try {
+        if (sock?.signalRepository?.lidMapper?.getPNForLid) {
+            const pn =
+                await sock.signalRepository.lidMapper.getPNForLid(id);
+            if (pn) {
+                return pn.includes('@')
+                    ? pn
+                    : pn + '@s.whatsapp.net';
+            }
+        }
+    } catch {}
+
+    try {
+        const limpio = id.split('@')[0].replace(/\D/g, '');
+        if (limpio) return limpio + '@s.whatsapp.net';
+    } catch {}
+
+    return id;
+}
+
 async function descargarFoto(sock, id) {
     const url =
         await sock.profilePictureUrl(
@@ -97,15 +120,15 @@ async function descargarFoto(sock, id) {
             'image'
         );
 
+    if (!url) throw new Error('Sin URL de foto');
+
     const respuesta =
         await fetch(url, {
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(4000)
         });
 
     if (!respuesta.ok) {
-        throw new Error(
-            'HTTP ' + respuesta.status
-        );
+        throw new Error('HTTP ' + respuesta.status);
     }
 
     const arrayBuffer =
@@ -121,7 +144,9 @@ async function obtenerFotoBuffer(sock, id) {
         return cache.buffer;
     }
 
-    const buffer = await descargarFoto(sock, id);
+    const jidReal = await resolverJidReal(sock, id);
+
+    const buffer = await descargarFoto(sock, jidReal);
 
     global.picBufferCache[id] = {
         buffer,
@@ -149,6 +174,8 @@ export default {
         sock,
         msg
     }) => {
+
+        const t0 = Date.now();
 
         const id =
             msg.key.participant ||
@@ -289,6 +316,10 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
+        console.log(
+            `[PROFILE] Datos listos en ${Date.now() - t0}ms | jid: ${id}`
+        );
+
         let fotoBuffer = null;
 
         try {
@@ -297,7 +328,16 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
                     obtenerFotoBuffer(sock, id),
                     TIMEOUT_FOTO
                 );
-        } catch {}
+        } catch (e) {
+            console.log(
+                '[PROFILE] Foto falló:',
+                e?.message || e
+            );
+        }
+
+        console.log(
+            `[PROFILE] Foto: ${fotoBuffer ? 'SÍ' : 'NO'} | total ${Date.now() - t0}ms`
+        );
 
         if (fotoBuffer) {
             try {
