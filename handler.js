@@ -200,30 +200,6 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             }
         }
 
-        if (!fromMe && isGroup) {
-            const candidatos = [
-                msg.key.participant,
-                msg.key.senderPn,
-                msg.key.participantAlt
-            ];
-
-            const muteado = obtenerMuteadoPorCandidatos(jid, candidatos);
-
-            if (muteado) {
-                try {
-                    await sock.sendMessage(jid, {
-                        delete: {
-                            remoteJid: jid,
-                            fromMe: false,
-                            id: msg.key.id,
-                            participant: msg.key.participant
-                        }
-                    });
-                } catch (e) {}
-                return;
-            }
-        }
-
         if (isGroup && !fromMe && antilinkActivo(jid)) {
             let esAdmin = false;
 
@@ -266,6 +242,24 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         const buttonId = extraerButtonId(msg);
+
+        if (!fromMe && isGroup) {
+            const sender =
+                msg.key.participant ||
+                msg.key.senderPn ||
+                msg.key.participantAlt;
+
+            if (
+                sender &&
+                (
+                    estaMuteado(jid, sender) ||
+                    (msg.key.senderPn && estaMuteado(jid, msg.key.senderPn)) ||
+                    (msg.key.participantAlt && estaMuteado(jid, msg.key.participantAlt))
+                )
+            ) {
+                return;
+            }
+        }
 
         if (!fromMe && (texto || buttonId)) {
             const textoLimpio = String(texto || '').trim().toLowerCase();
@@ -414,7 +408,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                             '┃ 🟢 Reactiva con:\n' +
                             '┃ ➪ .activar ' + catCmd + '\n' +
                             '┃\n' +
-                            '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
                     return;
                 }
