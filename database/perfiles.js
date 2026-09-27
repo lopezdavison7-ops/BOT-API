@@ -1,5 +1,3 @@
-
-
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { obtenerStore, guardarStore } from '../lib/jsonStore.js';
@@ -29,7 +27,9 @@ function crearPerfil() {
         pareja: null,
         casadoDesde: null,
         propuestaDe: null,
-        propuestaFecha: null
+        propuestaFecha: null,
+        nombre: null,
+        desc: null
     };
 }
 
@@ -73,7 +73,7 @@ export function validarFechaNacimiento(texto) {
 }
 
 export function calcularEdad(fecha) {
-    const f = fecha instanceof Date? fecha : new Date(fecha);
+    const f = fecha instanceof Date ? fecha : new Date(fecha);
     const ahora = new Date();
     let edad = ahora.getFullYear() - f.getFullYear();
     const noHaCumplidoAun = ahora.getMonth() < f.getMonth() || (ahora.getMonth() === f.getMonth() && ahora.getDate() < f.getDate());
@@ -112,7 +112,7 @@ export function crearPropuesta(deId, paraId) {
 
 export function obtenerPropuestaPendiente(paraId) {
     const perfil = obtenerPerfil(paraId);
-    if (!perfil.propuestaDe ||!perfil.propuestaFecha) return null;
+    if (!perfil.propuestaDe || !perfil.propuestaFecha) return null;
     return {
         emisor: perfil.propuestaDe,
         timestamp: perfil.propuestaFecha
@@ -167,4 +167,26 @@ export function divorciar(id) {
 
     guardar();
     return parejaId;
+}
+
+export function setNombre(id, nombre) {
+    const perfil = obtenerPerfil(id);
+    perfil.nombre = nombre;
+    guardar();
+    return perfil;
+}
+
+export function setDesc(id, desc) {
+    const perfil = obtenerPerfil(id);
+    perfil.desc = desc;
+    guardar();
+    return perfil;
+}
+
+export function obtenerNombre(id) {
+    return obtenerPerfil(id).nombre || null;
+}
+
+export function obtenerDesc(id) {
+    return obtenerPerfil(id).desc || null;
 }
