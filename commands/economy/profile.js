@@ -15,6 +15,31 @@ import {
     porcentajeXP
 } from '../../lib/niveles.js';
 
+const TTL_FOTO = 5 * 60 * 1000;
+const TIMEOUT_FOTO = 2500;
+
+if (!global.picCache) global.picCache = {};
+
+function conTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(null), ms))
+    ]);
+}
+
+async function obtenerFotoUrl(sock, id) {
+    const cache = global.picCache[id];
+    if (cache && Date.now() - cache.t < TTL_FOTO) return cache.url;
+    try {
+        const url = await sock.profilePictureUrl(id, 'image');
+        if (url) {
+            global.picCache[id] = { url, t: Date.now() };
+            return url;
+        }
+    } catch {}
+    return null;
+}
+
 export default {
     nombre: 'profile',
 
@@ -31,8 +56,7 @@ export default {
 
     ejecutar: async ({
         sock,
-        msg,
-        responder
+        msg
     }) => {
 
         const id =
@@ -106,40 +130,6 @@ export default {
                 .split('@')[0]
                 .split(':')[0];
 
-        let fotoBuffer = null;
-        let tieneFoto = false;
-
-        try {
-
-            const url =
-                await sock.profilePictureUrl(
-                    id,
-                    'image'
-                );
-
-            if (url) {
-
-                const respuesta =
-                    await fetch(url);
-
-                if (respuesta.ok) {
-
-                    const arrayBuffer =
-                        await respuesta.arrayBuffer();
-
-                    fotoBuffer =
-                        Buffer.from(
-                            arrayBuffer
-                        );
-
-                    tieneFoto = true;
-                }
-            }
-
-        } catch {
-
-        }
-
         const mentions = [id];
 
         let lineaNombre = '';
@@ -159,17 +149,9 @@ export default {
         }
 
         if (perfil.fechaNacimiento) {
-
-            const edad =
-                calcularEdad(
-                    perfil.fechaNacimiento
-                );
-
             lineaEdad =
-                `┃ 🎂 Edad › *${edad} años*\n`;
-
+                `┃ 🎂 Edad › *${calcularEdad(perfil.fechaNacimiento)} años*\n`;
         } else {
-
             lineaEdad =
                 '┃ 🎂 Edad › *No definida*\n';
         }
@@ -180,32 +162,24 @@ export default {
                 perfil.genero
             ]
         ) {
-
             const info =
                 GENEROS[
                     perfil.genero
                 ];
-
             lineaGenero =
                 `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
-
         } else {
-
             lineaGenero =
                 '┃ ⚧️ Género › *No definido*\n';
         }
 
         if (perfil.pareja) {
-
             lineaPareja =
                 `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
-
             mentions.push(
                 perfil.pareja
             );
-
         } else {
-
             lineaPareja =
                 '┃ 💍 Pareja › *No definida*\n';
         }
@@ -234,35 +208,38 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
-        if (
-            tieneFoto &&
-            fotoBuffer
-        ) {
-
-            await sock.sendMessage(
-                chatJid,
-                {
-                    image: fotoBuffer,
-                    caption: texto,
-                    mentions
-                },
-                {
-                    quoted: msg
-                }
+        const fotoUrl =
+            await conTimeout(
+                obtenerFotoUrl(sock, id),
+                TIMEOUT_FOTO
             );
 
-        } else {
-
-            await sock.sendMessage(
-                chatJid,
-                {
-                    text: texto,
-                    mentions
-                },
-                {
-                    quoted: msg
-                }
-            );
+        if (fotoUrl) {
+            try {
+                await sock.sendMessage(
+                    chatJid,
+                    {
+                        image: { url: fotoUrl },
+                        caption: texto,
+                        mentions
+                    },
+                    {
+                        quoted: msg
+                    }
+                );
+                return;
+            } catch {}
         }
+
+        await sock.sendMessage(
+            chatJid,
+            {
+                text: texto,
+                mentions
+            },
+            {
+                quoted: msg
+            }
+        );
     }
 };
