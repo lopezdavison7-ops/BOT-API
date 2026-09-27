@@ -9,7 +9,7 @@ import { manejarMemoriaIA } from './lib/memoria.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
 import { fmtTiempo } from './lib/helpers.js';
-import { obtenerMuteadoPorCandidatos } from './database/mutes.js';
+import { estaMuteado } from './database/mutes.js';
 import { estaActivo as modoadminActivo } from './database/modoadmin.js';
 import { esAdminGrupo } from './lib/adminCheck.js';
 import fs from 'fs';
