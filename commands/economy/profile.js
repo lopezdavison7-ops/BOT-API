@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import {
     obtenerUsuario
 } from '../../database/economia.js';
@@ -8,17 +11,77 @@ import {
     GENEROS
 } from '../../database/perfiles.js';
 
-import {
-    obtenerNivel,
-    xpNecesaria,
-    barraXP,
-    porcentajeXP
-} from '../../database/niveles.json';
+const RUTA_NIVELES =
+    path.join(
+        process.cwd(),
+        'database',
+        'niveles.json'
+    );
+
+const XP_POR_NIVEL = 100;
 
 const TTL_FOTO = 5 * 60 * 1000;
 const TIMEOUT_FOTO = 2500;
+const TTL_NIVELES = 1500;
 
 if (!global.picCache) global.picCache = {};
+
+let cacheNiveles = null;
+let cacheNivelesT = 0;
+
+function leerNiveles() {
+    const ahora = Date.now();
+    if (cacheNiveles && ahora - cacheNivelesT < TTL_NIVELES) {
+        return cacheNiveles;
+    }
+    try {
+        cacheNiveles = fs.existsSync(RUTA_NIVELES)
+            ? JSON.parse(fs.readFileSync(RUTA_NIVELES, 'utf8'))
+            : {};
+        cacheNivelesT = ahora;
+        return cacheNiveles;
+    } catch {
+        return {};
+    }
+}
+
+function buscarNivel(chatJid, id) {
+    const db = leerNiveles();
+
+    const porChat = db[chatJid];
+    if (porChat) {
+        if (porChat[id]) return porChat[id];
+        if (porChat.usuarios && porChat.usuarios[id]) {
+            return porChat.usuarios[id];
+        }
+    }
+
+    if (db[id]) return db[id];
+
+    if (db.usuarios && db.usuarios[id]) {
+        return db.usuarios[id];
+    }
+
+    return null;
+}
+
+function xpNecesaria(nivel) {
+    return nivel * XP_POR_NIVEL;
+}
+
+function porcentajeXP(datosNivel) {
+    const nivel = datosNivel?.nivel || 1;
+    const xp = Number(datosNivel?.xp || 0);
+    const necesaria = xpNecesaria(nivel);
+    if (!necesaria) return 0;
+    return Math.min(100, Math.round((xp / necesaria) * 100));
+}
+
+function barraXP(datosNivel, largo = 10) {
+    const pct = porcentajeXP(datosNivel);
+    const llenos = Math.round((pct / 100) * largo);
+    return '█'.repeat(llenos) + '░'.repeat(largo - llenos);
+}
 
 function conTimeout(promise, ms) {
     return Promise.race([
@@ -78,39 +141,29 @@ export default {
         const perfil =
             obtenerPerfil(id);
 
-        const nivel =
-            obtenerNivel(
-                chatJid,
-                id
-            );
+        const datosNivel =
+            buscarNivel(chatJid, id);
 
         const nivelActual =
-            nivel?.nivel || 1;
+            datosNivel?.nivel || 1;
 
         const xpActual =
             Number(
-                nivel?.xp || 0
+                datosNivel?.xp || 0
             );
 
         const xpNecesariaNivel =
-            xpNecesaria(
-                nivelActual
-            );
+            xpNecesaria(nivelActual);
 
         const progreso =
-            porcentajeXP(
-                nivel
-            );
+            porcentajeXP(datosNivel);
 
         const barra =
-            barraXP(
-                nivel,
-                10
-            );
+            barraXP(datosNivel, 10);
 
         const mensajes =
             Number(
-                nivel?.mensajes || 0
+                datosNivel?.mensajes || 0
             );
 
         const personajes =
@@ -186,7 +239,7 @@ export default {
 
         const texto =
 `
-╭〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
+╭〔 ⚡ B𝐎𝐓-𝐀𝐏𝐈 〕⬣
 ┃
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
