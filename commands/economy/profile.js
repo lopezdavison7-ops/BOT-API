@@ -21,7 +21,7 @@ const RUTA_NIVELES =
 const XP_POR_NIVEL = 100;
 
 const TTL_FOTO = 10 * 60 * 1000;
-const TIMEOUT_FOTO = 6000;
+const TIMEOUT_FOTO = 8000;
 const TTL_NIVELES = 1500;
 
 if (!global.picBufferCache) global.picBufferCache = {};
@@ -90,37 +90,14 @@ function conTimeout(promise, ms) {
     ]);
 }
 
-async function resolverJidReal(sock, id) {
-    if (!id || !id.endsWith('@lid')) return id;
-
-    try {
-        if (sock?.signalRepository?.lidMapper?.getPNForLid) {
-            const pn =
-                await sock.signalRepository.lidMapper.getPNForLid(id);
-            if (pn) {
-                return pn.includes('@')
-                    ? pn
-                    : pn + '@s.whatsapp.net';
-            }
-        }
-    } catch {}
-
-    try {
-        const limpio = id.split('@')[0].replace(/\D/g, '');
-        if (limpio) return limpio + '@s.whatsapp.net';
-    } catch {}
-
-    return id;
-}
-
-async function descargarFoto(sock, id) {
+async function descargarFoto(sock, jid) {
     const url =
         await sock.profilePictureUrl(
-            id,
+            jid,
             'image'
         );
 
-    if (!url) throw new Error('Sin URL de foto');
+    if (!url) throw new Error('Sin URL');
 
     const respuesta =
         await fetch(url, {
@@ -137,16 +114,55 @@ async function descargarFoto(sock, id) {
     return Buffer.from(arrayBuffer);
 }
 
-async function obtenerFotoBuffer(sock, id) {
+async function obtenerFotoBuffer(sock, msg, id) {
     const cache = global.picBufferCache[id];
 
     if (cache && Date.now() - cache.t < TTL_FOTO) {
         return cache.buffer;
     }
 
-    const jidReal = await resolverJidReal(sock, id);
+    const candidatos = [];
 
-    const buffer = await descargarFoto(sock, jidReal);
+    const push = (j) => {
+        if (j && !candidatos.includes(j)) {
+            candidatos.push(j);
+        }
+    };
+
+    push(msg.key?.senderPn);
+    push(msg.key?.participantAlt);
+
+    if (id && !id.endsWith('@lid')) push(id);
+
+    if (id && id.endsWith('@lid')) {
+        try {
+            if (sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn =
+                    await sock.signalRepository.lidMapper.getPNForLid(id);
+                if (pn) {
+                    push(pn.includes('@') ? pn : pn + '@s.whatsapp.net');
+                }
+            }
+        } catch {}
+    }
+
+    push(id);
+
+    let buffer = null;
+
+    for (const jid of candidatos) {
+        try {
+            buffer = await descargarFoto(sock, jid);
+            if (buffer) {
+                console.log(`[PROFILE] Foto OK con: ${jid}`);
+                break;
+            }
+        } catch (e) {
+            console.log(`[PROFILE] Foto falló con ${jid}: ${e?.message}`);
+        }
+    }
+
+    if (!buffer) throw new Error('Sin foto en ningún candidato');
 
     global.picBufferCache[id] = {
         buffer,
@@ -294,7 +310,7 @@ export default {
 
         const texto =
 `
-╭〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 〕⬣
+╭〔  𝐎𝐓-𝐀𝐏𝐈 〕⬣
 ┃
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
@@ -316,16 +332,12 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ╰━━━━━━━━━━━━━━━━⬣
 `;
 
-        console.log(
-            `[PROFILE] Datos listos en ${Date.now() - t0}ms | jid: ${id}`
-        );
-
         let fotoBuffer = null;
 
         try {
             fotoBuffer =
                 await conTimeout(
-                    obtenerFotoBuffer(sock, id),
+                    obtenerFotoBuffer(sock, msg, id),
                     TIMEOUT_FOTO
                 );
         } catch (e) {
