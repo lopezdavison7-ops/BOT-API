@@ -9,7 +9,9 @@ import { manejarMemoriaIA } from './lib/memoria.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
 import { fmtTiempo } from './lib/helpers.js';
-import { estaMuteado } from './database/mutes.js';
+import { obtenerMuteadoPorCandidatos } from './database/mutes.js';
+import { estaActivo as modoadminActivo } from './database/modoadmin.js';
+import { esAdminGrupo } from './lib/adminCheck.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -199,15 +201,22 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         }
 
         if (!fromMe && isGroup) {
-            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt;
-            if (sender && estaMuteado(jid, sender)) {
+            const candidatos = [
+                msg.key.participant,
+                msg.key.senderPn,
+                msg.key.participantAlt
+            ];
+
+            const muteado = obtenerMuteadoPorCandidatos(jid, candidatos);
+
+            if (muteado) {
                 try {
                     await sock.sendMessage(jid, {
                         delete: {
                             remoteJid: jid,
                             fromMe: false,
                             id: msg.key.id,
-                            participant: sender
+                            participant: msg.key.participant
                         }
                     });
                 } catch (e) {}
@@ -351,6 +360,11 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (!texto.startsWith(prefijo)) return;
 
+        if (isGroup && modoadminActivo(jid)) {
+            const esAdmin = await esAdminGrupo(sock, msg, jid);
+            if (!esAdmin) return;
+        }
+
         const sinPrefijo = texto.slice(prefijo.length).trim();
         const indiceEspacio = sinPrefijo.search(/\s/);
 
@@ -392,7 +406,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
                             '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
                             '┃ 🚫 Comando: .' + nombreComando + '\n' +
@@ -400,7 +414,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                             '┃ 🟢 Reactiva con:\n' +
                             '┃ ➪ .activar ' + catCmd + '\n' +
                             '┃\n' +
-                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                            '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
                     return;
                 }
