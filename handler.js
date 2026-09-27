@@ -17,6 +17,49 @@ const PREFIJO = '.';
 let comandos = null;
 let botJid = null;
 
+// ============================================================
+// 📊 STATS PARA .topmensajes (cache en memoria + guardado rápido)
+// ============================================================
+const RUTA_TOP = path.join(process.cwd(), 'database', 'topComandos.json');
+let topStats = null;
+let topSaveTimer = null;
+
+function cargarTopStats() {
+    if (topStats) return topStats;
+    try {
+        topStats = fs.existsSync(RUTA_TOP)
+            ? JSON.parse(fs.readFileSync(RUTA_TOP, 'utf8'))
+            : { comandos: {}, usuarios: {}, total: 0 };
+    } catch {
+        topStats = { comandos: {}, usuarios: {}, total: 0 };
+    }
+    return topStats;
+}
+
+function guardarTopStats() {
+    try {
+        fs.mkdirSync(path.dirname(RUTA_TOP), { recursive: true });
+        fs.writeFileSync(RUTA_TOP, JSON.stringify(topStats, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+function registrarUsoComando(nombreCmd, senderNum) {
+    try {
+        const db = cargarTopStats();
+        db.comandos[nombreCmd] = (db.comandos[nombreCmd] || 0) + 1;
+        db.total = (db.total || 0) + 1;
+        if (senderNum) db.usuarios[senderNum] = (db.usuarios[senderNum] || 0) + 1;
+
+        // Guardado con debounce (no frena el comando)
+        if (!topSaveTimer) {
+            topSaveTimer = setTimeout(() => {
+                topSaveTimer = null;
+                guardarTopStats();
+            }, 3000);
+        }
+    } catch (e) {}
+}
+
 export async function cargarComandosHandler() {
     if (!comandos) {
         comandos = await loadCommands();
@@ -54,23 +97,19 @@ function buscarSesionPlay(msg) {
 // ============================================================
 function extraerButtonId(msg) {
     try {
-        // 1. Botones tradicionales
         if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
             return msg.message.buttonsResponseMessage.selectedButtonId;
         }
 
-        // 2. Template buttons (el que está usando tu fork)
         if (msg.message?.templateButtonReplyMessage?.selectedId) {
             return msg.message.templateButtonReplyMessage.selectedId;
         }
 
-        // 3. Native flow / interactive
         if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
             return json.id || json.selected_row_id || null;
         }
 
-        // 4. Lista
         if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
@@ -83,21 +122,25 @@ function extraerButtonId(msg) {
 // 🔑 BUSCAR RUTA REAL DEL ARCHIVO PLAY.JS
 // ============================================================
 function buscarArchivoPlay() {
-    const rutas = [
-        './commands/downloads/play.js',
-        './commands/downloads/play2.js',
-        './commands/play/play.js',
-        './commands/musica/play.js',
-        './commands/music/play.js',
-        './commands/youtube/play.js',
-        './commands/media/play.js'
-    ];
+    const base = path.join(process.cwd(), 'commands');
 
-    for (const ruta of rutas) {
-        const abs = path.resolve(process.cwd(), ruta);
-        if (fs.existsSync(abs)) return abs;
+    function buscarEn(dir) {
+        try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    const r = buscarEn(fullPath);
+                    if (r) return r;
+                } else if (entry.isFile() && entry.name.toLowerCase() === 'play.js') {
+                    return fullPath;
+                }
+            }
+        } catch (e) {}
+        return null;
     }
-    return null;
+
+    return buscarEn(base);
 }
 
 export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []) {
@@ -227,9 +270,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             const textoLimpio = String(texto || '').trim().toLowerCase();
             const btnIdLimpio = String(buttonId || '').trim().toLowerCase();
 
-            // 🔑 Aceptar TODOS los formatos posibles
             const esAudio =
-                btnIdLimpio === 'playaudio' ||      // ← el que manda tu fork
+                btnIdLimpio === 'playaudio' ||
                 btnIdLimpio === 'play_audio' ||
                 textoLimpio === 'playaudio' ||
                 textoLimpio === 'play_audio' ||
@@ -238,7 +280,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 textoLimpio === 'audio';
 
             const esVideo =
-                btnIdLimpio === 'playvideo' ||      // ← el que manda tu fork
+                btnIdLimpio === 'playvideo' ||
                 btnIdLimpio === 'play_video' ||
                 textoLimpio === 'playvideo' ||
                 textoLimpio === 'play_video' ||
@@ -249,63 +291,34 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
             if (esAudio || esVideo) {
                 const encontrada = buscarSesionPlay(msg);
 
-                console.log(
-                    '[PLAY-DEBUG] texto:', JSON.stringify(texto),
-                    '| buttonId:', buttonId,
-                    '| esAudio:', esAudio,
-                    '| esVideo:', esVideo,
-                    '| sesión:', encontrada ? 'SÍ' : 'NO'
-                );
-
                 if (encontrada) {
                     const { clave, session } = encontrada;
 
                     if (Date.now() - session.timestamp < 600000) {
                         try {
-                            // 🔑 Buscar ruta real del archivo play.js
                             const rutaPlay = buscarArchivoPlay();
 
-                            if (!rutaPlay) {
-                                console.error('[PLAY-SESSION] ❌ No se encontró play.js en ninguna ruta conocida');
-                                console.log('[PLAY-SESSION] Rutas buscadas: commands/downloader/play.js, commands/play/play.js, etc.');
+                            if (rutaPlay) {
+                                const playMod = await import(rutaPlay);
+                                const { procesarAudio, procesarVideo } = playMod;
 
-                                // Fallback: buscar en todos los subdirectorios de commands
-                                const dirs = fs.readdirSync(path.join(process.cwd(), 'commands'));
-                                for (const dir of dirs) {
-                                    const subDir = path.join(process.cwd(), 'commands', dir);
-                                    if (fs.statSync(subDir).isDirectory()) {
-                                        const archivos = fs.readdirSync(subDir).filter(f => f.toLowerCase().includes('play'));
-                                        if (archivos.length > 0) {
-                                            console.log(`[PLAY-SESSION] 📂 Archivos con "play" en commands/${dir}/:`, archivos);
-                                        }
+                                const responder = {
+                                    texto: async (t) => {
+                                        await sock.sendMessage(jid, { text: t }, { quoted: msg });
                                     }
+                                };
+
+                                if (esAudio) {
+                                    await procesarAudio(sock, msg, session.video, responder);
+                                } else {
+                                    await procesarVideo(sock, msg, session.video, responder);
                                 }
-
-                                delete global.playSessions[clave];
-                                return;
-                            }
-
-                            console.log('[PLAY-SESSION] 📂 Importando:', rutaPlay);
-                            const playMod = await import(rutaPlay);
-                            const { procesarAudio, procesarVideo } = playMod;
-
-                            const responder = {
-                                texto: async (t) => {
-                                    await sock.sendMessage(jid, { text: t }, { quoted: msg });
-                                }
-                            };
-
-                            if (esAudio) {
-                                await procesarAudio(sock, msg, session.video, responder);
-                            } else {
-                                await procesarVideo(sock, msg, session.video, responder);
                             }
 
                             delete global.playSessions[clave];
                             return;
                         } catch (e) {
                             console.error('[PLAY-SESSION] Error:', e?.message || e);
-                            console.error('[PLAY-SESSION] Stack:', e?.stack);
                         }
                     } else {
                         delete global.playSessions[clave];
@@ -393,7 +406,7 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
                             '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
                             '┃ 🚫 Comando: .' + nombreComando + '\n' +
@@ -409,6 +422,15 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         } catch (e) {
             console.error('[CATEGORIAS] Error en bloqueo:', e?.message || e);
         }
+
+        // ============================================
+        // 📊 REGISTRAR USO (para .topmensajes)
+        // ============================================
+        registrarUsoComando(
+            cmd.nombre || nombreComando,
+            String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '')
+                .split('@')[0].replace(/\D/g, '')
+        );
 
         await cmd.ejecutar({
             sock,
