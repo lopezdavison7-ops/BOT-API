@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const RUTA_CONFIG = path.join(process.cwd(), 'database', 'config.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const RUTA_CONFIG = path.join(__dirname, '..', '..', 'database', 'config.json');
 
 function leerConfig() {
     try {
@@ -143,6 +146,7 @@ export default {
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
 
+        console.log(`[SETPREFIX] Guardado en: ${RUTA_CONFIG}`);
         console.log(`[SETPREFIX] Prefijo cambiado: ${prefijoAnterior} → ${nuevoPrefijo}`);
     }
 };
