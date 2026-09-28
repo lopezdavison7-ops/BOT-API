@@ -1,4 +1,4 @@
-import { createCanvas } from 'canvas';
+import { createCanvas } from '@napi-rs/canvas';
 import fetch from 'node-fetch';
 import { modificarDinero } from '../../database/economia.js';
 
@@ -24,67 +24,6 @@ function dibujarCorazon(ctx, x, y, size, color) {
     ctx.restore();
 }
 
-function dibujarJuego(pregunta, palabraOculta, vidas, letrasUsadas, respuesta) {
-    const canvas = createCanvas(400, 500);
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, 400, 500);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('🎮 AHORCADO', 200, 40);
-
-    for (let i = 0; i < VIDAS_MAX; i++) {
-        const x = 60 + i * 70;
-        const color = i < vidas ? '#ff4757' : '#2d2d44';
-        dibujarCorazon(ctx, x, 100, 25, color);
-    }
-
-    ctx.fillStyle = '#ffd93d';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText('❓ PREGUNTA:', 200, 160);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '18px Arial';
-    const preguntaLines = wrapText(ctx, pregunta, 360);
-    preguntaLines.forEach((line, i) => {
-        ctx.fillText(line, 200, 190 + i * 25);
-    });
-
-    ctx.fillStyle = '#6bcf7f';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText('🔤 PALABRA:', 200, 280);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px monospace';
-    ctx.fillText(palabraOculta, 200, 320);
-
-    if (letrasUsadas.length > 0) {
-        ctx.fillStyle = '#a0a0a0';
-        ctx.font = '14px Arial';
-        ctx.fillText('Letras usadas: ' + letrasUsadas.join(', ').toUpperCase(), 200, 370);
-    }
-
-    ctx.fillStyle = '#4a90e2';
-    ctx.font = '14px Arial';
-    ctx.fillText('❤️ Vidas: ' + vidas + '/' + VIDAS_MAX, 200, 410);
-
-    if (vidas === 0) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 200, 400, 100);
-        ctx.fillStyle = '#ff4757';
-        ctx.font = 'bold 32px Arial';
-        ctx.fillText('💀 GAME OVER', 200, 250);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '18px Arial';
-        ctx.fillText('Respuesta: ' + respuesta.toUpperCase(), 200, 285);
-    }
-
-    return canvas.toBuffer();
-}
-
 function wrapText(ctx, text, maxWidth) {
     const words = text.split(' ');
     const lines = [];
@@ -104,6 +43,67 @@ function wrapText(ctx, text, maxWidth) {
     return lines;
 }
 
+function dibujarJuego(pregunta, palabraOculta, vidas, letrasUsadas, respuesta) {
+    const canvas = createCanvas(400, 500);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, 400, 500);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AHORCADO', 200, 40);
+
+    for (let i = 0; i < VIDAS_MAX; i++) {
+        const x = 60 + i * 70;
+        const color = i < vidas ? '#ff4757' : '#2d2d44';
+        dibujarCorazon(ctx, x, 100, 25, color);
+    }
+
+    ctx.fillStyle = '#ffd93d';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('PREGUNTA:', 200, 160);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '18px sans-serif';
+    const preguntaLines = wrapText(ctx, pregunta, 360);
+    preguntaLines.forEach((line, i) => {
+        ctx.fillText(line, 200, 190 + i * 25);
+    });
+
+    ctx.fillStyle = '#6bcf7f';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('PALABRA:', 200, 280);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText(palabraOculta, 200, 320);
+
+    if (letrasUsadas.length > 0) {
+        ctx.fillStyle = '#a0a0a0';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Letras: ' + letrasUsadas.join(', ').toUpperCase(), 200, 370);
+    }
+
+    ctx.fillStyle = '#4a90e2';
+    ctx.font = '14px sans-serif';
+    ctx.fillText('Vidas: ' + vidas + '/' + VIDAS_MAX, 200, 410);
+
+    if (vidas === 0) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 200, 400, 100);
+        ctx.fillStyle = '#ff4757';
+        ctx.font = 'bold 32px sans-serif';
+        ctx.fillText('GAME OVER', 200, 250);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '18px sans-serif';
+        ctx.fillText('Respuesta: ' + respuesta.toUpperCase(), 200, 285);
+    }
+
+    return canvas.toBuffer('image/png');
+}
+
 function calcularRecompensa(respuesta, vidasRestantes) {
     const longitud = respuesta.replace(/ /g, '').length;
     let coinsBase = 50;
@@ -115,10 +115,9 @@ function calcularRecompensa(respuesta, vidasRestantes) {
     }
 
     const bonusVidas = vidasRestantes * 10;
-    const total = coinsBase + bonusVidas;
 
     return {
-        total,
+        total: coinsBase + bonusVidas,
         coinsBase,
         bonusVidas,
         dificultad: longitud >= 9 ? 'Difícil' : longitud >= 6 ? 'Media' : 'Fácil'
@@ -163,7 +162,7 @@ export default {
 
     ejecutar: async ({ sock, msg, responder, jid }) => {
         if (global.ahorcadoGames[jid]) {
-            return await responder.texto('⚠️ Ya hay un juego en curso. Responde al mensaje con letras o usa `.ahorcado stop` para cancelarlo.');
+            return await responder.texto('⚠️ Ya hay un juego en curso. Responde al mensaje con letras o usa `.ahorcado stop`.');
         }
 
         await responder.texto('🎮 Obteniendo pregunta...');
@@ -175,35 +174,34 @@ export default {
             respuesta: respuesta.toLowerCase(),
             letrasAdivinadas: new Set(),
             vidas: VIDAS_MAX,
-            jugador: msg.key.participant || msg.key.remoteJid,
+            jugador: msg.key.participant || msg.key.senderPn || msg.key.remoteJid,
             inicio: Date.now()
         };
 
-        const recompensa = calcularRecompuesta(respuesta, VIDAS_MAX);
+        const recompensa = calcularRecompensa(respuesta, VIDAS_MAX);
         const imagen = dibujarJuego(pregunta, palabraOculta(respuesta, new Set()), VIDAS_MAX, [], respuesta);
 
         const msgSent = await sock.sendMessage(jid, {
             image: imagen,
             caption:
-                '╭━━〔 🎮 𝐀𝐇𝐎𝐑𝐂𝐀𝐃𝐎 〕━━⬣\n' +
+                '╭━━〔 🎮 𝐇𝐎𝐑𝐀𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
-                '┃ 💡 Responde a este mensaje\n' +
-                '┃    con *una letra* para adivinar\n' +
+                '┃  Responde a este mensaje\n' +
+                '┃    con *una letra*\n' +
                 '┃\n' +
-                '┃ ❤️ Tienes *' + VIDAS_MAX + ' vidas*\n' +
-                '┃ ❌ Cada error = 1 corazón 🖤\n' +
+                ' ❤️ Tienes *' + VIDAS_MAX + ' vidas*\n' +
+                '┃  Cada error = 1 corazón 🖤\n' +
                 '┃\n' +
                 '┃ 💰 Recompensa:\n' +
                 '┃    Base: $' + recompensa.coinsBase + ' (' + recompensa.dificultad + ')\n' +
-                '┃    +$10 por cada vida restante\n' +
+                '    +$10 por vida restante\n' +
                 '┃\n' +
-                '┃ 🛑 Para cancelar:\n' +
-                '┃    `.ahorcado stop`\n' +
+                '┃ 🛑 Cancelar: `.ahorcado stop`\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣'
         }, { quoted: msg });
 
-        global.ahorcadoMsgIds[jid] = msgSent.key.id;
+        global.ahorcadoMsgIds[jid] = new Set([msgSent.key.id]);
     }
 };
 
@@ -214,9 +212,9 @@ export async function manejarRespuestaAhorcado(sock, msg) {
     if (!juego) return false;
 
     const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-    const msgId = global.ahorcadoMsgIds[jid];
+    const msgIds = global.ahorcadoMsgIds[jid];
 
-    if (!quotedId || quotedId !== msgId) return false;
+    if (!quotedId || !msgIds || !msgIds.has(quotedId)) return false;
 
     const texto = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim().toLowerCase();
 
@@ -225,11 +223,11 @@ export async function manejarRespuestaAhorcado(sock, msg) {
         delete global.ahorcadoMsgIds[jid];
         await sock.sendMessage(jid, {
             text:
-                '╭━━〔 🛑 𝐉𝐔𝐄𝐆𝐎 𝐂𝐀𝐍𝐂𝐄𝐋𝐀𝐃𝐎 〕━━⬣\n' +
+                '╭━━〔  𝐉𝐔𝐄𝐎 𝐂𝐍𝐂𝐄𝐀𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
                 '┃ La palabra era: *' + juego.respuesta.toUpperCase() + '*\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣'
         }, { quoted: msg });
         return true;
     }
@@ -258,7 +256,6 @@ export async function manejarRespuestaAhorcado(sock, msg) {
 
     if (letrasCorrectas.length === totalLetras) {
         const recompensa = calcularRecompensa(juego.respuesta, juego.vidas);
-        
         modificarDinero(juego.jugador, recompensa.total);
 
         const imagen = dibujarJuego(juego.pregunta, palabraOculta(juego.respuesta, juego.letrasAdivinadas), juego.vidas, Array.from(juego.letrasAdivinadas), juego.respuesta);
@@ -268,20 +265,20 @@ export async function manejarRespuestaAhorcado(sock, msg) {
         await sock.sendMessage(jid, {
             image: imagen,
             caption:
-                '╭━━〔 🎉 𝐆𝐀𝐍𝐀𝐒𝐓𝐄 〕━━⬣\n' +
+                '╭━━〔 🎉 𝐆𝐍𝐀𝐒𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ✅ ¡Completaste la palabra!\n' +
                 '┃\n' +
-                '┃ 📝 Pregunta: ' + juego.pregunta + '\n' +
-                '┃ 🔤 Respuesta: *' + juego.respuesta.toUpperCase() + '*\n' +
-                '┃ ❤️ Vidas restantes: ' + juego.vidas + '/' + VIDAS_MAX + '\n' +
-                '┃\n' +
+                '┃ 📝 ' + juego.pregunta + '\n' +
+                '┃ 🔤 *' + juego.respuesta.toUpperCase() + '*\n' +
+                '┃ ❤️ Vidas: ' + juego.vidas + '/' + VIDAS_MAX + '\n' +
+                '\n' +
                 '┃ 💰 *RECOMPENSA:*\n' +
                 '┃    Base: $' + recompensa.coinsBase + ' (' + recompensa.dificultad + ')\n' +
-                '┃    Bonus vidas: +$' + recompensa.bonusVidas + '\n' +
-                '┃    *TOTAL: +$' + recompensa.total + '*\n' +
+                '    Bonus vidas: +$' + recompensa.bonusVidas + '\n' +
+                '    *TOTAL: +$' + recompensa.total + '*\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔  𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣'
         }, { quoted: msg });
         return true;
     }
@@ -294,16 +291,16 @@ export async function manejarRespuestaAhorcado(sock, msg) {
         await sock.sendMessage(jid, {
             image: imagen,
             caption:
-                '╭━━〔 💀 𝐏𝐄𝐑𝐃𝐈𝐒𝐓𝐄 〕━━⬣\n' +
+                '━━〔 💀 𝐏𝐄𝐃𝐈𝐒𝐓𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Se acabaron tus vidas\n' +
                 '┃\n' +
-                '┃ 📝 Pregunta: ' + juego.pregunta + '\n' +
-                '┃ 🔤 Respuesta: *' + juego.respuesta.toUpperCase() + '*\n' +
+                '┃ 📝 ' + juego.pregunta + '\n' +
+                '┃ 🔤 *' + juego.respuesta.toUpperCase() + '*\n' +
                 '┃\n' +
-                '┃ 💡 Usa `.ahorcado` para jugar de nuevo\n' +
+                '┃ 💡 Juega de nuevo: `.ahorcado`\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         }, { quoted: msg });
         return true;
     }
@@ -312,17 +309,18 @@ export async function manejarRespuestaAhorcado(sock, msg) {
 
     const estado = esCorrecta ? '✅ ¡Correcto!' : '❌ Incorrecto - Perdiste 1 ❤️';
 
-    await sock.sendMessage(jid, {
+    const msgSent = await sock.sendMessage(jid, {
         image: imagen,
         caption:
-            '╭━━〔 🎮 𝐀𝐇𝐎𝐑𝐂𝐀𝐃𝐎 〕━━⬣\n' +
+            '╭━━〔 🎮 𝐇𝐎𝐑𝐀𝐃𝐎 〕━━⬣\n' +
             '┃\n' +
             '┃ ' + estado + '\n' +
             '┃\n' +
             '┃ 💡 Responde con otra letra\n' +
             '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
     }, { quoted: msg });
 
+    msgIds.add(msgSent.key.id);
     return true;
 }
