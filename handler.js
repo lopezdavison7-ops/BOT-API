@@ -6,7 +6,7 @@ import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import { manejarMensajeTTT } from './lib/ttt.js';
 import { manejarMemoriaIA } from './lib/memoria.js';
-import { manejarRespuestaAhorcado } from './commands/juegos/ahorcado.js';
+import { manejarRespuestaAhorcado } from './commands/economy/ahorcado.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
 import { fmtTiempo } from './lib/helpers.js';
