@@ -16,7 +16,16 @@ import { esAdminGrupo } from './lib/adminCheck.js';
 import fs from 'fs';
 import path from 'path';
 
-const PREFIJO = '.';
+function obtenerPrefijoActual() {
+    try {
+        const rutaConfig = path.join(process.cwd(), 'database', 'config.json');
+        if (fs.existsSync(rutaConfig)) {
+            const config = JSON.parse(fs.readFileSync(rutaConfig, 'utf8'));
+            return config.prefijo || '.';
+        }
+    } catch (e) {}
+    return '.';
+}
 
 let comandos = null;
 let botJid = null;
@@ -50,7 +59,6 @@ function registrarUsoComando(nombreCmd, senderNum) {
         db.comandos[nombreCmd] = (db.comandos[nombreCmd] || 0) + 1;
         db.total = (db.total || 0) + 1;
         if (senderNum) db.usuarios[senderNum] = (db.usuarios[senderNum] || 0) + 1;
-
         if (!topSaveTimer) {
             topSaveTimer = setTimeout(() => {
                 topSaveTimer = null;
@@ -71,7 +79,6 @@ export async function cargarComandosHandler() {
 function buscarSesionPlay(msg) {
     const sessions = global.playSessions;
     if (!sessions) return null;
-
     const candidatos = [
         msg.key?.participant,
         msg.key?.senderPn,
@@ -80,7 +87,6 @@ function buscarSesionPlay(msg) {
         msg.key?.sender,
         msg.key?.remoteJid
     ];
-
     for (const c of candidatos) {
         if (c && sessions[c]) {
             return { clave: c, session: sessions[c] };
@@ -94,27 +100,22 @@ function extraerButtonId(msg) {
         if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
             return msg.message.buttonsResponseMessage.selectedButtonId;
         }
-
         if (msg.message?.templateButtonReplyMessage?.selectedId) {
             return msg.message.templateButtonReplyMessage.selectedId;
         }
-
         if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
             return json.id || json.selected_row_id || null;
         }
-
         if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
     } catch (e) {}
-
     return null;
 }
 
 function buscarArchivoPlay() {
     const base = path.join(process.cwd(), 'commands');
-
     function buscarEn(dir) {
         try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -130,18 +131,15 @@ function buscarArchivoPlay() {
         } catch (e) {}
         return null;
     }
-
     return buscarEn(base);
 }
 
-export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []) {
+export async function handleMessage(sock, msg, prefijo = obtenerPrefijoActual(), listaComandos = []) {
     try {
         if (!comandos) {
             comandos = await loadCommands();
         }
-
         if (!botJid) botJid = sock.user.id;
-
         if (!msg.message) return;
         if (msg.key.remoteJid === 'status@broadcast') return;
 
@@ -152,18 +150,14 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (!fromMe) {
             try {
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                const esComandoAfk = /^\.afk/i.test(textoMsg.trim());
-
+                const esComandoAfk = new RegExp(`^\\${prefijo}afk`, 'i').test(textoMsg.trim());
                 if (!esComandoAfk) {
                     const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
                     const data = obtenerAfk(sender);
-
                     if (data) {
                         quitarAfk(sender);
-
                         let textoUser = '@' + String(sender).split('@')[0].replace(/\D/g, '');
                         let mentions = [sender];
-
                         try {
                             if (sender.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
                                 const pn = await sock.signalRepository.lidMapper.getPNForLid(sender);
@@ -174,12 +168,10 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
                                 }
                             }
                         } catch (e) {}
-
                         if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
                             const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
                             if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
                         }
-
                         await sock.sendMessage(jid, {
                             text:
                                 `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
@@ -203,61 +195,39 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         if (isGroup && !fromMe && antilinkActivo(jid)) {
             let esAdmin = false;
-
             try {
                 const permiso = await verificarPermisosAdmin(sock, msg, jid);
                 esAdmin = Boolean(permiso?.ok);
             } catch (error) {
                 console.error('[ANTILINK] Error comprobando admin:', error?.message || error);
             }
-
             const bloqueado = await revisarAntilink(sock, msg, esAdmin);
-
             if (bloqueado) return;
         }
 
         let texto = '';
-
         if (msg.message?.conversation) {
             texto = msg.message.conversation;
-        }
-        else if (msg.message?.extendedTextMessage?.text) {
+        } else if (msg.message?.extendedTextMessage?.text) {
             texto = msg.message.extendedTextMessage.text;
-        }
-        else if (msg.message?.imageMessage?.caption) {
+        } else if (msg.message?.imageMessage?.caption) {
             texto = msg.message.imageMessage.caption;
-        }
-        else if (msg.message?.videoMessage?.caption) {
+        } else if (msg.message?.videoMessage?.caption) {
             texto = msg.message.videoMessage.caption;
-        }
-        else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+        } else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             try {
-                const json = JSON.parse(
-                    msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson
-                );
+                const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
                 texto = json.id || json.display_text || '';
             } catch {}
-        }
-        else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
+        } else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
         const buttonId = extraerButtonId(msg);
 
         if (!fromMe && isGroup) {
-            const sender =
-                msg.key.participant ||
-                msg.key.senderPn ||
-                msg.key.participantAlt;
-
-            if (
-                sender &&
-                (
-                    estaMuteado(jid, sender) ||
-                    (msg.key.senderPn && estaMuteado(jid, msg.key.senderPn)) ||
-                    (msg.key.participantAlt && estaMuteado(jid, msg.key.participantAlt))
-                )
-            ) {
+            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt;
+            if (sender && (estaMuteado(jid, sender) || (msg.key.senderPn && estaMuteado(jid, msg.key.senderPn)) || (msg.key.participantAlt && estaMuteado(jid, msg.key.participantAlt)))) {
                 return;
             }
         }
@@ -265,52 +235,25 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (!fromMe && (texto || buttonId)) {
             const textoLimpio = String(texto || '').trim().toLowerCase();
             const btnIdLimpio = String(buttonId || '').trim().toLowerCase();
-
-            const esAudio =
-                btnIdLimpio === 'playaudio' ||
-                btnIdLimpio === 'play_audio' ||
-                textoLimpio === 'playaudio' ||
-                textoLimpio === 'play_audio' ||
-                textoLimpio === '1' ||
-                textoLimpio === '🎵 audio' ||
-                textoLimpio === 'audio';
-
-            const esVideo =
-                btnIdLimpio === 'playvideo' ||
-                btnIdLimpio === 'play_video' ||
-                textoLimpio === 'playvideo' ||
-                textoLimpio === 'play_video' ||
-                textoLimpio === '2' ||
-                textoLimpio === '🎬 video' ||
-                textoLimpio === 'video';
-
+            const esAudio = btnIdLimpio === 'playaudio' || btnIdLimpio === 'play_audio' || textoLimpio === 'playaudio' || textoLimpio === 'play_audio' || textoLimpio === '1' || textoLimpio === '🎵 audio' || textoLimpio === 'audio';
+            const esVideo = btnIdLimpio === 'playvideo' || btnIdLimpio === 'play_video' || textoLimpio === 'playvideo' || textoLimpio === 'play_video' || textoLimpio === '2' || textoLimpio === '🎬 video' || textoLimpio === 'video';
             if (esAudio || esVideo) {
                 const encontrada = buscarSesionPlay(msg);
-
                 if (encontrada) {
                     const { clave, session } = encontrada;
-
                     if (Date.now() - session.timestamp < 600000) {
                         try {
                             const rutaPlay = buscarArchivoPlay();
-
                             if (rutaPlay) {
                                 const playMod = await import(rutaPlay);
                                 const { procesarAudio, procesarVideo } = playMod;
-
-                                const responder = {
-                                    texto: async (t) => {
-                                        await sock.sendMessage(jid, { text: t }, { quoted: msg });
-                                    }
-                                };
-
+                                const responder = { texto: async (t) => { await sock.sendMessage(jid, { text: t }, { quoted: msg }); } };
                                 if (esAudio) {
                                     await procesarAudio(sock, msg, session.video, responder);
                                 } else {
                                     await procesarVideo(sock, msg, session.video, responder);
                                 }
                             }
-
                             delete global.playSessions[clave];
                             return;
                         } catch (e) {
@@ -326,16 +269,12 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
         if (!fromMe) {
             const fueAhorcado = await manejarRespuestaAhorcado(sock, msg);
             if (fueAhorcado) return;
-
             const fueTrivia = await manejarMensajeTrivia(sock, msg);
             if (fueTrivia) return;
-
             const fueTetris = await manejarMensajeTetris(sock, msg);
             if (fueTetris) return;
-
             const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
             if (fueAdivinanza) return;
-
             const fueTTT = await manejarMensajeTTT(sock, msg);
             if (fueTTT) return;
         }
@@ -365,18 +304,8 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         const sinPrefijo = texto.slice(prefijo.length).trim();
         const indiceEspacio = sinPrefijo.search(/\s/);
-
-        const nombreComando = (
-            indiceEspacio === -1
-                ? sinPrefijo
-                : sinPrefijo.slice(0, indiceEspacio)
-        ).toLowerCase();
-
-        const argumento =
-            indiceEspacio === -1
-                ? ''
-                : sinPrefijo.slice(indiceEspacio + 1);
-
+        const nombreComando = (indiceEspacio === -1 ? sinPrefijo : sinPrefijo.slice(0, indiceEspacio)).toLowerCase();
+        const argumento = indiceEspacio === -1 ? '' : sinPrefijo.slice(indiceEspacio + 1);
         const args = argumento ? argumento.split(' ') : [];
 
         if (nombreComando === 'menu' && args[0]) {
@@ -391,26 +320,23 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         let cmd = comandos.get(nombreComando);
         if (!cmd) {
-            cmd = [...comandos.values()].find(
-                c => c.alias?.includes(nombreComando)
-            );
+            cmd = [...comandos.values()].find(c => c.alias?.includes(nombreComando));
         }
         if (!cmd) return;
 
         try {
             const catCmd = String(cmd.categoria || '').toLowerCase().trim();
-
             if (catCmd && catCmd !== 'system' && catCmd !== 'owner') {
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
                             '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
-                            '┃ 🚫 Comando: .' + nombreComando + '\n' +
+                            '┃ 🚫 Comando: ' + prefijo + nombreComando + '\n' +
                             '┃\n' +
                             '┃ 🟢 Reactiva con:\n' +
-                            '┃ ➪ .activar ' + catCmd + '\n' +
+                            '┃ ➪ ' + prefijo + 'activar ' + catCmd + '\n' +
                             '┃\n' +
                             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
@@ -423,68 +349,23 @@ export async function handleMessage(sock, msg, prefijo = '.', listaComandos = []
 
         registrarUsoComando(
             cmd.nombre || nombreComando,
-            String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '')
-                .split('@')[0].replace(/\D/g, '')
+            String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '')
         );
 
         await cmd.ejecutar({
-            sock,
-            msg,
-            args,
-            argumento,
-            listaComandos,
-            prefijo,
-            fromMe,
-            isGroup,
-            jid,
-            botJid,
+            sock, msg, args, argumento, listaComandos, prefijo, fromMe, isGroup, jid, botJid,
             responder: {
-                texto: async (text) => {
-                    await sock.sendMessage(
-                        jid,
-                        { text },
-                        { quoted: msg }
-                    );
-                },
-                imagen: async (img, caption = '') => {
-                    await sock.sendMessage(
-                        jid,
-                        { image: img, caption },
-                        { quoted: msg }
-                    );
-                },
-                video: async (vid, caption = '') => {
-                    await sock.sendMessage(
-                        jid,
-                        { video: vid, caption },
-                        { quoted: msg }
-                    );
-                },
-                audio: async (aud, ptt = true) => {
-                    await sock.sendMessage(
-                        jid,
-                        {
-                            audio: aud,
-                            mimetype: 'audio/mpeg',
-                            ptt
-                        },
-                        { quoted: msg }
-                    );
-                }
+                texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
             }
         });
 
     } catch (error) {
         console.error('[HANDLER] Error al manejar mensaje:', error);
-
         if (!msg.key.fromMe) {
-            await sock.sendMessage(
-                msg.key.remoteJid,
-                {
-                    text: `❌ Error: ${error.message}`
-                },
-                { quoted: msg }
-            );
+            await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg });
         }
     }
 }
