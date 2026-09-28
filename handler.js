@@ -15,22 +15,30 @@ import { estaActivo as modoadminActivo } from './database/modoadmin.js';
 import { esAdminGrupo } from './lib/adminCheck.js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const RUTA_CONFIG = path.join(__dirname, 'database', 'config.json');
 
 function obtenerPrefijoActual() {
     try {
-        const rutaConfig = path.join(process.cwd(), 'database', 'config.json');
-        if (fs.existsSync(rutaConfig)) {
-            const config = JSON.parse(fs.readFileSync(rutaConfig, 'utf8'));
+        if (fs.existsSync(RUTA_CONFIG)) {
+            const raw = fs.readFileSync(RUTA_CONFIG, 'utf8');
+            const config = JSON.parse(raw);
+            console.log('[PREFIJO] Leído de config.json:', config.prefijo);
             return config.prefijo || '.';
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error('[PREFIJO] Error leyendo config:', e.message);
+    }
     return '.';
 }
 
 let comandos = null;
 let botJid = null;
 
-const RUTA_TOP = path.join(process.cwd(), 'database', 'topComandos.json');
+const RUTA_TOP = path.join(__dirname, 'database', 'topComandos.json');
 let topStats = null;
 let topSaveTimer = null;
 
@@ -115,7 +123,7 @@ function extraerButtonId(msg) {
 }
 
 function buscarArchivoPlay() {
-    const base = path.join(process.cwd(), 'commands');
+    const base = path.join(__dirname, 'commands');
     function buscarEn(dir) {
         try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -174,7 +182,7 @@ export async function handleMessage(sock, msg, prefijo = obtenerPrefijoActual(),
                         }
                         await sock.sendMessage(jid, {
                             text:
-                                `╭━━〔 ✅ 𝐕𝐎𝐋𝐕𝐈𝐒𝐓𝐄 〕━━⬣\n` +
+                                `╭━━〔 ✅ 𝐎𝐋𝐕𝐒𝐓𝐄 〕━━⬣\n` +
                                 `┃\n` +
                                 `┃ 🎉 ${textoUser} ya regresaste!\n` +
                                 `┃\n` +
@@ -183,7 +191,7 @@ export async function handleMessage(sock, msg, prefijo = obtenerPrefijoActual(),
                                 `┃\n` +
                                 `┃ 🎈 Bienvenido de vuelta\n` +
                                 `┃\n` +
-                                `╰━━━━━━━━━━━━━━━━⬣`,
+                                `━━━━━━━━━━━━━━━━⬣`,
                             mentions
                         }, { quoted: msg });
                     }
@@ -330,15 +338,15 @@ export async function handleMessage(sock, msg, prefijo = obtenerPrefijoActual(),
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐒𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í 𝐃𝐄𝐒𝐂𝐓𝐈𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
-                            '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
-                            '┃ 🚫 Comando: ' + prefijo + nombreComando + '\n' +
+                            '┃  Categoría: *' + catCmd.toUpperCase() + '*\n' +
+                            '┃  Comando: ' + prefijo + nombreComando + '\n' +
                             '┃\n' +
                             '┃ 🟢 Reactiva con:\n' +
                             '┃ ➪ ' + prefijo + 'activar ' + catCmd + '\n' +
                             '┃\n' +
-                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                            '╰━━〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
                     return;
                 }
