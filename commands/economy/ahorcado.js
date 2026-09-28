@@ -156,7 +156,7 @@ function palabraOculta(respuesta, letrasAdivinadas) {
 
 export default {
     nombre: 'ahorcado',
-    categoria: 'economy',
+    categoria: 'economia',
     alias: ['hangman', 'juegoahorcado', 'vidas'],
     descripcion: 'Juego del ahorcado con vidas y recompensas en coins',
     uso: '.ahorcado',
