@@ -8,7 +8,8 @@
     "gacha": "node lib/gacha-selector.cjs"
   },
   "dependencies": {
-    "@hapi/boom": "^10.0.1",
+"@napi-rs/canvas": "^0.1.65",  
+"@hapi/boom": "^10.0.1",
     "@img/sharp-wasm32": "^0.35.3",
     "axios": "^1.19.0",
     "baileys": "git@github.com:Andresv27728/baileys-beta.git",
