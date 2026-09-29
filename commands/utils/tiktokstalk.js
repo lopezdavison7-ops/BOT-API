@@ -49,7 +49,7 @@ function validarUsername(input) {
 
 export default {
     nombre: 'tiktokstalk',
-    categoria: 'utils',
+    categoria: 'info',
     alias: ['ttstalk', 'tiktokinfo', 'ttuser', 'tiktoker'],
     descripcion: 'Muestra información completa de un perfil de TikTok',
     uso: '.ttstalk <username>',
@@ -99,32 +99,46 @@ export default {
                 signal: AbortSignal.timeout(15000)
             });
 
-            if (!res.ok) throw new Error('API respondió ' + res.status);
+            const rawText = await res.text();
+            let json;
+            try {
+                json = JSON.parse(rawText);
+            } catch (e) {
+                console.error('[TT-STALK] Respuesta no es JSON:', rawText.substring(0, 200));
+                return await responder.texto('❌ La API no devolvió un formato válido.');
+            }
 
-            const json = await res.json();
-            console.log('[TT-STALK] Respuesta keys:', Object.keys(json));
+            console.log('[TT-STALK] Respuesta completa:', JSON.stringify(json).substring(0, 500));
 
             const estado = pick(json, ['estado', 'status', 'success']);
-            if (estado === false || estado === 'falso') {
+            if (estado === false || estado === 'falso' || estado === false) {
+                const mensaje = pick(json, ['mensaje', 'message', 'error']) || 'Usuario no encontrado';
                 return await responder.texto(
-                    '❌ Usuario no encontrado: *@' + username + '*\n\n' +
-                    '💡 Verifica que escribiste el username correcto.'
+                    '❌ ' + mensaje + '\n\n' +
+                    '💡 Verifica que *@' + username + '* exista en TikTok.'
                 );
             }
 
             const resultado = pick(json, ['resultado', 'result', 'data', 'datos']);
 
             if (!resultado) {
-                console.log('[TT-STALK] Sin resultado. JSON:', JSON.stringify(json).substring(0, 300));
-                return await responder.texto('❌ La API no devolvió datos para: *@' + username + '*');
+                console.error('[TT-STALK] Sin resultado. JSON completo:', JSON.stringify(json));
+                return await responder.texto(
+                    '❌ La API no devolvió datos para: *@' + username + '*\n\n' +
+                    '💡 Es posible que el usuario no exista o la API esté fallando.'
+                );
             }
 
-            const usuario = pick(resultado, ['usuarios', 'user', 'userInfo', 'profile']);
-            const stats = pick(resultado, ['estadísticas', 'stats', 'statistics']);
+            const usuario = pick(resultado, ['usuarios', 'user', 'userInfo', 'profile', 'userData']);
+            const stats = pick(resultado, ['estadísticas', 'stats', 'statistics', 'statsInfo']);
 
             if (!usuario) {
-                console.log('[TT-STALK] Sin usuario. Keys:', Object.keys(resultado));
-                return await responder.texto('❌ No se pudo obtener info del usuario.');
+                console.error('[TT-STALK] Sin usuario. Keys de resultado:', Object.keys(resultado));
+                console.error('[TT-STALK] Resultado completo:', JSON.stringify(resultado));
+                return await responder.texto(
+                    '❌ No se pudo obtener info del usuario.\n\n' +
+                    '💡 Verifica que *@' + username + '* exista en TikTok.'
+                );
             }
 
             const realUsername = pick(usuario, ['username', 'uniqueId']) || username;
