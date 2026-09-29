@@ -1,16 +1,51 @@
 import fetch from 'node-fetch';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { obtenerPerfil } from '../../database/perfiles.js';
 
 const API_URL = 'https://api.delirius.online/canvas/bratanime?text=';
+
+async function agregarMarcaDeAgua(buffer, userId) {
+    try {
+        const perfil = obtenerPerfil(userId);
+        const marca = perfil?.nombre || perfil?.desc || '';
+        
+        if (!marca) return buffer;
+
+        const imagen = await loadImage(buffer);
+        const canvas = createCanvas(imagen.width, imagen.height);
+        const ctx = canvas.getContext('2d');
+
+        ctx.drawImage(imagen, 0, 0);
+
+        const fontSize = Math.max(16, Math.floor(imagen.width / 25));
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 4;
+        ctx.strokeText(marca, imagen.width - 15, imagen.height - 15);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(marca, imagen.width - 15, imagen.height - 15);
+
+        return canvas.toBuffer('image/png');
+    } catch (error) {
+        console.error('[BRATANIME] Error agregando marca:', error.message);
+        return buffer;
+    }
+}
 
 export default {
     nombre: 'bratanime',
     categoria: 'canvas',
     alias: ['brat', 'bratanime', 'animebrat'],
-    descripcion: 'Genera sticker estilo brat anime con texto',
+    descripcion: 'Genera sticker estilo brat anime con texto y marca de agua',
     uso: '.bratanime <texto>',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const texto = String(argumento || '').trim();
+        const userId = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
 
         if (!texto) {
             return await responder.texto(
@@ -71,8 +106,13 @@ export default {
                 throw new Error('Imagen vacía');
             }
 
+            const bufferConMarca = await agregarMarcaDeAgua(buffer, userId);
+
             await sock.sendMessage(jid, {
-                sticker: buffer
+                sticker: bufferConMarca,
+                packname: 'BOT-API',
+                author: texto.slice(0, 30),
+                isAnimated: false
             }, { quoted: msg });
 
         } catch (error) {
