@@ -20,7 +20,7 @@ const RUTA_LIDMAP = path.join(__dirname, '..', '..', 'database', 'lidmap.json');
 
 const XP_POR_NIVEL = 100;
 const TTL_FOTO = 10 * 60 * 1000;
-const TIMEOUT_FOTO = 8000;
+const TIMEOUT_FOTO = 3500;
 const TTL_NIVELES = 1500;
 
 if (!global.picBufferCache) global.picBufferCache = {};
@@ -29,12 +29,20 @@ let lidMap = null;
 let cacheNiveles = null;
 let cacheNivelesT = 0;
 
+function esPnValido(j) {
+    return typeof j === 'string' && /^\d{5,15}@s\.whatsapp\.net$/.test(j);
+}
+
 function leerLidMap() {
     if (lidMap) return lidMap;
     try {
-        lidMap = fs.existsSync(RUTA_LIDMAP)
+        const raw = fs.existsSync(RUTA_LIDMAP)
             ? JSON.parse(fs.readFileSync(RUTA_LIDMAP, 'utf8'))
             : {};
+        lidMap = {};
+        for (const [k, v] of Object.entries(raw)) {
+            if (esPnValido(v)) lidMap[k] = v;
+        }
     } catch {
         lidMap = {};
     }
@@ -42,21 +50,15 @@ function leerLidMap() {
 }
 
 function registrarLid(lid, pn) {
-    if (!lid || !pn) return;
+    if (!lid || !esPnValido(pn)) return;
     const map = leerLidMap();
     if (map[lid] === pn) return;
     map[lid] = pn;
+    lidMap = map;
     try {
         fs.mkdirSync(path.dirname(RUTA_LIDMAP), { recursive: true });
         fs.writeFileSync(RUTA_LIDMAP, JSON.stringify(map, null, 2), 'utf8');
     } catch {}
-}
-
-function normalizarJid(j) {
-    if (!j) return null;
-    let s = String(j);
-    if (!s.includes('@')) s += '@s.whatsapp.net';
-    return s;
 }
 
 async function resolverPn(sock, lid) {
@@ -67,21 +69,11 @@ async function resolverPn(sock, lid) {
         if (sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(lid);
             if (pn) {
-                const j = normalizarJid(pn);
-                registrarLid(lid, j);
-                return j;
-            }
-        }
-    } catch {}
-
-    try {
-        const contacts = sock?.store?.contacts || {};
-        for (const [jid, contact] of Object.entries(contacts)) {
-            if (!jid.endsWith('@s.whatsapp.net')) continue;
-            const cLid = contact?.lid || contact?.attrs?.lid || contact?.pnLid;
-            if (cLid && (cLid === lid || normalizarJid(cLid) === lid)) {
-                registrarLid(lid, jid);
-                return jid;
+                const j = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                if (esPnValido(j)) {
+                    registrarLid(lid, j);
+                    return j;
+                }
             }
         }
     } catch {}
@@ -91,9 +83,7 @@ async function resolverPn(sock, lid) {
 
 function leerNiveles() {
     const ahora = Date.now();
-    if (cacheNiveles && ahora - cacheNivelesT < TTL_NIVELES) {
-        return cacheNiveles;
-    }
+    if (cacheNiveles && ahora - cacheNivelesT < TTL_NIVELES) return cacheNiveles;
     try {
         cacheNiveles = fs.existsSync(RUTA_NIVELES)
             ? JSON.parse(fs.readFileSync(RUTA_NIVELES, 'utf8'))
@@ -107,21 +97,13 @@ function leerNiveles() {
 
 function buscarNivel(chatJid, id) {
     const db = leerNiveles();
-
     const porChat = db[chatJid];
     if (porChat) {
         if (porChat[id]) return porChat[id];
-        if (porChat.usuarios && porChat.usuarios[id]) {
-            return porChat.usuarios[id];
-        }
+        if (porChat.usuarios && porChat.usuarios[id]) return porChat.usuarios[id];
     }
-
     if (db[id]) return db[id];
-
-    if (db.usuarios && db.usuarios[id]) {
-        return db.usuarios[id];
-    }
-
+    if (db.usuarios && db.usuarios[id]) return db.usuarios[id];
     return null;
 }
 
@@ -155,7 +137,7 @@ async function descargarFoto(sock, jid) {
     if (!url) throw new Error('Sin URL');
 
     const respuesta = await fetch(url, {
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(3000)
     });
 
     if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
@@ -170,24 +152,21 @@ async function obtenerFotoBuffer(sock, msg, id, jidReal) {
 
     const candidatos = [];
     const push = (j) => {
-        const n = normalizarJid(j);
-        if (n && !candidatos.includes(n)) candidatos.push(n);
+        if (j && !candidatos.includes(j)) candidatos.push(j);
     };
 
-    push(jidReal);
-    push(msg.key?.senderPn);
-    push(msg.key?.participantAlt);
-    push(msg.key?.sender);
-    push(msg.key?.senderAlt);
+    if (esPnValido(jidReal)) push(jidReal);
+    if (esPnValido(msg.key?.senderPn)) push(msg.key.senderPn);
+    if (esPnValido(msg.key?.participantAlt)) push(msg.key.participantAlt);
     push(id);
 
     let buffer = null;
 
-    for (const jid of candidatos) {
+    for (const jid of candidatos.slice(0, 2)) {
         try {
             buffer = await descargarFoto(sock, jid);
             if (buffer) {
-                if (id.endsWith('@lid') && jid !== id) registrarLid(id, jid);
+                if (id.endsWith('@lid') && esPnValido(jid)) registrarLid(id, jid);
                 console.log(`[PROFILE] Foto OK con: ${jid}`);
                 break;
             }
@@ -196,7 +175,7 @@ async function obtenerFotoBuffer(sock, msg, id, jidReal) {
         }
     }
 
-    if (!buffer) throw new Error('Sin foto en ningún candidato');
+    if (!buffer) throw new Error('Sin foto disponible');
 
     global.picBufferCache[id] = { buffer, t: Date.now() };
     return buffer;
@@ -207,19 +186,11 @@ export default {
 
     categoria: 'economia',
 
-    alias: [
-        'perfil',
-        'me',
-        'yo'
-    ],
+    alias: ['perfil', 'me', 'yo'],
 
-    descripcion:
-        'Muestra tu perfil económico, nivel y colección con foto y mención.',
+    descripcion: 'Muestra tu perfil económico, nivel y colección con foto y mención.',
 
-    ejecutar: async ({
-        sock,
-        msg
-    }) => {
+    ejecutar: async ({ sock, msg }) => {
 
         const t0 = Date.now();
 
@@ -256,7 +227,8 @@ export default {
         const personajes = Array.isArray(usuario.personajes) ? usuario.personajes : [];
         const dinero = Number(usuario.dinero || 0);
 
-        const numero = String(jidReal).split('@')[0].split(':')[0];
+        const numero = String(jidReal).split('@')[0].replace(/\D/g, '') ||
+            String(id).split('@')[0].replace(/\D/g, '');
 
         const mentions = [id];
 
@@ -266,13 +238,8 @@ export default {
         let lineaGenero = '';
         let lineaPareja = '';
 
-        if (perfil.nombre) {
-            lineaNombre = `┃ 📛 Nombre › *${perfil.nombre}*\n`;
-        }
-
-        if (perfil.desc) {
-            lineaBio = `┃ 📝 Bio › ${perfil.desc}\n`;
-        }
+        if (perfil.nombre) lineaNombre = `┃ 📛 Nombre › *${perfil.nombre}*\n`;
+        if (perfil.desc) lineaBio = `┃ 📝 Bio › ${perfil.desc}\n`;
 
         if (perfil.fechaNacimiento) {
             lineaEdad = `┃ 🎂 Edad › *${calcularEdad(perfil.fechaNacimiento)} años*\n`;
@@ -315,7 +282,7 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
 ┃ 💡 Edita con:
 ┃ ➪ .setmyname / .setdesc
 ┃
-╰━━━━━━━━━━━━━━━━⬣
+╰━━━━━━━━━━━━━━━━
 `;
 
         let fotoBuffer = null;
