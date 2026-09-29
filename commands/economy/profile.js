@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 import {
     obtenerUsuario
@@ -11,23 +12,82 @@ import {
     GENEROS
 } from '../../database/perfiles.js';
 
-const RUTA_NIVELES =
-    path.join(
-        process.cwd(),
-        'database',
-        'niveles.json'
-    );
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const RUTA_NIVELES = path.join(__dirname, '..', '..', 'database', 'niveles.json');
+const RUTA_LIDMAP = path.join(__dirname, '..', '..', 'database', 'lidmap.json');
 
 const XP_POR_NIVEL = 100;
-
 const TTL_FOTO = 10 * 60 * 1000;
 const TIMEOUT_FOTO = 8000;
 const TTL_NIVELES = 1500;
 
 if (!global.picBufferCache) global.picBufferCache = {};
 
+let lidMap = null;
 let cacheNiveles = null;
 let cacheNivelesT = 0;
+
+function leerLidMap() {
+    if (lidMap) return lidMap;
+    try {
+        lidMap = fs.existsSync(RUTA_LIDMAP)
+            ? JSON.parse(fs.readFileSync(RUTA_LIDMAP, 'utf8'))
+            : {};
+    } catch {
+        lidMap = {};
+    }
+    return lidMap;
+}
+
+function registrarLid(lid, pn) {
+    if (!lid || !pn) return;
+    const map = leerLidMap();
+    if (map[lid] === pn) return;
+    map[lid] = pn;
+    try {
+        fs.mkdirSync(path.dirname(RUTA_LIDMAP), { recursive: true });
+        fs.writeFileSync(RUTA_LIDMAP, JSON.stringify(map, null, 2), 'utf8');
+    } catch {}
+}
+
+function normalizarJid(j) {
+    if (!j) return null;
+    let s = String(j);
+    if (!s.includes('@')) s += '@s.whatsapp.net';
+    return s;
+}
+
+async function resolverPn(sock, lid) {
+    const map = leerLidMap();
+    if (map[lid]) return map[lid];
+
+    try {
+        if (sock?.signalRepository?.lidMapper?.getPNForLid) {
+            const pn = await sock.signalRepository.lidMapper.getPNForLid(lid);
+            if (pn) {
+                const j = normalizarJid(pn);
+                registrarLid(lid, j);
+                return j;
+            }
+        }
+    } catch {}
+
+    try {
+        const contacts = sock?.store?.contacts || {};
+        for (const [jid, contact] of Object.entries(contacts)) {
+            if (!jid.endsWith('@s.whatsapp.net')) continue;
+            const cLid = contact?.lid || contact?.attrs?.lid || contact?.pnLid;
+            if (cLid && (cLid === lid || normalizarJid(cLid) === lid)) {
+                registrarLid(lid, jid);
+                return jid;
+            }
+        }
+    } catch {}
+
+    return null;
+}
 
 function leerNiveles() {
     const ahora = Date.now();
@@ -91,61 +151,34 @@ function conTimeout(promise, ms) {
 }
 
 async function descargarFoto(sock, jid) {
-    const url =
-        await sock.profilePictureUrl(
-            jid,
-            'image'
-        );
-
+    const url = await sock.profilePictureUrl(jid, 'image');
     if (!url) throw new Error('Sin URL');
 
-    const respuesta =
-        await fetch(url, {
-            signal: AbortSignal.timeout(4000)
-        });
+    const respuesta = await fetch(url, {
+        signal: AbortSignal.timeout(5000)
+    });
 
-    if (!respuesta.ok) {
-        throw new Error('HTTP ' + respuesta.status);
-    }
+    if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
 
-    const arrayBuffer =
-        await respuesta.arrayBuffer();
-
+    const arrayBuffer = await respuesta.arrayBuffer();
     return Buffer.from(arrayBuffer);
 }
 
-async function obtenerFotoBuffer(sock, msg, id) {
+async function obtenerFotoBuffer(sock, msg, id, jidReal) {
     const cache = global.picBufferCache[id];
-
-    if (cache && Date.now() - cache.t < TTL_FOTO) {
-        return cache.buffer;
-    }
+    if (cache && Date.now() - cache.t < TTL_FOTO) return cache.buffer;
 
     const candidatos = [];
-
     const push = (j) => {
-        if (j && !candidatos.includes(j)) {
-            candidatos.push(j);
-        }
+        const n = normalizarJid(j);
+        if (n && !candidatos.includes(n)) candidatos.push(n);
     };
 
+    push(jidReal);
     push(msg.key?.senderPn);
     push(msg.key?.participantAlt);
-
-    if (id && !id.endsWith('@lid')) push(id);
-
-    if (id && id.endsWith('@lid')) {
-        try {
-            if (sock?.signalRepository?.lidMapper?.getPNForLid) {
-                const pn =
-                    await sock.signalRepository.lidMapper.getPNForLid(id);
-                if (pn) {
-                    push(pn.includes('@') ? pn : pn + '@s.whatsapp.net');
-                }
-            }
-        } catch {}
-    }
-
+    push(msg.key?.sender);
+    push(msg.key?.senderAlt);
     push(id);
 
     let buffer = null;
@@ -154,6 +187,7 @@ async function obtenerFotoBuffer(sock, msg, id) {
         try {
             buffer = await descargarFoto(sock, jid);
             if (buffer) {
+                if (id.endsWith('@lid') && jid !== id) registrarLid(id, jid);
                 console.log(`[PROFILE] Foto OK con: ${jid}`);
                 break;
             }
@@ -164,11 +198,7 @@ async function obtenerFotoBuffer(sock, msg, id) {
 
     if (!buffer) throw new Error('Sin foto en ningún candidato');
 
-    global.picBufferCache[id] = {
-        buffer,
-        t: Date.now()
-    };
-
+    global.picBufferCache[id] = { buffer, t: Date.now() };
     return buffer;
 }
 
@@ -193,66 +223,40 @@ export default {
 
         const t0 = Date.now();
 
+        const menciones =
+            msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
         const id =
+            menciones[0] ||
             msg.key.participant ||
             msg.key.participantAlt ||
             msg.key.remoteJid ||
             msg.key.remoteJidAlt;
 
-        const chatJid =
-            msg.key.remoteJid;
+        const chatJid = msg.key.remoteJid;
 
-        if (!id || !chatJid) {
-            return;
+        if (!id || !chatJid) return;
+
+        let jidReal = id;
+        if (id.endsWith('@lid')) {
+            jidReal = (await resolverPn(sock, id)) || id;
         }
 
-        const usuario =
-            obtenerUsuario(id);
+        const usuario = obtenerUsuario(id);
+        const perfil = obtenerPerfil(id);
+        const datosNivel = buscarNivel(chatJid, id);
 
-        const perfil =
-            obtenerPerfil(id);
+        const nivelActual = datosNivel?.nivel || 1;
+        const xpActual = Number(datosNivel?.xp || 0);
+        const xpNecesariaNivel = xpNecesaria(nivelActual);
+        const progreso = porcentajeXP(datosNivel);
+        const barra = barraXP(datosNivel, 10);
+        const mensajes = Number(datosNivel?.mensajes || 0);
 
-        const datosNivel =
-            buscarNivel(chatJid, id);
+        const personajes = Array.isArray(usuario.personajes) ? usuario.personajes : [];
+        const dinero = Number(usuario.dinero || 0);
 
-        const nivelActual =
-            datosNivel?.nivel || 1;
-
-        const xpActual =
-            Number(
-                datosNivel?.xp || 0
-            );
-
-        const xpNecesariaNivel =
-            xpNecesaria(nivelActual);
-
-        const progreso =
-            porcentajeXP(datosNivel);
-
-        const barra =
-            barraXP(datosNivel, 10);
-
-        const mensajes =
-            Number(
-                datosNivel?.mensajes || 0
-            );
-
-        const personajes =
-            Array.isArray(
-                usuario.personajes
-            )
-                ? usuario.personajes
-                : [];
-
-        const dinero =
-            Number(
-                usuario.dinero || 0
-            );
-
-        const numero =
-            String(id)
-                .split('@')[0]
-                .split(':')[0];
+        const numero = String(jidReal).split('@')[0].split(':')[0];
 
         const mentions = [id];
 
@@ -263,54 +267,36 @@ export default {
         let lineaPareja = '';
 
         if (perfil.nombre) {
-            lineaNombre =
-                `┃ 📛 Nombre › *${perfil.nombre}*\n`;
+            lineaNombre = `┃ 📛 Nombre › *${perfil.nombre}*\n`;
         }
 
         if (perfil.desc) {
-            lineaBio =
-                `┃ 📝 Bio › ${perfil.desc}\n`;
+            lineaBio = `┃ 📝 Bio › ${perfil.desc}\n`;
         }
 
         if (perfil.fechaNacimiento) {
-            lineaEdad =
-                `┃ 🎂 Edad › *${calcularEdad(perfil.fechaNacimiento)} años*\n`;
+            lineaEdad = `┃ 🎂 Edad › *${calcularEdad(perfil.fechaNacimiento)} años*\n`;
         } else {
-            lineaEdad =
-                '┃ 🎂 Edad › *No definida*\n';
+            lineaEdad = '┃ 🎂 Edad › *No definida*\n';
         }
 
-        if (
-            perfil.genero &&
-            GENEROS[
-                perfil.genero
-            ]
-        ) {
-            const info =
-                GENEROS[
-                    perfil.genero
-                ];
-            lineaGenero =
-                `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
+        if (perfil.genero && GENEROS[perfil.genero]) {
+            const info = GENEROS[perfil.genero];
+            lineaGenero = `┃ ${info.emoji} Género › *${info.etiqueta}*\n`;
         } else {
-            lineaGenero =
-                '┃ ⚧️ Género › *No definido*\n';
+            lineaGenero = '┃ ⚧️ Género › *No definido*\n';
         }
 
         if (perfil.pareja) {
-            lineaPareja =
-                `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
-            mentions.push(
-                perfil.pareja
-            );
+            lineaPareja = `┃ 💍 Pareja › @${perfil.pareja.split('@')[0]}\n`;
+            mentions.push(perfil.pareja);
         } else {
-            lineaPareja =
-                '┃ 💍 Pareja › *No definida*\n';
+            lineaPareja = '┃ 💍 Pareja › *No definida*\n';
         }
 
         const texto =
 `
-╭〔  𝐎𝐓-𝐀𝐏𝐈 〕⬣
+╭〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 〕⬣
 ┃
 ┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
@@ -335,48 +321,30 @@ ${lineaEdad}${lineaGenero}${lineaPareja}┃
         let fotoBuffer = null;
 
         try {
-            fotoBuffer =
-                await conTimeout(
-                    obtenerFotoBuffer(sock, msg, id),
-                    TIMEOUT_FOTO
-                );
-        } catch (e) {
-            console.log(
-                '[PROFILE] Foto falló:',
-                e?.message || e
+            fotoBuffer = await conTimeout(
+                obtenerFotoBuffer(sock, msg, id, jidReal),
+                TIMEOUT_FOTO
             );
+        } catch (e) {
+            console.log('[PROFILE] Foto falló:', e?.message || e);
         }
 
-        console.log(
-            `[PROFILE] Foto: ${fotoBuffer ? 'SÍ' : 'NO'} | total ${Date.now() - t0}ms`
-        );
+        console.log(`[PROFILE] Foto: ${fotoBuffer ? 'SÍ' : 'NO'} | total ${Date.now() - t0}ms`);
 
         if (fotoBuffer) {
             try {
-                await sock.sendMessage(
-                    chatJid,
-                    {
-                        image: fotoBuffer,
-                        caption: texto,
-                        mentions
-                    },
-                    {
-                        quoted: msg
-                    }
-                );
+                await sock.sendMessage(chatJid, {
+                    image: fotoBuffer,
+                    caption: texto,
+                    mentions
+                }, { quoted: msg });
                 return;
             } catch {}
         }
 
-        await sock.sendMessage(
-            chatJid,
-            {
-                text: texto,
-                mentions
-            },
-            {
-                quoted: msg
-            }
-        );
+        await sock.sendMessage(chatJid, {
+            text: texto,
+            mentions
+        }, { quoted: msg });
     }
 };
