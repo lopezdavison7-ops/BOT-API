@@ -161,7 +161,7 @@ export default {
 
     categoria: 'stickers',
 
-    alias: ['stickerpack', 'stickers', 'sp'],
+    alias: ['stickerpack', 'stickers', 'pk'],
 
     descripcion:
         'Busca y envía un pack de stickers completo. Uso: .spack <tema>',
