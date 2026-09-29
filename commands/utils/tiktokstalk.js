@@ -27,21 +27,13 @@ function validarUsername(input) {
             valido: false,
             error:
                 'Los usernames de TikTok *NO pueden tener espacios*.\n\n' +
-                'Ejemplo:\n' +
-                '❌ `Alex Aguilar30` (nombre visible)\n' +
-                '✅ `alex_aguilar30` (username real)\n\n' +
-                '💡 Para encontrar el username real:\n' +
-                '1. Ve al perfil en TikTok\n' +
-                '2. Debajo del nombre aparece *@username*\n' +
-                '3. Usa ese sin el @'
+                '💡 Ve al perfil en TikTok y copia el *@username* real.'
         };
     }
     if (!/^[a-zA-Z0-9._]+$/.test(limpio)) {
         return {
             valido: false,
-            error:
-                'El username contiene caracteres inválidos.\n\n' +
-                'Solo se permiten: letras, números, `.` y `_`'
+            error: 'Solo se permiten: letras, números, `.` y `_`'
         };
     }
     return { valido: true, username: limpio };
@@ -66,7 +58,6 @@ export default {
                 '┃ 💡 Ejemplos:\n' +
                 '┃ ➪ .ttstalk twice_tiktok_official\n' +
                 '┃ ➪ .ttstalk khaby.lame\n' +
-                '┃ ➪ .ttstalk @charlidamelio\n' +
                 '┃\n' +
                 '┃ ⚠️ Usa el *@username* real,\n' +
                 '┃    NO el nombre visible\n' +
@@ -99,65 +90,56 @@ export default {
                 signal: AbortSignal.timeout(15000)
             });
 
+            if (!res.ok) throw new Error('API respondió ' + res.status);
+
             const rawText = await res.text();
             let json;
             try {
                 json = JSON.parse(rawText);
             } catch (e) {
-                console.error('[TT-STALK] Respuesta no es JSON:', rawText.substring(0, 200));
-                return await responder.texto('❌ La API no devolvió un formato válido.');
+                return await responder.texto('❌ La API no devolvió formato válido.');
             }
 
-            console.log('[TT-STALK] Respuesta completa:', JSON.stringify(json).substring(0, 500));
-
-            const estado = pick(json, ['estado', 'status', 'success']);
-            if (estado === false || estado === 'falso' || estado === false) {
-                const mensaje = pick(json, ['mensaje', 'message', 'error']) || 'Usuario no encontrado';
-                return await responder.texto(
-                    '❌ ' + mensaje + '\n\n' +
-                    '💡 Verifica que *@' + username + '* exista en TikTok.'
-                );
+            const estado = pick(json, ['status', 'estado', 'success']);
+            if (estado === false || estado === 'false') {
+                const mensaje = pick(json, ['message', 'mensaje', 'error']) || 'Usuario no encontrado';
+                return await responder.texto('❌ ' + mensaje);
             }
 
-            const resultado = pick(json, ['resultado', 'result', 'data', 'datos']);
+            const resultado = pick(json, ['result', 'resultado', 'data', 'datos']);
 
             if (!resultado) {
-                console.error('[TT-STALK] Sin resultado. JSON completo:', JSON.stringify(json));
-                return await responder.texto(
-                    '❌ La API no devolvió datos para: *@' + username + '*\n\n' +
-                    '💡 Es posible que el usuario no exista o la API esté fallando.'
-                );
+                return await responder.texto('❌ La API no devolvió datos para: *@' + username + '*');
             }
 
-            const usuario = pick(resultado, ['usuarios', 'user', 'userInfo', 'profile', 'userData']);
-            const stats = pick(resultado, ['estadísticas', 'stats', 'statistics', 'statsInfo']);
+            const usuario = pick(resultado, ['users', 'usuarios', 'user', 'userInfo', 'profile', 'userData']);
+            const stats = pick(resultado, ['stats', 'estadísticas', 'statistics', 'statsInfo']);
 
             if (!usuario) {
-                console.error('[TT-STALK] Sin usuario. Keys de resultado:', Object.keys(resultado));
-                console.error('[TT-STALK] Resultado completo:', JSON.stringify(resultado));
                 return await responder.texto(
-                    '❌ No se pudo obtener info del usuario.\n\n' +
-                    '💡 Verifica que *@' + username + '* exista en TikTok.'
+                    '❌ Usuario no encontrado: *@' + username + '*\n\n' +
+                    '💡 Verifica que el username exista en TikTok.'
                 );
             }
 
             const realUsername = pick(usuario, ['username', 'uniqueId']) || username;
-            const apodo = pick(usuario, ['apodo', 'nickname', 'name']) || realUsername;
-            const bio = pick(usuario, ['firma', 'signature', 'bio', 'description']) || 'Sin biografía';
-            const verificado = Boolean(pick(usuario, ['verificado', 'verified']));
-            const privado = Boolean(pick(usuario, ['privateAccount', 'private', 'isPrivate']));
+            const apodo = pick(usuario, ['nickname', 'apodo', 'name']) || realUsername;
+            const bio = pick(usuario, ['signature', 'firma', 'bio', 'description']) || 'Sin biografía';
+            const verificado = Boolean(pick(usuario, ['verified', 'verificado']));
+            const privado = Boolean(pick(usuario, ['privateAccount', 'private', 'isPrivate', 'private_account']));
             const perfilUrl = pick(usuario, ['url', 'profileUrl', 'link']) || ('https://www.tiktok.com/@' + realUsername);
             const avatar =
                 pick(usuario, ['avatarLarger', 'avatarLarge', 'avatar']) ||
                 pick(usuario, ['avatarMedium']) ||
-                pick(usuario, ['avatarPulgar', 'avatarThumb']);
+                pick(usuario, ['avatarThumb', 'avatarPulgar']);
 
             const followers = formatNumber(pick(stats, ['followerCount', 'followers', 'seguidores']));
             const following = formatNumber(pick(stats, ['followingCount', 'following', 'siguiendo']));
-            const likes = formatNumber(pick(stats, ['heartCount', 'likes', 'hearts', 'corazones']));
-            const videos = formatNumber(pick(stats, ['videoCount', 'videos']));
+            const likes = formatNumber(pick(stats, ['heartCount', 'heart', 'likes', 'hearts', 'corazones']));
+            const videos = formatNumber(pick(stats, ['videoCount', 'videos', 'video']));
+            const friends = formatNumber(pick(stats, ['friendCount', 'friends', 'amigos']));
 
-            const bioLimpia = String(bio).replace(/[*_~`]/g, '').slice(0, 150);
+            const bioLimpia = String(bio).replace(/[*_~`]/g, '').slice(0, 200);
 
             const caption =
                 '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 𝐏𝐑𝐎𝐅𝐈𝐋𝐄 〕━━⬣\n' +
@@ -174,6 +156,7 @@ export default {
                 '┃ 👤 Siguiendo: *' + following + '*\n' +
                 '┃ ❤️ Likes: *' + likes + '*\n' +
                 '┃ 🎬 Videos: *' + videos + '*\n' +
+                (friends && friends !== '0' ? '┃ 👥 Amigos: *' + friends + '*\n' : '') +
                 '┃\n' +
                 '┃ 🔗 ' + perfilUrl + '\n' +
                 '┃\n' +
