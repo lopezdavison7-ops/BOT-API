@@ -1,5 +1,3 @@
-
-
 import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
@@ -9,11 +7,12 @@ const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
 const ZONA_HORARIA = 'America/Managua';
 
+const HOSTING_URL = 'https://nexcodea.com';
+const CANAL_URL = 'https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q';
+
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 const VIDEO_MENU_URL = '';
 const CANAL_FILE = path.join(process.cwd(), 'database', 'canal.json');
-
-const CANAL_URL = 'https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q';
 
 const GRUPO_MENCIONES = '120363429140811226@g.us';
 const CANTIDAD_MENCIONES = 5;
@@ -302,6 +301,7 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName, diseño
     texto += `${diseño.info}\n`;
     texto += `┃ 👨‍💻 Creador    ▸ ${CREADOR}\n`;
     texto += `┃ 📦 Versión    ▸ ${VERSION}\n`;
+    texto += `┃ 🌐 Hosting    ▸ ${HOSTING_URL}\n`;
     texto += `┃ 📚 Comandos   ▸ ${totalCmds}\n`;
     texto += `┃ 🗂️ Categorías ▸ ${totalCats}\n`;
     texto += `┃ 🔧 Prefijo    ▸ ${prefijo}\n`;
