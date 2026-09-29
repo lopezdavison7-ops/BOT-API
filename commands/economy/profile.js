@@ -230,7 +230,9 @@ export default {
         const numero = String(jidReal).split('@')[0].replace(/\D/g, '') ||
             String(id).split('@')[0].replace(/\D/g, '');
 
-        const mentions = [id];
+        const mentions = [];
+        if (esPnValido(jidReal)) mentions.push(jidReal);
+        if (id && id !== jidReal) mentions.push(id);
 
         let lineaNombre = '';
         let lineaBio = '';
@@ -263,9 +265,9 @@ export default {
 
         const texto =
 `
-╭〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 〕⬣
+╭〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕⬣
 ┃
-┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
+┃ 👤 𝐄𝐑𝐅𝐈𝐋
 ┃
 ┃ 🆔 Usuario › @${numero}
 ${lineaNombre}${lineaBio}┃
