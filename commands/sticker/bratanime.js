@@ -4,34 +4,42 @@ import { obtenerPerfil } from '../../database/perfiles.js';
 
 const API_URL = 'https://api.delirius.online/canvas/bratanime?text=';
 
-async function agregarMarcaDeAgua(buffer, userId) {
+async function procesarSticker(buffer, userId) {
     try {
-        const perfil = obtenerPerfil(userId);
-        const marca = perfil?.nombre || perfil?.desc || '';
-        
-        if (!marca) return buffer;
-
         const imagen = await loadImage(buffer);
-        const canvas = createCanvas(imagen.width, imagen.height);
+        const canvas = createCanvas(512, 512);
         const ctx = canvas.getContext('2d');
 
-        ctx.drawImage(imagen, 0, 0);
+        ctx.clearRect(0, 0, 512, 512);
 
-        const fontSize = Math.max(16, Math.floor(imagen.width / 25));
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'bottom';
+        const scale = Math.min(512 / imagen.width, 512 / imagen.height);
+        const w = imagen.width * scale;
+        const h = imagen.height * scale;
+        const x = (512 - w) / 2;
+        const y = (512 - h) / 2;
 
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 4;
-        ctx.strokeText(marca, imagen.width - 15, imagen.height - 15);
+        ctx.drawImage(imagen, x, y, w, h);
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillText(marca, imagen.width - 15, imagen.height - 15);
+        const perfil = obtenerPerfil(userId);
+        const marca = perfil?.nombre || perfil?.desc || '';
 
-        return canvas.toBuffer('image/png');
+        if (marca) {
+            const fontSize = 24;
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = 4;
+            ctx.strokeText(marca, 500, 500);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillText(marca, 500, 500);
+        }
+
+        return canvas.toBuffer('image/webp');
     } catch (error) {
-        console.error('[BRATANIME] Error agregando marca:', error.message);
+        console.error('[BRATANIME] Error procesando:', error.message);
         return buffer;
     }
 }
@@ -49,7 +57,7 @@ export default {
 
         if (!texto) {
             return await responder.texto(
-                '╭━━〔 🎨 𝐁𝐑𝐀𝐓 𝐀𝐍𝐈𝐌𝐄 〕━━⬣\n' +
+                '╭━━〔 🎨 𝐁𝐑𝐀𝐓 𝐀𝐍𝐈𝐄 〕━━\n' +
                 '┃\n' +
                 '┃ ❌ Escribe el texto\n' +
                 '┃\n' +
@@ -106,13 +114,10 @@ export default {
                 throw new Error('Imagen vacía');
             }
 
-            const bufferConMarca = await agregarMarcaDeAgua(buffer, userId);
+            const stickerBuffer = await procesarSticker(buffer, userId);
 
             await sock.sendMessage(jid, {
-                sticker: bufferConMarca,
-                packname: 'BOT-API',
-                author: texto.slice(0, 30),
-                isAnimated: false
+                sticker: stickerBuffer
             }, { quoted: msg });
 
         } catch (error) {
