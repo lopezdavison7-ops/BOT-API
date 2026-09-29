@@ -3,8 +3,6 @@ import fetch from 'node-fetch';
 const API_SEARCH = 'https://api.delirius.online/search/soundcloud?q=';
 const API_DOWNLOAD = 'https://api.delirius.online/download/soundcloud?url=';
 
-if (!global.scMap) global.scMap = {};
-
 function pick(obj, keys) {
     if (!obj) return undefined;
     for (const k of keys) {
@@ -69,7 +67,7 @@ async function downloadAndSend(track, sock, jid, msg) {
                 '┃ 👤 ' + track.artista + '\n' +
                 '┃ ⏱️ ' + formatDuration(track.duracion) + '\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         }, { quoted: msg });
 
     } catch (error) {
@@ -85,7 +83,7 @@ export default {
     categoria: 'Descargas',
     alias: ['sc', 'sound'],
     descripcion: 'Busca y descarga música de SoundCloud',
-    uso: '.soundcloud <búsqueda> | .soundcloud <número>',
+    uso: '.soundcloud <búsqueda>',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const q = String(argumento || '').trim();
@@ -99,20 +97,8 @@ export default {
                 '┃ 💡 Ejemplo:\n' +
                 '┃ ➪ .sc dalex hola\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-        }
-
-        if (/^\d+$/.test(q)) {
-            const num = parseInt(q);
-            const track = global.scMap?.[jid]?.[num];
-
-            if (!track) {
-                return await responder.texto('❌ Ese número no existe. Haz una nueva búsqueda.');
-            }
-
-            await responder.texto('⏳ Descargando: *' + track.titulo + '*...');
-            return await downloadAndSend(track, sock, jid, msg);
         }
 
         try {
@@ -133,49 +119,27 @@ export default {
             const datosCrudos = pick(json, ['datos', 'data', 'result', 'results', 'items']);
 
             if (!Array.isArray(datosCrudos) || datosCrudos.length === 0) {
-                console.log('[SC] Respuesta sin lista:', JSON.stringify(json).substring(0, 300));
                 return await responder.texto(
                     '❌ Sin resultados para: *' + q + '*\n\n' +
                     '💡 Intenta con otro nombre o artista.'
                 );
             }
 
-            const lista = datosCrudos.slice(0, 10).map(v => ({
-                titulo: pick(v, ['título', 'title', 'titulo', 'name']) || 'Sin título',
-                artista: pick(v, ['artista', 'artist', 'author', 'username']) || 'Desconocido',
-                duracion: Number(pick(v, ['duración', 'duration', 'duration_ms', 'dur']) || 0),
-                imagen: pick(v, ['imagen', 'image', 'thumbnail', 'artwork']) || null,
-                link: pick(v, ['link', 'url', 'permalink_url', 'permalink']) || null
-            })).filter(v => v.link);
+            const primero = datosCrudos[0];
 
-            if (!lista.length) {
-                return await responder.texto('❌ Sin resultados válidos para: *' + q + '*');
+            const track = {
+                titulo: pick(primero, ['título', 'title', 'titulo', 'name']) || 'Sin título',
+                artista: pick(primero, ['artista', 'artist', 'author', 'username']) || 'Desconocido',
+                duracion: Number(pick(primero, ['duración', 'duration', 'duration_ms', 'dur']) || 0),
+                imagen: pick(primero, ['imagen', 'image', 'thumbnail', 'artwork']) || null,
+                link: pick(primero, ['link', 'url', 'permalink_url', 'permalink']) || null
+            };
+
+            if (!track.link) {
+                return await responder.texto('❌ El primer resultado no tiene link válido.');
             }
 
-            global.scMap = global.scMap || {};
-            global.scMap[jid] = {};
-            lista.forEach((v, i) => {
-                global.scMap[jid][i + 1] = v;
-            });
-
-            const primerTrack = lista[0];
-
-            await responder.texto('⏳ Descargando el primer resultado:\n*' + primerTrack.titulo + '* - ' + primerTrack.artista);
-            await downloadAndSend(primerTrack, sock, jid, msg);
-
-            if (lista.length > 1) {
-                let txt = '╭━━〔 🎵 𝐎𝐓𝐑𝐎𝐒 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n┃\n';
-                lista.forEach((v, i) => {
-                    if (i === 0) return;
-                    txt += '┃ *' + (i + 1) + '.* ' + v.titulo + '\n';
-                    txt += '┃    👤 ' + v.artista + ' · ⏱️ ' + formatDuration(v.duracion) + '\n┃\n';
-                });
-                txt += '┃ 💡 Para descargar otro escribe:\n';
-                txt += '┃ ➪ .sc <número>\n';
-                txt += '┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
-                await responder.texto(txt);
-            }
+            await downloadAndSend(track, sock, jid, msg);
 
         } catch (error) {
             console.error('[SC] Error:', error.message);
