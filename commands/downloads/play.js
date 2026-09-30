@@ -1,26 +1,35 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
 
-const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 12 });
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
-const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
-const API_MP3 = 'https://api.delirius.online/download/ytmp3';
-const API_MP4 = 'https://api.delirius.online/download/ytmp4';
+const DELIRIUS = {
+    buscar: 'https://api.delirius.online/search/ytsearch',
+    mp3: 'https://api.delirius.online/download/ytmp3',
+    mp4: 'https://api.delirius.online/download/ytmp4'
+};
+
+const NOTH = {
+    buscar: 'https://noth.hidenplay.net/api/busqueda/youtube',
+    mp3: 'https://noth.hidenplay.net/api/descargas/ytmp3',
+    mp4: 'https://noth.hidenplay.net/api/descargas/ytmp4',
+    key: 'nothSrEG'
+};
+
 const FORMATO_VIDEO = '360p';
-
-const CACHE_TTL = 10 * 60 * 1000;
-const MODIFICADORES = ['remix', 'official audio', 'song'];
+const CACHE_TTL = 5 * 60 * 1000;
+const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
 const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 'que', 'aaa', 'a']);
 
 const UAS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
 ];
 
 if (!global.playSessions) global.playSessions = {};
 if (!global.playCache) global.playCache = new Map();
-if (!global.playInfoCache) global.playInfoCache = new Map();
 
 function getUA() {
     return UAS[Math.floor(Math.random() * UAS.length)];
@@ -34,11 +43,11 @@ function formatearVistas(vistas) {
     return String(num);
 }
 
-async function getJSON(url, timeoutMs, signal) {
+async function getJSON(url, timeoutMs) {
     const res = await fetch(url, {
         agent: AGENTE,
         headers: { 'Accept': 'application/json', 'User-Agent': getUA() },
-        signal: signal || AbortSignal.timeout(timeoutMs)
+        signal: AbortSignal.timeout(timeoutMs)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
@@ -60,38 +69,28 @@ function normInfo(i) {
     return {
         titulo: i.title || i.titulo || i.título || 'Sin título',
         autor: i.author || i.autor || 'Desconocido',
+        thumbnail: i.image || i.imagen || '',
         formato: i.format || i.formato || '',
         downloadUrl: i.download || i.descarga
     };
 }
 
-async function buscarUna(query, signal) {
-    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}`, 8000, signal);
-    if (data.status !== true && data.estado !== true) throw new Error('API sin éxito');
+async function buscarDelirius(query) {
+    const data = await getJSON(`${DELIRIUS.buscar}?q=${encodeURIComponent(query)}`, 10000);
+    if (data.status !== true && data.estado !== true) throw new Error('Delirius sin éxito');
     const lista = data.data || data.datos || [];
     const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-    if (!v) throw new Error('Sin resultados');
+    if (!v) throw new Error('Delirius vacío');
     return normVideo(v);
 }
 
-function carreraBusquedas(variantes) {
-    return new Promise((resolve, reject) => {
-        const controller = new AbortController();
-        let pendientes = variantes.length;
-        let ultimoError = null;
-
-        variantes.forEach(v => {
-            buscarUna(v, controller.signal)
-                .then(r => {
-                    controller.abort();
-                    resolve({ video: r, variante: v });
-                })
-                .catch(e => {
-                    ultimoError = e;
-                    if (--pendientes === 0) reject(ultimoError || new Error('Sin resultados'));
-                });
-        });
-    });
+async function buscarNoth(query) {
+    const data = await getJSON(`${NOTH.buscar}?query=${encodeURIComponent(query)}&apikey=${NOTH.key}`, 10000);
+    if (data.status !== true) throw new Error('Noth sin éxito');
+    const lista = data.data || [];
+    const v = lista.find(x => x.type === 'video' && !x.isLive) || lista[0];
+    if (!v) throw new Error('Noth vacío');
+    return normVideo(v);
 }
 
 async function buscarYouTube(query) {
@@ -99,60 +98,80 @@ async function buscarYouTube(query) {
 
     const cached = global.playCache.get(key);
     if (cached && Date.now() - cached.t < CACHE_TTL) {
+        console.log(`[PLAY] ⚡ Caché: ${key}`);
         return cached.video;
     }
 
     const esGenerica = key.length <= 5 || GENERICAS.has(key);
-    const variantes = esGenerica
-        ? [key, ...MODIFICADORES.map(m => `${key} ${m}`)]
-        : [key];
+    let video = null;
 
-    const { video } = await carreraBusquedas(variantes);
+    if (!esGenerica) {
+        video = await Promise.any([buscarDelirius(key), buscarNoth(key)]);
+    } else {
+        const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
+        console.log(`[PLAY] Búsqueda genérica → variantes: ${variantes.join(' | ')}`);
 
-    if (global.playCache.size > 60) global.playCache.clear();
+        const resultados = await Promise.allSettled(
+            variantes.flatMap(v => [
+                buscarDelirius(v).then(r => ({ r, v })),
+                buscarNoth(v).then(r => ({ r, v }))
+            ])
+        );
+
+        for (const v of variantes) {
+            const exito = resultados.find(s => s.status === 'fulfilled' && s.value.v === v);
+            if (exito) {
+                video = exito.value.r;
+                console.log(`[PLAY] ✅ Variante ganadora: "${v}"`);
+                break;
+            }
+        }
+
+        if (!video) throw new Error('Sin resultados');
+    }
+
+    if (global.playCache.size > 50) global.playCache.clear();
     global.playCache.set(key, { video, t: Date.now() });
 
     return video;
 }
 
 async function infoAudio(url) {
-    const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(url)}`, 12000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP3 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
+    return await Promise.any([
+        (async () => {
+            const d = await getJSON(`${DELIRIUS.mp3}?url=${encodeURIComponent(url)}`, 18000);
+            if (d.status !== true && d.estado !== true) throw new Error('x');
+            const i = normInfo(d.data || d.datos || {});
+            if (!i.downloadUrl) throw new Error('x');
+            return i;
+        })(),
+        (async () => {
+            const d = await getJSON(`${NOTH.mp3}?url=${encodeURIComponent(url)}&apikey=${NOTH.key}`, 18000);
+            if (d.status !== true && d.estado !== true) throw new Error('x');
+            const i = normInfo(d.data || d.datos || {});
+            if (!i.downloadUrl) throw new Error('x');
+            return i;
+        })()
+    ]);
 }
 
 async function infoVideo(url) {
-    const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 12000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP4 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
-}
-
-function prefetchInfo(video) {
-    const id = video.videoId;
-    if (!id || global.playInfoCache.has(id)) return;
-
-    if (global.playInfoCache.size > 40) global.playInfoCache.clear();
-
-    global.playInfoCache.set(id, {
-        audio: infoAudio(video.url).catch(() => null),
-        video: infoVideo(video.url).catch(() => null),
-        t: Date.now()
-    });
-}
-
-async function obtenerInfo(video, tipo) {
-    const entry = global.playInfoCache.get(video.videoId);
-
-    if (entry && Date.now() - entry.t < CACHE_TTL) {
-        const pre = await entry[tipo];
-        if (pre) return pre;
-    }
-
-    return tipo === 'audio' ? infoAudio(video.url) : infoVideo(video.url);
+    return await Promise.any([
+        (async () => {
+            const d = await getJSON(`${DELIRIUS.mp4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
+            if (d.status !== true && d.estado !== true) throw new Error('x');
+            const i = normInfo(d.data || d.datos || {});
+            if (!i.downloadUrl) throw new Error('x');
+            return i;
+        })(),
+        (async () => {
+            const d = await getJSON(`${NOTH.mp4}?url=${encodeURIComponent(url)}&apikey=${NOTH.key}`, 18000);
+            if (d.status !== true && d.estado !== true) throw new Error('x');
+            const i = normInfo(d.data || d.datos || {});
+            if (!i.downloadUrl) throw new Error('x');
+            return i;
+        })()
+    ]);
 }
 
 async function descargarBuffer(url, timeoutMs) {
@@ -169,12 +188,10 @@ async function descargarBuffer(url, timeoutMs) {
 
 async function procesarAudio(sock, msg, video, responder) {
     try {
-        await sock.sendMessage(msg.key.remoteJid, {
-            react: { text: '⏳', key: msg.key }
-        }).catch(() => {});
+        await responder.texto('🎵 Descargando audio...');
 
-        const info = await obtenerInfo(video, 'audio');
-        const buffer = await descargarBuffer(info.downloadUrl, 45000);
+        const info = await infoAudio(video.url);
+        const buffer = await descargarBuffer(info.downloadUrl, 60000);
 
         await sock.sendMessage(msg.key.remoteJid, {
             audio: buffer,
@@ -194,19 +211,17 @@ async function procesarAudio(sock, msg, video, responder) {
 
 async function procesarVideo(sock, msg, video, responder) {
     try {
-        await sock.sendMessage(msg.key.remoteJid, {
-            react: { text: '⏳', key: msg.key }
-        }).catch(() => {});
+        await responder.texto('🎬 Descargando video...');
 
-        const info = await obtenerInfo(video, 'video');
-        const buffer = await descargarBuffer(info.downloadUrl, 90000);
+        const info = await infoVideo(video.url);
+        const buffer = await descargarBuffer(info.downloadUrl, 120000);
 
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
         const titulo = info.titulo || video.titulo;
         const autor = info.autor || video.autor;
 
         const caption =
-            '╭━━〔 🎬 𝐈𝐄𝐎 〕━━⬣\n' +
+            '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
             '┃ 🎧 *' + titulo + '*\n' +
             '┃ 👤 ' + autor + '\n' +
             '┃ 📊 ' + (info.formato || FORMATO_VIDEO) + ' | 📦 ' + tamañoMB + ' MB\n' +
@@ -229,7 +244,7 @@ async function procesarVideo(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔  𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el video.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -251,7 +266,7 @@ export default {
 
         if (!query) {
             return await responder.texto(
-                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '╭━━〔 🎵 𝐏𝐋𝐘 〕━━\n' +
                 '┃\n' +
                 '┃ ❌ Escribe el nombre\n' +
                 '┃\n' +
@@ -262,7 +277,7 @@ export default {
                 '┃ 🎯 Elige con botones o\n' +
                 '┃    responde *1* o *2*\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -278,10 +293,8 @@ export default {
                 }
             }
 
-            prefetchInfo(video);
-
             const caption =
-                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '╭━━〔  𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🎧 *' + video.titulo + '*\n' +
                 '┃\n' +
@@ -289,7 +302,7 @@ export default {
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
                 '┃\n' +
-                '┣━━〔  𝐄𝐈𝐄 〕━━⬣\n' +
+                '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
                 '┃    o responde *1* o *2*\n' +
@@ -301,16 +314,20 @@ export default {
                 { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🎬 Video', id: 'playvideo' }) }
             ];
 
-            await sock.sendMessage(jid, {
-                text: caption,
-                footer: '🎵 BOT-API • Elige formato',
-                interactiveButtons: botones
-            }, { quoted: msg });
+            const mensajePreview = video.thumbnail
+                ? { image: { url: video.thumbnail }, caption, footer: '🎵 BOT-API • Elige formato', interactiveButtons: botones }
+                : { text: caption, footer: '🎵 BOT-API • Elige formato', interactiveButtons: botones };
+
+            try {
+                await sock.sendMessage(jid, mensajePreview, { quoted: msg });
+            } catch (e) {
+                await responder.texto(caption + '\n\nResponde *1* para audio o *2* para video');
+            }
 
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
-                '╭━━〔  𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ No se pudo buscar\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
