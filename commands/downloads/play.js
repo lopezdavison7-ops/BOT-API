@@ -34,6 +34,18 @@ function formatearVistas(vistas) {
     return String(num);
 }
 
+function esURL(input) {
+    return /^https?:\/\//i.test(input) || 
+           /youtube\.com\/watch/i.test(input) || 
+           /youtu\.be\//i.test(input);
+}
+
+function extraerVideoId(url) {
+    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+}
+
 async function getJSON(url, timeoutMs) {
     const res = await fetch(url, {
         agent: AGENTE,
@@ -79,8 +91,28 @@ async function buscarUna(query) {
     return normVideo(v);
 }
 
+function videoDesdeURL(url) {
+    const videoId = extraerVideoId(url);
+    if (!videoId) throw new Error('URL de YouTube inválida');
+    
+    return {
+        videoId,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        titulo: 'Cargando...',
+        thumbnail: '',
+        duracion: '0:00',
+        vistas: 0,
+        autor: 'Desconocido'
+    };
+}
+
 async function buscarYouTube(query) {
     const key = query.toLowerCase().trim();
+
+    if (esURL(query)) {
+        console.log(`[PLAY] 📎 URL directa detectada: ${query}`);
+        return videoDesdeURL(query);
+    }
 
     const cached = global.playCache.get(key);
     if (cached && Date.now() - cached.t < CACHE_TTL) {
@@ -159,7 +191,7 @@ async function procesarAudio(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔  𝐄𝐑𝐑 〕━━⬣\n' +
+            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el audio.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -203,7 +235,7 @@ async function procesarVideo(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔  𝐄𝐑𝐎 〕━━\n' +
+            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el video.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -217,7 +249,7 @@ export default {
     categoria: 'downloader',
     alias: ['p', 'musica', 'reproducir', 'song', 'play2', 'playvideo', 'video'],
     descripcion: 'Busca en YouTube y elige audio o video con botones.',
-    uso: '.play <nombre>',
+    uso: '.play <nombre o URL>',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const query = String(argumento || '').trim();
@@ -227,11 +259,12 @@ export default {
             return await responder.texto(
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Escribe el nombre\n' +
+                '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplos:\n' +
                 '┃ ➪ .play hola\n' +
                 '┃ ➪ .play twice fancy\n' +
+                '┃ ➪ .play https://youtu.be/...\n' +
                 '┃\n' +
                 '┃ 🎯 Elige con botones o\n' +
                 '┃    responde *1* o *2*\n' +
@@ -261,7 +294,7 @@ export default {
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
                 '┃\n' +
-                '┣━━〔  𝐄𝐈𝐄 〕━━⬣\n' +
+                '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
                 '┃    o responde *1* o *2*\n' +
@@ -286,11 +319,12 @@ export default {
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
-                '╭━━〔  𝐄𝐑𝐎𝐑 〕━━⬣\n' +
-                '┃ ⚠️ No se pudo buscar\n' +
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '┃    o verifica tu conexión.\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
     }
