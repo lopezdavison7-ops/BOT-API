@@ -3,20 +3,11 @@ import https from 'node:https';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
-const DELIRIUS = {
-    buscar: 'https://api.delirius.online/search/ytsearch',
-    mp3: 'https://api.delirius.online/download/ytmp3',
-    mp4: 'https://api.delirius.online/download/ytmp4'
-};
-
-const NOTH = {
-    buscar: 'https://noth.hidenplay.net/api/busqueda/youtube',
-    mp3: 'https://noth.hidenplay.net/api/descargas/ytmp3',
-    mp4: 'https://noth.hidenplay.net/api/descargas/ytmp4',
-    key: 'nothSrEG'
-};
-
+const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
+const API_MP3 = 'https://api.delirius.online/download/ytmp3';
+const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
+
 const CACHE_TTL = 5 * 60 * 1000;
 const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
 const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 'que', 'aaa', 'a']);
@@ -46,7 +37,11 @@ function formatearVistas(vistas) {
 async function getJSON(url, timeoutMs) {
     const res = await fetch(url, {
         agent: AGENTE,
-        headers: { 'Accept': 'application/json', 'User-Agent': getUA() },
+        headers: {
+            'Accept': 'application/json',
+            'User-Agent': getUA(),
+            'Referer': 'https://www.youtube.com/'
+        },
         signal: AbortSignal.timeout(timeoutMs)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -75,21 +70,12 @@ function normInfo(i) {
     };
 }
 
-async function buscarDelirius(query) {
-    const data = await getJSON(`${DELIRIUS.buscar}?q=${encodeURIComponent(query)}`, 10000);
-    if (data.status !== true && data.estado !== true) throw new Error('Delirius sin éxito');
+async function buscarUna(query) {
+    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}`, 10000);
+    if (data.status !== true && data.estado !== true) throw new Error('API sin éxito');
     const lista = data.data || data.datos || [];
     const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-    if (!v) throw new Error('Delirius vacío');
-    return normVideo(v);
-}
-
-async function buscarNoth(query) {
-    const data = await getJSON(`${NOTH.buscar}?query=${encodeURIComponent(query)}&apikey=${NOTH.key}`, 10000);
-    if (data.status !== true) throw new Error('Noth sin éxito');
-    const lista = data.data || [];
-    const v = lista.find(x => x.type === 'video' && !x.isLive) || lista[0];
-    if (!v) throw new Error('Noth vacío');
+    if (!v) throw new Error('Sin resultados');
     return normVideo(v);
 }
 
@@ -102,21 +88,16 @@ async function buscarYouTube(query) {
         return cached.video;
     }
 
-    const esGenerica = key.length <= 5 || GENERICAS.has(key);
     let video = null;
+    const esGenerica = key.length <= 5 || GENERICAS.has(key);
 
     if (!esGenerica) {
-        video = await Promise.any([buscarDelirius(key), buscarNoth(key)]);
+        video = await buscarUna(key);
     } else {
         const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
-        console.log(`[PLAY] Búsqueda genérica → variantes: ${variantes.join(' | ')}`);
+        console.log(`[PLAY] Genérica → variantes: ${variantes.join(' | ')}`);
 
-        const resultados = await Promise.allSettled(
-            variantes.flatMap(v => [
-                buscarDelirius(v).then(r => ({ r, v })),
-                buscarNoth(v).then(r => ({ r, v }))
-            ])
-        );
+        const resultados = await Promise.allSettled(variantes.map(v => buscarUna(v).then(r => ({ r, v }))));
 
         for (const v of variantes) {
             const exito = resultados.find(s => s.status === 'fulfilled' && s.value.v === v);
@@ -137,41 +118,19 @@ async function buscarYouTube(query) {
 }
 
 async function infoAudio(url) {
-    return await Promise.any([
-        (async () => {
-            const d = await getJSON(`${DELIRIUS.mp3}?url=${encodeURIComponent(url)}`, 18000);
-            if (d.status !== true && d.estado !== true) throw new Error('x');
-            const i = normInfo(d.data || d.datos || {});
-            if (!i.downloadUrl) throw new Error('x');
-            return i;
-        })(),
-        (async () => {
-            const d = await getJSON(`${NOTH.mp3}?url=${encodeURIComponent(url)}&apikey=${NOTH.key}`, 18000);
-            if (d.status !== true && d.estado !== true) throw new Error('x');
-            const i = normInfo(d.data || d.datos || {});
-            if (!i.downloadUrl) throw new Error('x');
-            return i;
-        })()
-    ]);
+    const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(url)}`, 18000);
+    if (data.status !== true && data.estado !== true) throw new Error('API MP3 sin éxito');
+    const info = normInfo(data.data || data.datos || {});
+    if (!info.downloadUrl) throw new Error('Sin link de descarga');
+    return info;
 }
 
 async function infoVideo(url) {
-    return await Promise.any([
-        (async () => {
-            const d = await getJSON(`${DELIRIUS.mp4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
-            if (d.status !== true && d.estado !== true) throw new Error('x');
-            const i = normInfo(d.data || d.datos || {});
-            if (!i.downloadUrl) throw new Error('x');
-            return i;
-        })(),
-        (async () => {
-            const d = await getJSON(`${NOTH.mp4}?url=${encodeURIComponent(url)}&apikey=${NOTH.key}`, 18000);
-            if (d.status !== true && d.estado !== true) throw new Error('x');
-            const i = normInfo(d.data || d.datos || {});
-            if (!i.downloadUrl) throw new Error('x');
-            return i;
-        })()
-    ]);
+    const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
+    if (data.status !== true && data.estado !== true) throw new Error('API MP4 sin éxito');
+    const info = normInfo(data.data || data.datos || {});
+    if (!info.downloadUrl) throw new Error('Sin link de descarga');
+    return info;
 }
 
 async function descargarBuffer(url, timeoutMs) {
@@ -200,7 +159,7 @@ async function procesarAudio(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+            '╭━━〔  𝐄𝐑𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el audio.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -244,7 +203,7 @@ async function procesarVideo(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+            '╭━━〔  𝐄𝐑𝐎 〕━━\n' +
             '┃ No se pudo enviar el video.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -266,7 +225,7 @@ export default {
 
         if (!query) {
             return await responder.texto(
-                '╭━━〔 🎵 𝐏𝐋𝐘 〕━━\n' +
+                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe el nombre\n' +
                 '┃\n' +
@@ -277,7 +236,7 @@ export default {
                 '┃ 🎯 Elige con botones o\n' +
                 '┃    responde *1* o *2*\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -294,7 +253,7 @@ export default {
             }
 
             const caption =
-                '╭━━〔  𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🎧 *' + video.titulo + '*\n' +
                 '┃\n' +
@@ -302,7 +261,7 @@ export default {
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
                 '┃\n' +
-                '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
+                '┣━━〔  𝐄𝐈𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
                 '┃    o responde *1* o *2*\n' +
@@ -327,7 +286,7 @@ export default {
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
-                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '╭━━〔  𝐄𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ No se pudo buscar\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
