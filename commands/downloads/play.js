@@ -1,5 +1,4 @@
 import fetch from 'node-fetch';
-import { performance } from 'node:perf_hooks';
 
 const API_BUSQUEDA = 'https://noth.hidenplay.net/api/busqueda/youtube';
 const API_MP3 = 'https://noth.hidenplay.net/api/descargas/ytmp3';
@@ -23,29 +22,57 @@ function formatearVistas(vistas) {
 }
 
 async function buscarYouTube(query) {
-    const inicio = performance.now();
-
+    console.log(`[PLAY] Buscando: "${query}"`);
+    
     const url = `${API_BUSQUEDA}?query=${encodeURIComponent(query)}&apikey=${API_KEY}`;
+    console.log(`[PLAY] URL: ${url}`);
 
-    const res = await fetch(url, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(15000)
-    });
+    let res;
+    try {
+        res = await fetch(url, {
+            headers: HEADERS,
+            signal: AbortSignal.timeout(20000)
+        });
+    } catch (error) {
+        console.error('[PLAY] Error de red:', error.message);
+        throw new Error('Error de conexión con la API');
+    }
 
-    if (!res.ok) throw new Error(`Búsqueda falló: ${res.status}`);
+    console.log(`[PLAY] Status: ${res.status}`);
+    console.log(`[PLAY] Content-Type: ${res.headers.get('content-type')}`);
 
-    const data = await res.json();
+    if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[PLAY] Respuesta de error: ${errorText.substring(0, 500)}`);
+        throw new Error(`API respondió con error ${res.status}`);
+    }
 
-    const esExitoso = data.status === true || data.estado === true;
+    let data;
+    try {
+        const rawText = await res.text();
+        console.log(`[PLAY] Respuesta (primeros 500 chars): ${rawText.substring(0, 500)}`);
+        data = JSON.parse(rawText);
+    } catch (error) {
+        console.error('[PLAY] Error parseando JSON:', error.message);
+        throw new Error('La API no devolvió JSON válido');
+    }
+
+    console.log(`[PLAY] data.status = ${data.status}, typeof = ${typeof data.status}`);
+    console.log(`[PLAY] data.data es array: ${Array.isArray(data.data)}, length: ${data.data?.length}`);
+
+    const esExitoso = data.status === true;
     if (!esExitoso) {
+        console.error('[PLAY] API no devolvió status: true');
         throw new Error(data.message || data.mensaje || 'La API respondió sin éxito');
     }
 
-    const resultados = data.data || data.datos || [];
+    const resultados = data.data || [];
 
     if (!Array.isArray(resultados) || resultados.length === 0) {
         throw new Error('No se encontraron resultados');
     }
+
+    console.log(`[PLAY] Encontrados ${resultados.length} resultados`);
 
     const video = resultados.find(v => {
         const tipo = v.type || v.tipo;
@@ -53,7 +80,7 @@ async function buscarYouTube(query) {
         return tipo === 'video' && !esLive;
     }) || resultados[0];
 
-    console.log(`[PLAY] Búsqueda OK en ${(performance.now() - inicio).toFixed(0)}ms`);
+    console.log(`[PLAY] Video seleccionado: ${video.title || video.título}`);
 
     return {
         videoId: video.videoId,
@@ -68,38 +95,60 @@ async function buscarYouTube(query) {
 }
 
 async function descargarBuffer(url, timeoutMs = 60000) {
-    const inicio = performance.now();
+    console.log(`[PLAY] Descargando buffer desde: ${url.substring(0, 100)}...`);
 
     const res = await fetch(url, {
         headers: HEADERS,
         signal: AbortSignal.timeout(timeoutMs)
     });
 
-    if (!res.ok) throw new Error(`Descarga falló: ${res.status}`);
+    if (!res.ok) {
+        console.error(`[PLAY] Error descargando buffer: ${res.status}`);
+        throw new Error(`Descarga falló: ${res.status}`);
+    }
 
     const buffer = Buffer.from(await res.arrayBuffer());
 
-    if (!buffer.length) throw new Error('Buffer vacío');
+    if (!buffer.length) {
+        console.error('[PLAY] Buffer vacío');
+        throw new Error('Buffer vacío');
+    }
 
-    console.log(`[PLAY] Buffer: ${(buffer.length / 1024 / 1024).toFixed(2)} MB en ${(performance.now() - inicio).toFixed(0)}ms`);
+    console.log(`[PLAY] Buffer descargado: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
 
     return buffer;
 }
 
 async function descargarAudio(youtubeUrl) {
+    console.log(`[PLAY] Obteniendo info de audio para: ${youtubeUrl}`);
+    
     const url = `${API_MP3}?url=${encodeURIComponent(youtubeUrl)}&apikey=${API_KEY}`;
+    console.log(`[PLAY] URL MP3: ${url}`);
 
     const res = await fetch(url, {
         headers: HEADERS,
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(25000)
     });
 
-    if (!res.ok) throw new Error(`API MP3 falló: ${res.status}`);
+    if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[PLAY] Error API MP3: ${res.status} - ${errorText.substring(0, 300)}`);
+        throw new Error(`API MP3 falló: ${res.status}`);
+    }
 
-    const data = await res.json();
+    let data;
+    try {
+        const rawText = await res.text();
+        console.log(`[PLAY] Respuesta MP3 (primeros 300 chars): ${rawText.substring(0, 300)}`);
+        data = JSON.parse(rawText);
+    } catch (error) {
+        console.error('[PLAY] Error parseando JSON MP3:', error.message);
+        throw new Error('API MP3 no devolvió JSON válido');
+    }
 
     const esExitoso = data.status === true || data.estado === true;
     if (!esExitoso) {
+        console.error('[PLAY] API MP3 no devolvió status/estado: true');
         throw new Error(data.message || data.mensaje || 'No se pudo obtener el audio');
     }
 
@@ -107,8 +156,12 @@ async function descargarAudio(youtubeUrl) {
 
     const downloadUrl = info.download || info.descarga;
     if (!downloadUrl) {
+        console.error('[PLAY] API MP3 no devolvió link de descarga');
+        console.error('[PLAY] info keys:', Object.keys(info));
         throw new Error('La API no devolvió link de descarga');
     }
+
+    console.log(`[PLAY] Link de descarga MP3 obtenido`);
 
     return {
         titulo: info.title || info.título || 'Sin título',
@@ -119,19 +172,35 @@ async function descargarAudio(youtubeUrl) {
 }
 
 async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
+    console.log(`[PLAY] Obteniendo info de video para: ${youtubeUrl}`);
+    
     const url = `${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&apikey=${API_KEY}`;
+    console.log(`[PLAY] URL MP4: ${url}`);
 
     const res = await fetch(url, {
         headers: HEADERS,
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(25000)
     });
 
-    if (!res.ok) throw new Error(`API MP4 falló: ${res.status}`);
+    if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`[PLAY] Error API MP4: ${res.status} - ${errorText.substring(0, 300)}`);
+        throw new Error(`API MP4 falló: ${res.status}`);
+    }
 
-    const data = await res.json();
+    let data;
+    try {
+        const rawText = await res.text();
+        console.log(`[PLAY] Respuesta MP4 (primeros 300 chars): ${rawText.substring(0, 300)}`);
+        data = JSON.parse(rawText);
+    } catch (error) {
+        console.error('[PLAY] Error parseando JSON MP4:', error.message);
+        throw new Error('API MP4 no devolvió JSON válido');
+    }
 
     const esExitoso = data.status === true || data.estado === true;
     if (!esExitoso) {
+        console.error('[PLAY] API MP4 no devolvió status/estado: true');
         throw new Error(data.message || data.mensaje || 'No se pudo obtener el video');
     }
 
@@ -139,8 +208,12 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
 
     const downloadUrl = info.download || info.descarga;
     if (!downloadUrl) {
+        console.error('[PLAY] API MP4 no devolvió link de descarga');
+        console.error('[PLAY] info keys:', Object.keys(info));
         throw new Error('La API no devolvió link de descarga');
     }
+
+    console.log(`[PLAY] Link de descarga MP4 obtenido`);
 
     return {
         titulo: info.title || info.título || 'Sin título',
@@ -153,7 +226,6 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
 
 async function procesarAudio(sock, msg, video, responder) {
     try {
-        const inicio = performance.now();
         await responder.texto('🎵 Descargando audio...');
 
         const audio = await descargarAudio(video.url);
@@ -164,9 +236,9 @@ async function procesarAudio(sock, msg, video, responder) {
             mimetype: 'audio/mpeg'
         }, { quoted: msg });
 
-        console.log(`[PLAY] ✅ Audio enviado en ${(performance.now() - inicio).toFixed(0)}ms`);
+        console.log(`[PLAY] ✅ Audio enviado exitosamente`);
     } catch (error) {
-        console.error('[PLAY-AUDIO] Error:', error?.message || error);
+        console.error('[PLAY-AUDIO] Error completo:', error);
         await responder.texto(
             '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el audio.\n' +
@@ -179,7 +251,6 @@ async function procesarAudio(sock, msg, video, responder) {
 
 async function procesarVideo(sock, msg, video, responder) {
     try {
-        const inicio = performance.now();
         await responder.texto('🎬 Descargando video...');
 
         const vid = await descargarVideo(video.url, FORMATO_VIDEO);
@@ -214,9 +285,9 @@ async function procesarVideo(sock, msg, video, responder) {
             }, { quoted: msg });
         }
 
-        console.log(`[PLAY] ✅ Video enviado en ${(performance.now() - inicio).toFixed(0)}ms`);
+        console.log(`[PLAY] ✅ Video enviado exitosamente`);
     } catch (error) {
-        console.error('[PLAY-VIDEO] Error:', error?.message || error);
+        console.error('[PLAY-VIDEO] Error completo:', error);
         await responder.texto(
             '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el video.\n' +
@@ -235,7 +306,6 @@ export default {
     uso: '.play <nombre>',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
-        const inicio = performance.now();
         const query = String(argumento || '').trim();
         const sender = msg.key.participant || msg.key.remoteJid;
 
@@ -311,15 +381,14 @@ export default {
                 await responder.texto(caption + '\n\nResponde *1* para audio o *2* para video');
             }
 
-            console.log(`[PLAY] Preview enviado en ${(performance.now() - inicio).toFixed(0)}ms`);
-
         } catch (error) {
-            console.error('[PLAY] Error:', error?.message || error);
+            console.error('[PLAY] Error completo:', error);
             await responder.texto(
                 '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
-                '┃ 💡 Intenta con otro nombre\n' +
+                '┃ 💡 Revisa los logs del bot\n' +
+                '┃    para más detalles\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
