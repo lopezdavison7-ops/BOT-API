@@ -1,17 +1,16 @@
-
-
 import fetch from 'node-fetch';
 import { performance } from 'node:perf_hooks';
 
 // ───────────── CONFIGURACIÓN ─────────────
-const API_BUSQUEDA = 'https://api.delirius.online/search/ytsearch';
+const API_BUSQUEDA_PRINCIPAL = 'https://api.delirius.online/search/ytsearch';
+const API_BUSQUEDA_ALT = 'https://api.delirius.online/search/youtube';
 const API_MP3 = 'https://api.delirius.online/download/ytmp3';
 const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 
 const HEADERS = {
     'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36'
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 };
 // ─────────────────────────────────────────
 
@@ -25,43 +24,78 @@ function formatearVistas(vistas) {
     return String(num);
 }
 
-// ───────────── BÚSQUEDA OPTIMIZADA ─────────────
+// ───────────── BÚSQUEDA CON FALLBACK ─────────────
 async function buscarYouTube(query) {
     const inicio = performance.now();
+    const endpoints = [API_BUSQUEDA_PRINCIPAL, API_BUSQUEDA_ALT];
     
-    const url = `${API_BUSQUEDA}?q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(15000) // reducido de 20s a 15s
-    });
+    let ultimoError = null;
+    
+    for (const apiEndpoint of endpoints) {
+        try {
+            const url = `${apiEndpoint}?q=${encodeURIComponent(query)}`;
+            console.log(`[PLAY] Intentando: ${apiEndpoint}`);
+            
+            const res = await fetch(url, {
+                headers: HEADERS,
+                signal: AbortSignal.timeout(15000)
+            });
 
-    if (!res.ok) throw new Error(`Búsqueda falló: ${res.status}`);
-    const data = await res.json();
+            if (!res.ok) {
+                ultimoError = `HTTP ${res.status}`;
+                console.log(`[PLAY] ${apiEndpoint} falló: ${res.status}`);
+                continue;
+            }
+            
+            const data = await res.json();
+            
+            // Validar respuesta
+            if (!data && typeof data !== 'object') {
+                ultimoError = 'Respuesta inválida';
+                continue;
+            }
+            
+            if (!data.estado && !data.status && data.status !== true) {
+                ultimoError = data.message || 'Estado inválido';
+                continue;
+            }
 
-    if (!data.estado && !data.status) {
-        throw new Error(data.message || 'No se pudo buscar');
+            const resultados = data.datos || data.data || data.result || [];
+            
+            if (!Array.isArray(resultados) || resultados.length === 0) {
+                ultimoError = 'Sin resultados';
+                continue;
+            }
+
+            // Preferir el primer video NO live
+            const video = resultados.find(v => !v.isLive && !v.enVivo) || resultados[0];
+            
+            if (!video) {
+                ultimoError = 'No se pudo extraer video';
+                continue;
+            }
+
+            console.log(`[PLAY] ✅ Búsqueda exitosa en ${(performance.now() - inicio).toFixed(0)}ms usando ${apiEndpoint}`);
+
+            return {
+                videoId: video.videoId || video.id,
+                url: video.url || `https://www.youtube.com/watch?v=${video.videoId || video.id}`,
+                titulo: video.título || video.title || 'Sin título',
+                thumbnail: video.imagen || video.miniatura || video.thumbnail || '',
+                duracion: video.duración || video.duration || '0:00',
+                vistas: video.vistas || video.views || 0,
+                publicado: video.publicadoEn || video.uploaded || 'Desconocido',
+                autor: video.autor?.nombre || video.autor?.name || video.author || 'Desconocido'
+            };
+            
+        } catch (error) {
+            ultimoError = error.message;
+            console.log(`[PLAY] Error en ${apiEndpoint}: ${error.message}`);
+            continue;
+        }
     }
-
-    const resultados = data.datos || data.data || [];
-    if (!Array.isArray(resultados) || resultados.length === 0) {
-        throw new Error('No se encontraron resultados');
-    }
-
-    // Preferir el primer video NO live
-    const video = resultados.find(v => !v.isLive && !v.enVivo) || resultados[0];
-
-    console.log(`[PLAY] Búsqueda: ${(performance.now() - inicio).toFixed(0)}ms`);
-
-    return {
-        videoId: video.videoId,
-        url: video.url || `https://www.youtube.com/watch?v=${video.videoId}`,
-        titulo: video.título || video.title,
-        thumbnail: video.imagen || video.miniatura || video.thumbnail,
-        duracion: video.duración || video.duration,
-        vistas: video.vistas || video.views,
-        publicado: video.publicadoEn || video.uploaded || 'Desconocido',
-        autor: video.autor?.nombre || video.autor?.name || 'Desconocido'
-    };
+    
+    throw new Error(`Todas las APIs fallaron. Último error: ${ultimoError}`);
 }
 
 // ───────────── DESCARGAR BUFFER (OPTIMIZADO) ─────────────
@@ -70,7 +104,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 
     const res = await fetch(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': '*/*',
             'Accept-Encoding': 'identity'
         },
@@ -79,7 +113,6 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 
     if (!res.ok) throw new Error(`Descarga falló: ${res.status}`);
 
-    // Convertir ArrayBuffer directamente (más rápido que arrayBuffer())
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -96,16 +129,18 @@ async function descargarAudio(youtubeUrl) {
 
     const res = await fetch(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, {
         headers: HEADERS,
-        signal: AbortSignal.timeout(30000) // 30s en vez de 60s
+        signal: AbortSignal.timeout(30000)
     });
 
     if (!res.ok) throw new Error(`API MP3 falló: ${res.status}`);
     const data = await res.json();
 
-    if (!data.status && !data.estado) throw new Error('No se pudo obtener el audio');
+    if (!data.status && !data.estado && data.status !== true) {
+        throw new Error(data.message || 'No se pudo obtener el audio');
+    }
 
-    const info = data.data || data.datos || {};
-    
+    const info = data.data || data.datos || data.result || {};
+
     if (!info.download && !info.descarga) {
         throw new Error('La API no devolvió link de descarga');
     }
@@ -113,9 +148,9 @@ async function descargarAudio(youtubeUrl) {
     console.log(`[PLAY] Info MP3: ${(performance.now() - inicio).toFixed(0)}ms`);
 
     return {
-        titulo: info.title || info.titulo,
-        autor: info.author || info.autor,
-        thumbnail: info.image || info.imagen,
+        titulo: info.title || info.titulo || 'Sin título',
+        autor: info.author || info.autor || 'Desconocido',
+        thumbnail: info.image || info.imagen || '',
         downloadUrl: info.download || info.descarga
     };
 }
@@ -132,9 +167,11 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
     if (!res.ok) throw new Error(`API MP4 falló: ${res.status}`);
     const data = await res.json();
 
-    if (!data.status && !data.estado) throw new Error('No se pudo obtener el video');
+    if (!data.status && !data.estado && data.status !== true) {
+        throw new Error(data.message || 'No se pudo obtener el video');
+    }
 
-    const info = data.data || data.datos || {};
+    const info = data.data || data.datos || data.result || {};
 
     if (!info.download && !info.descarga) {
         throw new Error('La API no devolvió link de descarga');
@@ -143,15 +180,15 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
     console.log(`[PLAY] Info MP4: ${(performance.now() - inicio).toFixed(0)}ms`);
 
     return {
-        titulo: info.title || info.titulo,
-        autor: info.author || info.autor,
-        thumbnail: info.image || info.imagen,
+        titulo: info.title || info.titulo || 'Sin título',
+        autor: info.author || info.autor || 'Desconocido',
+        thumbnail: info.image || info.imagen || '',
         formato: info.format || info.formato || formato,
         downloadUrl: info.download || info.descarga
     };
 }
 
-// ───────────── ENVIAR AUDIO (FIX DEL BUG) ─────────────
+// ───────────── ENVIAR AUDIO ─────────────
 async function procesarAudio(sock, msg, video, responder) {
     try {
         const inicio = performance.now();
@@ -160,14 +197,9 @@ async function procesarAudio(sock, msg, video, responder) {
         const audio = await descargarAudio(video.url);
         const buffer = await descargarBuffer(audio.downloadUrl, 60000);
 
-        // 🔑 FIX: mensaje simple sin contextInfo problemático
-        // Esto es lo que arregla el bug de entrega a otros usuarios
         await sock.sendMessage(msg.key.remoteJid, {
             audio: buffer,
             mimetype: 'audio/mpeg'
-            // ❌ SIN contextInfo.externalAdReply (causaba el bug)
-            // ❌ SIN showAdAttribution
-            // ❌ SIN mediaUrl/sourceUrl
         }, { quoted: msg });
 
         console.log(`[PLAY] ✅ Audio enviado en ${(performance.now() - inicio).toFixed(0)}ms`);
@@ -183,7 +215,7 @@ async function procesarAudio(sock, msg, video, responder) {
     }
 }
 
-// ───────────── ENVIAR VIDEO (FIX DEL BUG) ─────────────
+// ───────────── ENVIAR VIDEO ─────────────
 async function procesarVideo(sock, msg, video, responder) {
     try {
         const inicio = performance.now();
@@ -196,9 +228,7 @@ async function procesarVideo(sock, msg, video, responder) {
         const titulo = vid.titulo || video.titulo;
         const autor = vid.autor || video.autor;
 
-        // 🔑 FIX: mensaje simple sin contextInfo problemático
         if (buffer.length > 16 * 1024 * 1024) {
-            // Video muy pesado → enviar como documento
             await sock.sendMessage(msg.key.remoteJid, {
                 document: buffer,
                 mimetype: 'video/mp4',
@@ -211,7 +241,6 @@ async function procesarVideo(sock, msg, video, responder) {
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             }, { quoted: msg });
         } else {
-            // Video normal
             await sock.sendMessage(msg.key.remoteJid, {
                 video: buffer,
                 mimetype: 'video/mp4',
@@ -268,10 +297,8 @@ export default {
         }
 
         try {
-            // Búsqueda
             const video = await buscarYouTube(query);
 
-            // Guardar sesión
             global.playSessions[sender] = {
                 jid,
                 video,
@@ -279,7 +306,6 @@ export default {
                 msgQuoted: msg
             };
 
-            // Limpiar sesiones viejas
             const ahora = Date.now();
             for (const key of Object.keys(global.playSessions)) {
                 if (ahora - global.playSessions[key].timestamp > 600000) {
@@ -303,7 +329,6 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            // Enviar preview con botones
             const mensajePreview = video.thumbnail
                 ? {
                     image: { url: video.thumbnail },
@@ -350,24 +375,25 @@ export default {
             try {
                 await sock.sendMessage(jid, mensajePreview, { quoted: msg });
             } catch (e) {
-                // Fallback sin botones
                 await responder.texto(caption + '\n\nResponde *1* para audio o *2* para video');
             }
 
             console.log(`[PLAY] Preview enviado en ${(performance.now() - inicio).toFixed(0)}ms`);
 
         } catch (error) {
-            console.error('[PLAY] Error:', error?.message || error);
+            console.error('[PLAY] Error completo:', error);
             await responder.texto(
                 '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
-                '┃ 💡 Intenta con otro nombre\n' +
+                '┃ 💡 La API de búsqueda puede estar caída.\n' +
+                '┃    Intenta de nuevo en unos minutos.\n' +
+                '┃\n' +
+                '┃ 🔧 O prueba con otro nombre de canción\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
     }
 };
 
-// Exportar funciones para el handler
 export { procesarAudio, procesarVideo };
