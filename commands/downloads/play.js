@@ -1,16 +1,15 @@
 import fetch from 'node-fetch';
 import { performance } from 'node:perf_hooks';
 
-const API_BUSQUEDA = 'https://api.delirius.online/search/ytsearch';
-const API_MP3 = 'https://api.delirius.online/download/ytmp3';
-const API_MP4 = 'https://api.delirius.online/download/ytmp4';
+const API_BUSQUEDA = 'https://noth.hidenplay.net/api/busqueda/youtube';
+const API_MP3 = 'https://noth.hidenplay.net/api/descargas/ytmp3';
+const API_MP4 = 'https://noth.hidenplay.net/api/descargas/ytmp4';
+const API_KEY = 'nothSrEG';
 const FORMATO_VIDEO = '360p';
 
 const HEADERS = {
     'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'es-ES,es;q=0.9',
-    'Referer': 'https://www.youtube.com/'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 };
 
 if (!global.playSessions) global.playSessions = {};
@@ -26,7 +25,9 @@ function formatearVistas(vistas) {
 async function buscarYouTube(query) {
     const inicio = performance.now();
 
-    const res = await fetch(`${API_BUSQUEDA}?q=${encodeURIComponent(query)}`, {
+    const url = `${API_BUSQUEDA}?query=${encodeURIComponent(query)}&apikey=${API_KEY}`;
+
+    const res = await fetch(url, {
         headers: HEADERS,
         signal: AbortSignal.timeout(15000)
     });
@@ -37,7 +38,7 @@ async function buscarYouTube(query) {
 
     const esExitoso = data.status === true || data.estado === true;
     if (!esExitoso) {
-        throw new Error(data.message || 'La API respondió sin éxito');
+        throw new Error(data.message || data.mensaje || 'La API respondió sin éxito');
     }
 
     const resultados = data.data || data.datos || [];
@@ -86,7 +87,9 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 }
 
 async function descargarAudio(youtubeUrl) {
-    const res = await fetch(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, {
+    const url = `${API_MP3}?url=${encodeURIComponent(youtubeUrl)}&apikey=${API_KEY}`;
+
+    const res = await fetch(url, {
         headers: HEADERS,
         signal: AbortSignal.timeout(20000)
     });
@@ -97,25 +100,28 @@ async function descargarAudio(youtubeUrl) {
 
     const esExitoso = data.status === true || data.estado === true;
     if (!esExitoso) {
-        throw new Error(data.message || 'No se pudo obtener el audio');
+        throw new Error(data.message || data.mensaje || 'No se pudo obtener el audio');
     }
 
     const info = data.data || data.datos || {};
 
-    if (!info.download && !info.descarga) {
+    const downloadUrl = info.download || info.descarga;
+    if (!downloadUrl) {
         throw new Error('La API no devolvió link de descarga');
     }
 
     return {
-        titulo: info.title || info.titulo || 'Sin título',
+        titulo: info.title || info.título || 'Sin título',
         autor: info.author || info.autor || 'Desconocido',
         thumbnail: info.image || info.imagen || '',
-        downloadUrl: info.download || info.descarga
+        downloadUrl
     };
 }
 
 async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
-    const res = await fetch(`${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`, {
+    const url = `${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&apikey=${API_KEY}`;
+
+    const res = await fetch(url, {
         headers: HEADERS,
         signal: AbortSignal.timeout(20000)
     });
@@ -126,21 +132,22 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
 
     const esExitoso = data.status === true || data.estado === true;
     if (!esExitoso) {
-        throw new Error(data.message || 'No se pudo obtener el video');
+        throw new Error(data.message || data.mensaje || 'No se pudo obtener el video');
     }
 
     const info = data.data || data.datos || {};
 
-    if (!info.download && !info.descarga) {
+    const downloadUrl = info.download || info.descarga;
+    if (!downloadUrl) {
         throw new Error('La API no devolvió link de descarga');
     }
 
     return {
-        titulo: info.title || info.titulo || 'Sin título',
+        titulo: info.title || info.título || 'Sin título',
         autor: info.author || info.autor || 'Desconocido',
         thumbnail: info.image || info.imagen || '',
         formato: info.format || info.formato || formato,
-        downloadUrl: info.download || info.descarga
+        downloadUrl
     };
 }
 
@@ -241,6 +248,7 @@ export default {
                 '┃ 💡 Ejemplos:\n' +
                 '┃ ➪ .play twice fancy\n' +
                 '┃ ➪ .play bad bunny\n' +
+                '┃ ➪ .play hola\n' +
                 '┃\n' +
                 '┃ 🎯 Elige con botones o\n' +
                 '┃    responde *1* o *2*\n' +
