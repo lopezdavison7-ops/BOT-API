@@ -1,16 +1,24 @@
 import fetch from 'node-fetch';
-import { performance } from 'node:perf_hooks';
+import { performance } from 'node:perf';
 
 // ───────────── CONFIGURACIÓN ─────────────
-const API_BUSQUEDA_PRINCIPAL = 'https://api.delirius.online/search/ytsearch';
-const API_BUSQUEDA_ALT = 'https://api.delirius.online/search/youtube';
+const ENDPOINTS_BUSQUEDA = [
+    'https://api.delirius.online/search/youtube',
+    'https://api.delirius.online/search/ytsearch',
+    'https://api.delirius.online/search/yt',
+    'https://api.delirius.online/yt/search',
+    'https://api.delirius.online/youtube/search'
+];
+
 const API_MP3 = 'https://api.delirius.online/download/ytmp3';
 const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 
 const HEADERS = {
-    'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    'Accept': 'application/json, text/plain, */*',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Referer': 'https://api.delirius.online/'
 };
 // ─────────────────────────────────────────
 
@@ -24,43 +32,60 @@ function formatearVistas(vistas) {
     return String(num);
 }
 
-// ───────────── BÚSQUEDA CON FALLBACK ─────────────
+// ───────────── BÚSQUEDA CON MÚLTIPLES ENDPOINTS ─────────────
 async function buscarYouTube(query) {
     const inicio = performance.now();
-    const endpoints = [API_BUSQUEDA_PRINCIPAL, API_BUSQUEDA_ALT];
-    
     let ultimoError = null;
+    let ultimaRespuesta = null;
     
-    for (const apiEndpoint of endpoints) {
+    for (const endpoint of ENDPOINTS_BUSQUEDA) {
         try {
-            const url = `${apiEndpoint}?q=${encodeURIComponent(query)}`;
-            console.log(`[PLAY] Intentando: ${apiEndpoint}`);
+            const url = `${endpoint}?q=${encodeURIComponent(query)}`;
+            console.log(`[PLAY] 🔍 Probando: ${endpoint}`);
             
             const res = await fetch(url, {
                 headers: HEADERS,
                 signal: AbortSignal.timeout(15000)
             });
 
+            console.log(`[PLAY] Status: ${res.status} | Content-Type: ${res.headers.get('content-type')}`);
+
+            const rawText = await res.text();
+            console.log(`[PLAY] Respuesta raw (primeros 500 chars):`, rawText.substring(0, 500));
+
             if (!res.ok) {
                 ultimoError = `HTTP ${res.status}`;
-                console.log(`[PLAY] ${apiEndpoint} falló: ${res.status}`);
+                ultimaRespuesta = rawText.substring(0, 200);
+                console.log(`[PLAY] ❌ ${endpoint} falló: ${res.status}`);
                 continue;
             }
             
-            const data = await res.json();
-            
-            // Validar respuesta
-            if (!data && typeof data !== 'object') {
-                ultimoError = 'Respuesta inválida';
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (e) {
+                ultimoError = 'Respuesta no es JSON válido';
+                ultimaRespuesta = rawText.substring(0, 200);
+                console.log(`[PLAY] ❌ ${endpoint} no devolvió JSON`);
                 continue;
             }
             
-            if (!data.estado && !data.status && data.status !== true) {
-                ultimoError = data.message || 'Estado inválido';
+            // Validar respuesta - aceptar múltiples formatos
+            const esValido = data.estado === true || 
+                           data.status === true || 
+                           data.success === true ||
+                           (data.datos && Array.isArray(data.datos)) ||
+                           (data.data && Array.isArray(data.data)) ||
+                           (data.result && Array.isArray(data.result));
+            
+            if (!esValido) {
+                ultimoError = data.message || data.error || 'Respuesta inválida';
+                ultimaRespuesta = JSON.stringify(data).substring(0, 200);
+                console.log(`[PLAY] ❌ ${endpoint} respondió pero sin datos válidos`);
                 continue;
             }
 
-            const resultados = data.datos || data.data || data.result || [];
+            const resultados = data.datos || data.data || data.result || data.results || [];
             
             if (!Array.isArray(resultados) || resultados.length === 0) {
                 ultimoError = 'Sin resultados';
@@ -68,43 +93,47 @@ async function buscarYouTube(query) {
             }
 
             // Preferir el primer video NO live
-            const video = resultados.find(v => !v.isLive && !v.enVivo) || resultados[0];
+            const video = resultados.find(v => !v.isLive && !v.enVivo && !v.live) || resultados[0];
             
             if (!video) {
                 ultimoError = 'No se pudo extraer video';
                 continue;
             }
 
-            console.log(`[PLAY] ✅ Búsqueda exitosa en ${(performance.now() - inicio).toFixed(0)}ms usando ${apiEndpoint}`);
+            console.log(`[PLAY] ✅ Búsqueda exitosa en ${(performance.now() - inicio).toFixed(0)}ms usando ${endpoint}`);
 
             return {
-                videoId: video.videoId || video.id,
+                videoId: video.videoId || video.id || video.vid,
                 url: video.url || `https://www.youtube.com/watch?v=${video.videoId || video.id}`,
-                titulo: video.título || video.title || 'Sin título',
-                thumbnail: video.imagen || video.miniatura || video.thumbnail || '',
-                duracion: video.duración || video.duration || '0:00',
-                vistas: video.vistas || video.views || 0,
-                publicado: video.publicadoEn || video.uploaded || 'Desconocido',
-                autor: video.autor?.nombre || video.autor?.name || video.author || 'Desconocido'
+                titulo: video.título || video.title || video.name || 'Sin título',
+                thumbnail: video.imagen || video.miniatura || video.thumbnail || video.thumb || '',
+                duracion: video.duración || video.duration || video.dur || '0:00',
+                vistas: video.vistas || video.views || video.viewCount || 0,
+                publicado: video.publicadoEn || video.uploaded || video.publishedAt || 'Desconocido',
+                autor: video.autor?.nombre || video.autor?.name || video.author || video.channel || 'Desconocido'
             };
             
         } catch (error) {
             ultimoError = error.message;
-            console.log(`[PLAY] Error en ${apiEndpoint}: ${error.message}`);
+            console.log(`[PLAY] ❌ Error en ${endpoint}: ${error.message}`);
             continue;
         }
     }
     
-    throw new Error(`Todas las APIs fallaron. Último error: ${ultimoError}`);
+    console.error('[PLAY] Todos los endpoints fallaron');
+    console.error('[PLAY] Último error:', ultimoError);
+    console.error('[PLAY] Última respuesta:', ultimaRespuesta);
+    
+    throw new Error(`Todas las APIs fallaron. Último error: ${ultimoError}. Respuesta: ${ultimaRespuesta}`);
 }
 
-// ───────────── DESCARGAR BUFFER (OPTIMIZADO) ─────────────
+// ───────────── DESCARGAR BUFFER ─────────────
 async function descargarBuffer(url, timeoutMs = 60000) {
     const inicio = performance.now();
 
     const res = await fetch(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': HEADERS['User-Agent'],
             'Accept': '*/*',
             'Accept-Encoding': 'identity'
         },
@@ -123,7 +152,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
     return buffer;
 }
 
-// ───────────── OBTENER AUDIO (OPTIMIZADO) ─────────────
+// ───────────── OBTENER AUDIO ─────────────
 async function descargarAudio(youtubeUrl) {
     const inicio = performance.now();
 
@@ -133,15 +162,23 @@ async function descargarAudio(youtubeUrl) {
     });
 
     if (!res.ok) throw new Error(`API MP3 falló: ${res.status}`);
-    const data = await res.json();
+    
+    const rawText = await res.text();
+    let data;
+    try {
+        data = JSON.parse(rawText);
+    } catch (e) {
+        throw new Error('API MP3 no devolvió JSON válido');
+    }
 
-    if (!data.status && !data.estado && data.status !== true) {
+    const esValido = data.status === true || data.estado === true || data.success === true;
+    if (!esValido) {
         throw new Error(data.message || 'No se pudo obtener el audio');
     }
 
     const info = data.data || data.datos || data.result || {};
 
-    if (!info.download && !info.descarga) {
+    if (!info.download && !info.descarga && !info.url) {
         throw new Error('La API no devolvió link de descarga');
     }
 
@@ -151,11 +188,11 @@ async function descargarAudio(youtubeUrl) {
         titulo: info.title || info.titulo || 'Sin título',
         autor: info.author || info.autor || 'Desconocido',
         thumbnail: info.image || info.imagen || '',
-        downloadUrl: info.download || info.descarga
+        downloadUrl: info.download || info.descarga || info.url
     };
 }
 
-// ───────────── OBTENER VIDEO (OPTIMIZADO) ─────────────
+// ───────────── OBTENER VIDEO ─────────────
 async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
     const inicio = performance.now();
 
@@ -165,15 +202,23 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
     });
 
     if (!res.ok) throw new Error(`API MP4 falló: ${res.status}`);
-    const data = await res.json();
+    
+    const rawText = await res.text();
+    let data;
+    try {
+        data = JSON.parse(rawText);
+    } catch (e) {
+        throw new Error('API MP4 no devolvió JSON válido');
+    }
 
-    if (!data.status && !data.estado && data.status !== true) {
+    const esValido = data.status === true || data.estado === true || data.success === true;
+    if (!esValido) {
         throw new Error(data.message || 'No se pudo obtener el video');
     }
 
     const info = data.data || data.datos || data.result || {};
 
-    if (!info.download && !info.descarga) {
+    if (!info.download && !info.descarga && !info.url) {
         throw new Error('La API no devolvió link de descarga');
     }
 
@@ -184,7 +229,7 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
         autor: info.author || info.autor || 'Desconocido',
         thumbnail: info.image || info.imagen || '',
         formato: info.format || info.formato || formato,
-        downloadUrl: info.download || info.descarga
+        downloadUrl: info.download || info.descarga || info.url
     };
 }
 
@@ -382,14 +427,18 @@ export default {
 
         } catch (error) {
             console.error('[PLAY] Error completo:', error);
+            
+            const errorMsg = error?.message || 'Error desconocido';
+            
             await responder.texto(
                 '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
-                '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
+                '┃ ⚠️ ' + errorMsg.split('\n')[0] + '\n' +
                 '┃\n' +
-                '┃ 💡 La API de búsqueda puede estar caída.\n' +
-                '┃    Intenta de nuevo en unos minutos.\n' +
+                '┃ 🔍 Revisa los logs del bot\n' +
+                '┃    para ver qué endpoint funcionó\n' +
                 '┃\n' +
-                '┃ 🔧 O prueba con otro nombre de canción\n' +
+                '┃ 💡 Si todos fallan, la API puede\n' +
+                '┃    estar en mantenimiento\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
