@@ -6,12 +6,43 @@ const API_MP3 = 'https://api.delirius.online/download/ytmp3';
 const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 
-const HEADERS = {
-    'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-};
+const RUTAS = [
+    (u) => u,
+    (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+    (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
+];
+
+const NOMBRES_RUTA = ['directo', 'allorigins', 'corsproxy'];
 
 if (!global.playSessions) global.playSessions = {};
+
+async function fetchJSON(url, timeoutMs = 12000) {
+    let ultimoError = null;
+
+    for (let i = 0; i < RUTAS.length; i++) {
+        try {
+            const res = await fetch(RUTAS[i](url), {
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(timeoutMs)
+            });
+
+            if (!res.ok) {
+                ultimoError = `HTTP ${res.status} (${NOMBRES_RUTA[i]})`;
+                console.log(`[PLAY] ${NOMBRES_RUTA[i]} → ${res.status}`);
+                continue;
+            }
+
+            const json = JSON.parse(await res.text());
+            console.log(`[PLAY] ${NOMBRES_RUTA[i]} → 200 OK`);
+            return json;
+        } catch (e) {
+            ultimoError = `${e.message} (${NOMBRES_RUTA[i]})`;
+            console.log(`[PLAY] ${NOMBRES_RUTA[i]} → ${e.message}`);
+        }
+    }
+
+    throw new Error('API inaccesible: ' + ultimoError);
+}
 
 function formatearVistas(vistas) {
     const num = parseInt(String(vistas).replace(/\D/g, '')) || 0;
@@ -24,14 +55,7 @@ function formatearVistas(vistas) {
 async function buscarYouTube(query) {
     const inicio = performance.now();
 
-    const res = await fetch(`${API_BUSQUEDA}?q=${encodeURIComponent(query)}`, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(15000)
-    });
-
-    if (!res.ok) throw new Error(`Búsqueda falló: ${res.status}`);
-
-    const data = await res.json();
+    const data = await fetchJSON(`${API_BUSQUEDA}?q=${encodeURIComponent(query)}`);
 
     if (data.status !== true && data.estado !== true) {
         throw new Error(data.message || 'La API respondió sin éxito');
@@ -64,7 +88,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 
     const res = await fetch(url, {
         headers: {
-            'User-Agent': HEADERS['User-Agent'],
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': '*/*',
             'Accept-Encoding': 'identity'
         },
@@ -73,8 +97,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 
     if (!res.ok) throw new Error(`Descarga falló: ${res.status}`);
 
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(await res.arrayBuffer());
 
     if (!buffer.length) throw new Error('Buffer vacío');
 
@@ -84,16 +107,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 }
 
 async function descargarAudio(youtubeUrl) {
-    const inicio = performance.now();
-
-    const res = await fetch(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(30000)
-    });
-
-    if (!res.ok) throw new Error(`API MP3 falló: ${res.status}`);
-
-    const data = await res.json();
+    const data = await fetchJSON(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, 20000);
 
     if (data.status !== true && data.estado !== true) {
         throw new Error(data.message || 'No se pudo obtener el audio');
@@ -105,8 +119,6 @@ async function descargarAudio(youtubeUrl) {
         throw new Error('La API no devolvió link de descarga');
     }
 
-    console.log(`[PLAY] Info MP3 en ${(performance.now() - inicio).toFixed(0)}ms`);
-
     return {
         titulo: info.title || info.titulo || 'Sin título',
         autor: info.author || info.autor || 'Desconocido',
@@ -116,16 +128,7 @@ async function descargarAudio(youtubeUrl) {
 }
 
 async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
-    const inicio = performance.now();
-
-    const res = await fetch(`${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(30000)
-    });
-
-    if (!res.ok) throw new Error(`API MP4 falló: ${res.status}`);
-
-    const data = await res.json();
+    const data = await fetchJSON(`${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`, 20000);
 
     if (data.status !== true && data.estado !== true) {
         throw new Error(data.message || 'No se pudo obtener el video');
@@ -136,8 +139,6 @@ async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
     if (!info.download && !info.descarga) {
         throw new Error('La API no devolvió link de descarga');
     }
-
-    console.log(`[PLAY] Info MP4 en ${(performance.now() - inicio).toFixed(0)}ms`);
 
     return {
         titulo: info.title || info.titulo || 'Sin título',
@@ -215,7 +216,7 @@ async function procesarVideo(sock, msg, video, responder) {
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
-            '╭━━〔 ❌ 𝐄𝐑𝐑𝐑 〕━━\n' +
+            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el video.\n' +
             '┃\n' +
             '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
@@ -249,7 +250,7 @@ export default {
                 '┃ 🎯 Elige con botones o\n' +
                 '┃    responde *1* o *2*\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -279,7 +280,7 @@ export default {
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
                 '┃\n' +
-                '┣━━〔  𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
+                '┣━━〔  𝐄𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
                 '┃    o responde *1* o *2*\n' +
@@ -312,7 +313,7 @@ export default {
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
-                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '╭━━〔 ❌ 𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
