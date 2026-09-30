@@ -6,43 +6,14 @@ const API_MP3 = 'https://api.delirius.online/download/ytmp3';
 const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 
-const RUTAS = [
-    (u) => u,
-    (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-    (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
-];
-
-const NOMBRES_RUTA = ['directo', 'allorigins', 'corsproxy'];
+const HEADERS = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-ES,es;q=0.9',
+    'Referer': 'https://www.youtube.com/'
+};
 
 if (!global.playSessions) global.playSessions = {};
-
-async function fetchJSON(url, timeoutMs = 12000) {
-    let ultimoError = null;
-
-    for (let i = 0; i < RUTAS.length; i++) {
-        try {
-            const res = await fetch(RUTAS[i](url), {
-                headers: { 'Accept': 'application/json' },
-                signal: AbortSignal.timeout(timeoutMs)
-            });
-
-            if (!res.ok) {
-                ultimoError = `HTTP ${res.status} (${NOMBRES_RUTA[i]})`;
-                console.log(`[PLAY] ${NOMBRES_RUTA[i]} → ${res.status}`);
-                continue;
-            }
-
-            const json = JSON.parse(await res.text());
-            console.log(`[PLAY] ${NOMBRES_RUTA[i]} → 200 OK`);
-            return json;
-        } catch (e) {
-            ultimoError = `${e.message} (${NOMBRES_RUTA[i]})`;
-            console.log(`[PLAY] ${NOMBRES_RUTA[i]} → ${e.message}`);
-        }
-    }
-
-    throw new Error('API inaccesible: ' + ultimoError);
-}
 
 function formatearVistas(vistas) {
     const num = parseInt(String(vistas).replace(/\D/g, '')) || 0;
@@ -55,9 +26,17 @@ function formatearVistas(vistas) {
 async function buscarYouTube(query) {
     const inicio = performance.now();
 
-    const data = await fetchJSON(`${API_BUSQUEDA}?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`${API_BUSQUEDA}?q=${encodeURIComponent(query)}`, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(15000)
+    });
 
-    if (data.status !== true && data.estado !== true) {
+    if (!res.ok) throw new Error(`Búsqueda falló: ${res.status}`);
+
+    const data = await res.json();
+
+    const esExitoso = data.status === true || data.estado === true;
+    if (!esExitoso) {
         throw new Error(data.message || 'La API respondió sin éxito');
     }
 
@@ -67,7 +46,11 @@ async function buscarYouTube(query) {
         throw new Error('No se encontraron resultados');
     }
 
-    const video = resultados.find(v => v.type === 'video' && !v.isLive) || resultados[0];
+    const video = resultados.find(v => {
+        const tipo = v.type || v.tipo;
+        const esLive = v.isLive || v.enVivo;
+        return tipo === 'video' && !esLive;
+    }) || resultados[0];
 
     console.log(`[PLAY] Búsqueda OK en ${(performance.now() - inicio).toFixed(0)}ms`);
 
@@ -75,11 +58,11 @@ async function buscarYouTube(query) {
         videoId: video.videoId,
         url: video.url || `https://www.youtube.com/watch?v=${video.videoId}`,
         titulo: video.title || video.título || 'Sin título',
-        thumbnail: video.image || video.thumbnail || video.imagen || '',
+        thumbnail: video.image || video.imagen || video.thumbnail || video.miniatura || '',
         duracion: video.duration || video.duración || '0:00',
         vistas: video.views || video.vistas || 0,
         publicado: video.publishedAt || video.publicadoEn || 'Desconocido',
-        autor: video.author?.name || video.author?.nombre || video.autor || 'Desconocido'
+        autor: video.author?.name || video.author?.nombre || video.autor?.nombre || video.autor || 'Desconocido'
     };
 }
 
@@ -87,11 +70,7 @@ async function descargarBuffer(url, timeoutMs = 60000) {
     const inicio = performance.now();
 
     const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': '*/*',
-            'Accept-Encoding': 'identity'
-        },
+        headers: HEADERS,
         signal: AbortSignal.timeout(timeoutMs)
     });
 
@@ -107,9 +86,17 @@ async function descargarBuffer(url, timeoutMs = 60000) {
 }
 
 async function descargarAudio(youtubeUrl) {
-    const data = await fetchJSON(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, 20000);
+    const res = await fetch(`${API_MP3}?url=${encodeURIComponent(youtubeUrl)}`, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(20000)
+    });
 
-    if (data.status !== true && data.estado !== true) {
+    if (!res.ok) throw new Error(`API MP3 falló: ${res.status}`);
+
+    const data = await res.json();
+
+    const esExitoso = data.status === true || data.estado === true;
+    if (!esExitoso) {
         throw new Error(data.message || 'No se pudo obtener el audio');
     }
 
@@ -128,9 +115,17 @@ async function descargarAudio(youtubeUrl) {
 }
 
 async function descargarVideo(youtubeUrl, formato = FORMATO_VIDEO) {
-    const data = await fetchJSON(`${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`, 20000);
+    const res = await fetch(`${API_MP4}?url=${encodeURIComponent(youtubeUrl)}&format=${formato}`, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(20000)
+    });
 
-    if (data.status !== true && data.estado !== true) {
+    if (!res.ok) throw new Error(`API MP4 falló: ${res.status}`);
+
+    const data = await res.json();
+
+    const esExitoso = data.status === true || data.estado === true;
+    if (!esExitoso) {
         throw new Error(data.message || 'No se pudo obtener el video');
     }
 
@@ -197,7 +192,7 @@ async function procesarVideo(sock, msg, video, responder) {
                     '┃ 🎧 *' + titulo + '*\n' +
                     '┃ 👤 ' + autor + '\n' +
                     '┃ 📊 ' + vid.formato + ' | 📦 ' + tamañoMB + ' MB\n' +
-                    '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             }, { quoted: msg });
         } else {
             await sock.sendMessage(msg.key.remoteJid, {
@@ -208,7 +203,7 @@ async function procesarVideo(sock, msg, video, responder) {
                     '┃ 🎧 *' + titulo + '*\n' +
                     '┃ 👤 ' + autor + '\n' +
                     '┃ 📊 ' + vid.formato + ' | 📦 ' + tamañoMB + ' MB\n' +
-                    '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             }, { quoted: msg });
         }
 
@@ -280,7 +275,7 @@ export default {
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
                 '┃\n' +
-                '┣━━〔  𝐄𝐈𝐆𝐄 〕━━⬣\n' +
+                '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
                 '┃    o responde *1* o *2*\n' +
@@ -313,7 +308,7 @@ export default {
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
-                '╭━━〔 ❌ 𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
