@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -14,45 +13,49 @@ function cargarDB() {
         return {};
     }
 }
+
 function guardarDB(db) {
     fs.writeFileSync(RUTA_DB, JSON.stringify(db, null, 2));
 }
-function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+function num(v) { 
+    const n = Number(v); 
+    return Number.isFinite(n) ? n : 0; 
+}
+
 const fmt = n => '$' + n.toLocaleString('en-US');
 
-async function datosMencion(sock, jid, nombreGuardado) {
-
-    if (nombreGuardado && nombreGuardado.trim()) {
-        return {
-            token: '*' + nombreGuardado + '*',
-            jids: [jid],
-            esNombre: true
-        };
-    }
-
-    try {
-        if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-            const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
-            if (pn) {
-                const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                return { token: '@' + pj.split('@')[0], jids: [pj] };
+async function obtenerMencion(sock, jid) {
+    // Intentar resolver LID a número de teléfono
+    let jidReal = jid;
+    
+    if (jid.endsWith('@lid')) {
+        try {
+            if (sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
+                if (pn) {
+                    jidReal = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+                }
             }
+        } catch (e) {
+            console.log('[BALTOP] No se pudo resolver LID:', jid);
         }
-    } catch (e) {   }
-
-    const idLimpio = jid.split('@')[0];
+    }
+    
+    // Extraer número limpio
+    const numero = jidReal.split('@')[0].replace(/\D/g, '');
+    
     return {
-        token: '*Usuario ' + idLimpio.slice(-4) + '*',
-        jids: [jid],
-        esNombre: true
+        token: '@' + numero,
+        jid: jidReal
     };
 }
 
 export default {
     nombre: 'baltop',
     categoria: 'Economy',
-    alias: ['topbanco', 'banktop', 'topbank', 'top'],
-    descripcion: 'Ranking de TOTAL de coins con nombres reales',
+    alias: ['topbanco', 'banktop', 'topbank', 'tops'],
+    descripcion: 'Ranking de TOTAL de coins con menciones reales',
     uso: '.baltop',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -75,25 +78,33 @@ export default {
                 );
             }
 
-            const medallas = ['👑', '', ''];
+            const medallas = ['👑', '🥈', '🥉'];
             const menciones = [];
             let txt = '╭━━〔 💎 𝐓𝐎𝐏 𝐁𝐀𝐍𝐂𝐎 💎 〕━━⬣\n\n┃  𝐑𝐀𝐍𝐊𝐈𝐍𝐆 𝐃𝐄 𝐁𝐀𝐍𝐂𝐎\n┃\n';
 
             for (let i = 0; i < top.length; i++) {
                 const [jid, u] = top[i];
-                const m = await datosMencion(sock, jid, u.nombre);
-                m.jids.forEach(j => { if (!menciones.includes(j)) menciones.push(j); });
+                const mencion = await obtenerMencion(sock, jid);
+                
+                // Agregar JID al array de menciones
+                if (!menciones.includes(mencion.jid)) {
+                    menciones.push(mencion.jid);
+                }
 
                 const total = num(u.banco) + num(u.dinero);
+                const posicion = medallas[i] || `${i + 1}.`;
 
-                txt += '┃ ' + (medallas[i] || (i + 1) + '.') + ' ' + m.token + '\n';
+                txt += '┃ ' + posicion + ' ' + mencion.token + '\n';
                 txt += '┃    💰 Total › *' + fmt(total) + '*\n';
                 txt += '┃\n';
             }
 
             txt += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-            await sock.sendMessage(msg.key.remoteJid, { text: txt, mentions: menciones }, { quoted: msg });
+            await sock.sendMessage(msg.key.remoteJid, { 
+                text: txt, 
+                mentions: menciones 
+            }, { quoted: msg });
         } catch (error) {
             console.error('[BALTOP] Error:', error);
             await responder.texto('❌ Error al leer el ranking del banco.');
