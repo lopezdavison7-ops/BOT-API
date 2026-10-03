@@ -1,60 +1,107 @@
 import fetch from 'node-fetch';
-import { exec } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { promisify } from 'node:util';
 
-const execP = promisify(exec);
-const WAIFU_BASE = 'https://api.waifu.pics/sfw/';
+const APIs = [
+    (tipo) => `https://api.waifu.pics/sfw/${tipo}`,
+    (tipo) => `https://nekos.life/api/v2/img/${tipo}`,
+    (tipo) => `https://nekos.best/api/v2/${tipo}`,
+    (tipo) => `https://api.otakugifs.xyz/gif?reaction=${tipo}`
+];
 
-let ffmpegDisponible = null;
+const ENDPOINTS = {
+    hug: ['hug', 'hug', 'hug', 'hug'],
+    kiss: ['kiss', 'kiss', 'kiss', 'kiss'],
+    pat: ['pat', 'pat', 'pat', 'pat'],
+    slap: ['slap', 'slap', 'slap', 'slap'],
+    cuddle: ['cuddle', 'cuddle', 'cuddle', 'cuddle'],
+    cry: ['cry', 'cry', 'cry', 'cry'],
+    dance: ['dance', 'dance', 'dance', 'dance'],
+    blush: ['blush', 'blush', 'blush', 'blush'],
+    bonk: ['bonk', 'bonk', 'bonk', 'bonk'],
+    bully: ['bully', 'bully', 'bully', 'bully'],
+    cringe: ['cringe', 'cringe', 'cringe', 'cringe'],
+    bite: ['bite', 'bite', 'bite', 'bite'],
+    happy: ['happy', 'happy', 'happy', 'happy'],
+    highfive: ['highfive', 'highfive', 'highfive', 'highfive'],
+    handhold: ['handhold', 'handhold', 'handhold', 'handhold'],
+    lick: ['lick', 'lick', 'lick', 'lick'],
+    poke: ['poke', 'poke', 'poke', 'poke'],
+    smile: ['smile', 'smile', 'smile', 'smile'],
+    smug: ['smug', 'smug', 'smug', 'smug'],
+    wave: ['wave', 'wave', 'wave', 'wave'],
+    wink: ['wink', 'wink', 'wink', 'wink'],
+    yeet: ['yeet', 'yeet', 'yeet', 'yeet'],
+    glomp: ['glomp', 'glomp', 'glomp', 'glomp'],
+    kill: ['kill', 'kill', 'kill', 'kill'],
+    nom: ['nom', 'nom', 'nom', 'nom'],
+    peek: ['poke', 'poke', 'poke', 'peek'],
+    feed: ['nom', 'nom', 'nom', 'feed'],
+    tickle: ['poke', 'poke', 'poke', 'tickle'],
+    think: ['smug', 'smug', 'smug', 'think'],
+    stare: ['smug', 'smug', 'smug', 'stare'],
+    bored: ['smug', 'smug', 'smug', 'bored'],
+    pout: ['smug', 'smug', 'smug', 'pout'],
+    shrug: ['smug', 'smug', 'smug', 'shrug'],
+    facepalm: ['smug', 'smug', 'smug', 'facepalm'],
+    laugh: ['smile', 'smile', 'smile', 'laugh'],
+    sleep: ['smug', 'smug', 'smug', 'sleep'],
+    sad: ['cry', 'cry', 'cry', 'sad'],
+    angry: ['bully', 'bully', 'bully', 'angry'],
+    confused: ['smug', 'smug', 'smug', 'confused'],
+    shocked: ['smug', 'smug', 'smug', 'shocked'],
+    scared: ['cry', 'cry', 'cry', 'scared'],
+    love: ['hug', 'hug', 'hug', 'love'],
+    run: ['dance', 'dance', 'dance', 'run'],
+    walk: ['dance', 'dance', 'dance', 'walk'],
+    sing: ['dance', 'dance', 'dance', 'sing'],
+    coffee: ['nom', 'nom', 'nom', 'coffee'],
+    eat: ['nom', 'nom', 'nom', 'eat'],
+    drink: ['nom', 'nom', 'nom', 'drink'],
+    bath: ['smug', 'smug', 'smug', 'bath'],
+    smoke: ['smug', 'smug', 'smug', 'smoke'],
+    game: ['smug', 'smug', 'smug', 'game'],
+    read: ['smug', 'smug', 'smug', 'read'],
+    work: ['smug', 'smug', 'smug', 'work'],
+    study: ['smug', 'smug', 'smug', 'study'],
+    fight: ['bully', 'bully', 'bully', 'fight'],
+    celebrate: ['dance', 'dance', 'dance', 'celebrate'],
+    party: ['dance', 'dance', 'dance', 'party'],
+    gift: ['handhold', 'handhold', 'handhold', 'gift'],
+    arrest: ['slap', 'slap', 'slap', 'arrest'],
+    shoot: ['kill', 'kill', 'kill', 'shoot'],
+    stab: ['kill', 'kill', 'kill', 'stab'],
+    punch: ['slap', 'slap', 'slap', 'punch'],
+    throw: ['yeet', 'yeet', 'yeet', 'throw'],
+    catch: ['handhold', 'handhold', 'handhold', 'catch'],
+    push: ['yeet', 'yeet', 'yeet', 'push'],
+    pull: ['handhold', 'handhold', 'handhold', 'pull'],
+    drag: ['yeet', 'yeet', 'yeet', 'drag'],
+    carry: ['hug', 'hug', 'hug', 'carry'],
+    lift: ['hug', 'hug', 'hug', 'lift'],
+    drop: ['yeet', 'yeet', 'yeet', 'drop'],
+    spin: ['dance', 'dance', 'dance', 'spin'],
+    jump: ['dance', 'dance', 'dance', 'jump'],
+    fall: ['cry', 'cry', 'cry', 'fall'],
+    trip: ['cry', 'cry', 'cry', 'trip'],
+    slip: ['cry', 'cry', 'cry', 'slip'],
+    climb: ['dance', 'dance', 'dance', 'climb'],
+    swim: ['dance', 'dance', 'dance', 'swim'],
+    fly: ['dance', 'dance', 'dance', 'fly'],
+    drive: ['smug', 'smug', 'smug', 'drive'],
+    ride: ['smug', 'smug', 'smug', 'ride'],
+    surf: ['dance', 'dance', 'dance', 'surf'],
+    ski: ['dance', 'dance', 'dance', 'ski'],
+    skate: ['dance', 'dance', 'dance', 'skate'],
+    bike: ['dance', 'dance', 'dance', 'bike']
+};
 
-async function hayFfmpeg() {
-    if (ffmpegDisponible !== null) return ffmpegDisponible;
-    try {
-        await execP('ffmpeg -version');
-        ffmpegDisponible = true;
-    } catch {
-        ffmpegDisponible = false;
-    }
-    return ffmpegDisponible;
-}
-
-async function gifAMp4(gifBuffer) {
-    const tmp = os.tmpdir();
-    const inPath = path.join(tmp, 'rx_' + Date.now() + '.gif');
-    const outPath = path.join(tmp, 'rx_' + Date.now() + '.mp4');
-    fs.writeFileSync(inPath, gifBuffer);
-    try {
-        await execP(`ffmpeg -y -i "${inPath}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" "${outPath}"`, { timeout: 20000 });
-        const mp4 = fs.readFileSync(outPath);
-        return mp4;
-    } finally {
-        try { fs.unlinkSync(inPath); } catch {}
-        try { fs.unlinkSync(outPath); } catch {}
-    }
-}
-
-const WAIFU_MAP = {
-    hug: 'hug', kiss: 'kiss', pat: 'pat', slap: 'slap', cuddle: 'cuddle',
-    cry: 'cry', dance: 'dance', blush: 'blush', bonk: 'bonk', bully: 'bully',
-    cringe: 'cringe', bite: 'bite', happy: 'happy', highfive: 'highfive',
-    handhold: 'handhold', lick: 'lick', poke: 'poke', smile: 'smile',
-    smug: 'smug', wave: 'wave', wink: 'wink', yeet: 'yeet', glomp: 'glomp',
-    kill: 'kill', nom: 'nom',
-    peek: 'poke', feed: 'nom', tickle: 'poke', think: 'smug', stare: 'smug',
-    bored: 'smug', pout: 'smug', shrug: 'smug', facepalm: 'smug', laugh: 'smile',
-    sleep: 'smug', sad: 'cry', angry: 'bully', confused: 'smug', shocked: 'smug',
-    scared: 'cry', love: 'hug', run: 'dance', walk: 'dance', sing: 'dance',
-    coffee: 'nom', eat: 'nom', drink: 'nom', bath: 'smug', smoke: 'smug',
-    game: 'smug', read: 'smug', work: 'smug', study: 'smug', fight: 'bully',
-    celebrate: 'dance', party: 'dance', gift: 'handhold', arrest: 'slap',
-    shoot: 'kill', stab: 'kill', punch: 'slap', throw: 'yeet', catch: 'handhold',
-    push: 'yeet', pull: 'handhold', drag: 'yeet', carry: 'hug', lift: 'hug',
-    drop: 'yeet', spin: 'dance', jump: 'dance', fall: 'cry', trip: 'cry',
-    slip: 'cry', climb: 'dance', swim: 'dance', fly: 'dance', drive: 'smug',
-    ride: 'smug', surf: 'dance', ski: 'dance', skate: 'dance', bike: 'dance'
+const FALLBACK_GIFS = {
+    hug: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    kiss: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    pat: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    slap: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    cry: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    dance: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4',
+    default: 'https://github.com/Kone457/Nexus/raw/main/Anime/006ba5556a.mp4'
 };
 
 const MENSAJES = {
@@ -157,17 +204,36 @@ function bold(texto) {
     });
 }
 
-async function pedirGif(tipo) {
-    const endpoint = WAIFU_MAP[tipo] || 'waifu';
-    try {
-        const res = await fetch(WAIFU_BASE + endpoint, { signal: AbortSignal.timeout(10000) });
-        if (!res.ok) return null;
-        const json = await res.json();
-        return json.url || null;
-    } catch (e) {
-        console.error('[REACCIONES] waifu.pics falló:', e.message);
-        return null;
+function extraerUrl(json) {
+    if (!json || typeof json !== 'object') return null;
+    const candidatos = [
+        json.url, json.video, json.gif, json.link, json.file,
+        json.result?.url, json.data?.url, json.response?.url,
+        json.results?.[0]?.url, json.results?.[0]?.media?.[0]?.gif?.url
+    ];
+    for (const c of candidatos) {
+        if (typeof c === 'string' && c.startsWith('http')) return c;
     }
+    return null;
+}
+
+async function pedirGif(tipo) {
+    const endpoints = ENDPOINTS[tipo] || ENDPOINTS.hug;
+    
+    for (let i = 0; i < APIs.length; i++) {
+        try {
+            const url = APIs[i](endpoints[i]);
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!res.ok) continue;
+            const json = await res.json();
+            const gifUrl = extraerUrl(json);
+            if (gifUrl) return gifUrl;
+        } catch (e) {
+            continue;
+        }
+    }
+    
+    return FALLBACK_GIFS[tipo] || FALLBACK_GIFS.default;
 }
 
 async function datosMencion(sock, jid) {
@@ -193,7 +259,7 @@ export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...Object.keys(MENSAJES), ...Object.values(MENSAJES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime animadas (waifu.pics + ffmpeg)',
+    descripcion: 'Reacciones anime con múltiples APIs + fallback',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -238,48 +304,25 @@ export default {
             }
 
             const url = await pedirGif(tipo);
-            if (!url) return await responder.texto(caption);
-
-            let gifBuffer = null;
-            try {
-                const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-                if (r.ok) gifBuffer = Buffer.from(await r.arrayBuffer());
-            } catch (e) {
-                console.error('[REACCIONES] descarga gif falló:', e.message);
-            }
-
-            if (!gifBuffer) return await responder.texto(caption);
-
-            let mp4 = null;
-            if (await hayFfmpeg()) {
-                try {
-                    mp4 = await gifAMp4(gifBuffer);
-                } catch (e) {
-                    console.error('[REACCIONES] ffmpeg falló:', e.message);
-                }
-            }
 
             try {
                 await sock.sendMessage(jid, {
-                    video: mp4 || gifBuffer,
+                    video: { url },
                     mimetype: 'video/mp4',
                     gifPlayback: true,
                     caption,
                     mentions
                 }, { quoted: msg });
-                return;
             } catch (e) {
-                console.error('[REACCIONES] envio video falló:', e.message);
-            }
-
-            try {
-                await sock.sendMessage(jid, {
-                    image: gifBuffer,
-                    caption,
-                    mentions
-                }, { quoted: msg });
-            } catch (e) {
-                await responder.texto(caption);
+                try {
+                    await sock.sendMessage(jid, {
+                        image: { url },
+                        caption,
+                        mentions
+                    }, { quoted: msg });
+                } catch (e2) {
+                    await responder.texto(caption);
+                }
             }
 
         } catch (error) {
