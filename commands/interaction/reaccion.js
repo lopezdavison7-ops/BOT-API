@@ -1,428 +1,24 @@
-import fetch from 'node-fetch';
+const WAIFU_BASE = 'https://api.waifu.pics/sfw/';
 
-const GIFS = {
-    hug: [
-        'https://c.tenor.com/ohbIkr1Iy5UAAAAC/hug-anime.gif',
-        'https://c.tenor.com/WabTLUkQh58AAAAC/anime-hug.gif',
-        'https://c.tenor.com/J7vGqJz8m9IAAAAC/anime-hug.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/hug.gif'
-    ],
-    kiss: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/kiss-anime.gif',
-        'https://c.tenor.com/Kj4RTXkQ6xYAAAAC/kiss.gif',
-        'https://media.tenor.com/3xS4gMfKw8MAAAAC/kiss.gif',
-        'https://c.tenor.com/9k4nY5p3k5YAAAAC/anime-kiss.gif'
-    ],
-    pat: [
-        'https://c.tenor.com/pKwL2I8aQqEAAAAC/pat-anime.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/pat.gif',
-        'https://media.tenor.com/K5R4nV1J9sEAAAAC/pat.gif'
-    ],
-    slap: [
-        'https://c.tenor.com/XiYuU9hxtEkAAAAC/slap-anime.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/slap.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/slap.gif'
-    ],
-    cuddle: [
-        'https://c.tenor.com/J7vGqJz8m9IAAAAC/cuddle.gif',
-        'https://media.tenor.com/K5R4nV1J9sEAAAAC/cuddle.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/cuddle.gif'
-    ],
-    cry: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/cry-anime.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/cry.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/cry.gif'
-    ],
-    dance: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/dance.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/dance.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/dance.gif'
-    ],
-    blush: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/blush.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/blush.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/blush.gif'
-    ],
-    bonk: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/bonk.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/bonk.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/bonk.gif'
-    ],
-    bully: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/bully.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/bully.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/bully.gif'
-    ],
-    cringe: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/cringe.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/cringe.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/cringe.gif'
-    ],
-    bite: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/bite.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/bite.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/bite.gif'
-    ],
-    happy: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/happy-anime.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/happy.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/happy.gif'
-    ],
-    highfive: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/highfive.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/highfive.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/highfive.gif'
-    ],
-    handhold: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/handhold.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/handhold.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/handhold.gif'
-    ],
-    lick: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/lick.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/lick.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/lick.gif'
-    ],
-    poke: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/poke.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/poke.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/poke.gif'
-    ],
-    smile: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/smile.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/smile.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/smile.gif'
-    ],
-    smug: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/smug.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/smug.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/smug.gif'
-    ],
-    wave: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/wave.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/wave.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/wave.gif'
-    ],
-    wink: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/wink.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/wink.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/wink.gif'
-    ],
-    yeet: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/yeet.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/yeet.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/yeet.gif'
-    ],
-    glomp: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/glomp.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/glomp.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/glomp.gif'
-    ],
-    kill: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/kill.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/kill.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/kill.gif'
-    ],
-    nom: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/nom.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/nom.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/nom.gif'
-    ],
-    peek: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/peek.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/peek.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/peek.gif'
-    ],
-    feed: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/feed.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/feed.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/feed.gif'
-    ],
-    tickle: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/tickle.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/tickle.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/tickle.gif'
-    ],
-    think: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/think.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/think.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/think.gif'
-    ],
-    stare: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/stare.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/stare.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/stare.gif'
-    ],
-    bored: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/bored.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/bored.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/bored.gif'
-    ],
-    pout: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/pout.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/pout.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/pout.gif'
-    ],
-    shrug: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/shrug.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/shrug.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/shrug.gif'
-    ],
-    facepalm: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/facepalm.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/facepalm.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/facepalm.gif'
-    ],
-    laugh: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/laugh.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/laugh.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/laugh.gif'
-    ],
-    sleep: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/sleep.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/sleep.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/sleep.gif'
-    ],
-    sad: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/sad.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/sad.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/sad.gif'
-    ],
-    angry: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/angry.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/angry.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/angry.gif'
-    ],
-    confused: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/confused.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/confused.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/confused.gif'
-    ],
-    shocked: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/shocked.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/shocked.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/shocked.gif'
-    ],
-    scared: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/scared.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/scared.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/scared.gif'
-    ],
-    love: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/love.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/love.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/love.gif'
-    ],
-    run: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/run.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/run.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/run.gif'
-    ],
-    walk: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/walk.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/walk.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/walk.gif'
-    ],
-    sing: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/sing.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/sing.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/sing.gif'
-    ],
-    coffee: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/coffee.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/coffee.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/coffee.gif'
-    ],
-    eat: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/eat.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/eat.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/eat.gif'
-    ],
-    drink: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/drink.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/drink.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/drink.gif'
-    ],
-    bath: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/bath.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/bath.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/bath.gif'
-    ],
-    smoke: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/smoke.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/smoke.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/smoke.gif'
-    ],
-    game: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/game.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/game.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/game.gif'
-    ],
-    read: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/read.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/read.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/read.gif'
-    ],
-    work: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/work.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/work.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/work.gif'
-    ],
-    study: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/study.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/study.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/study.gif'
-    ],
-    fight: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/fight.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/fight.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/fight.gif'
-    ],
-    celebrate: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/celebrate.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/celebrate.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/celebrate.gif'
-    ],
-    party: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/party.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/party.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/party.gif'
-    ],
-    gift: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/gift.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/gift.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/gift.gif'
-    ],
-    arrest: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/arrest.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/arrest.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/arrest.gif'
-    ],
-    shoot: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/shoot.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/shoot.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/shoot.gif'
-    ],
-    stab: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/stab.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/stab.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/stab.gif'
-    ],
-    punch: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/punch.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/punch.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/punch.gif'
-    ],
-    throw: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/throw.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/throw.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/throw.gif'
-    ],
-    catch: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/catch.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/catch.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/catch.gif'
-    ],
-    push: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/push.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/push.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/push.gif'
-    ],
-    pull: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/pull.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/pull.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/pull.gif'
-    ],
-    drag: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/drag.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/drag.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/drag.gif'
-    ],
-    carry: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/carry.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/carry.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/carry.gif'
-    ],
-    lift: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/lift.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/lift.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/lift.gif'
-    ],
-    drop: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/drop.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/drop.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/drop.gif'
-    ],
-    spin: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/spin.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/spin.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/spin.gif'
-    ],
-    jump: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/jump.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/jump.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/jump.gif'
-    ],
-    fall: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/fall.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/fall.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/fall.gif'
-    ],
-    trip: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/trip.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/trip.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/trip.gif'
-    ],
-    slip: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/slip.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/slip.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/slip.gif'
-    ],
-    climb: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/climb.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/climb.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/climb.gif'
-    ],
-    swim: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/swim.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/swim.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/swim.gif'
-    ],
-    fly: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/fly.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/fly.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/fly.gif'
-    ],
-    drive: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/drive.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/drive.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/drive.gif'
-    ],
-    ride: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/ride.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/ride.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/ride.gif'
-    ],
-    surf: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/surf.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/surf.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/surf.gif'
-    ],
-    ski: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/ski.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/ski.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/ski.gif'
-    ],
-    skate: [
-        'https://c.tenor.com/qi5t1nQ1p9EAAAAC/skate.gif',
-        'https://media.tenor.com/KJ4RTXkQ6xYAAAAC/skate.gif',
-        'https://c.tenor.com/2yN9yJQv7kYAAAAC/skate.gif'
-    ],
-    bike: [
-        'https://c.tenor.com/K5R4nV1J9sEAAAAC/bike.gif',
-        'https://media.tenor.com/5ry7314cY0cAAAAC/bike.gif',
-        'https://c.tenor.com/Q8gqJ7z8m9IAAAAC/bike.gif'
-    ]
+const WAIFU_MAP = {
+    hug: 'hug', kiss: 'kiss', pat: 'pat', slap: 'slap', cuddle: 'cuddle',
+    cry: 'cry', dance: 'dance', blush: 'blush', bonk: 'bonk', bully: 'bully',
+    cringe: 'cringe', bite: 'bite', happy: 'happy', highfive: 'highfive',
+    handhold: 'handhold', lick: 'lick', poke: 'poke', smile: 'smile',
+    smug: 'smug', wave: 'wave', wink: 'wink', yeet: 'yeet', glomp: 'glomp',
+    kill: 'kill', nom: 'nom',
+    peek: 'poke', feed: 'nom', tickle: 'poke', think: 'smug', stare: 'smug',
+    bored: 'smug', pout: 'smug', shrug: 'smug', facepalm: 'smug', laugh: 'smile',
+    sleep: 'smug', sad: 'cry', angry: 'bully', confused: 'smug', shocked: 'smug',
+    scared: 'cry', love: 'hug', run: 'dance', walk: 'dance', sing: 'dance',
+    coffee: 'nom', eat: 'nom', drink: 'nom', bath: 'smug', smoke: 'smug',
+    game: 'smug', read: 'smug', work: 'smug', study: 'smug', fight: 'bully',
+    celebrate: 'dance', party: 'dance', gift: 'handhold', arrest: 'slap',
+    shoot: 'kill', stab: 'kill', punch: 'slap', throw: 'yeet', catch: 'handhold',
+    push: 'yeet', pull: 'handhold', drag: 'yeet', carry: 'hug', lift: 'hug',
+    drop: 'yeet', spin: 'dance', jump: 'dance', fall: 'cry', trip: 'cry',
+    slip: 'cry', climb: 'dance', swim: 'dance', fly: 'dance', drive: 'smug',
+    ride: 'smug', surf: 'dance', ski: 'dance', skate: 'dance', bike: 'dance'
 };
 
 const MENSAJES = {
@@ -525,8 +121,18 @@ function bold(texto) {
     });
 }
 
-function random(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
+async function pedirGif(tipo) {
+    const endpoint = WAIFU_MAP[tipo] || 'waifu';
+    try {
+        const res = await fetch(WAIFU_BASE + endpoint, {
+            signal: AbortSignal.timeout(10000)
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.url || null;
+    } catch (e) {
+        return null;
+    }
 }
 
 async function datosMencion(sock, jid) {
@@ -552,7 +158,7 @@ export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...Object.keys(MENSAJES), ...Object.values(MENSAJES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime locales (82+ tipos)',
+    descripcion: 'Reacciones anime (waifu.pics) 82 tipos',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -596,12 +202,11 @@ export default {
                 caption = '`' + senderName + '` ' + bold(d.solo) + ' ' + d.emoji;
             }
 
-            const gifs = GIFS[tipo];
-            if (!gifs || gifs.length === 0) {
+            const url = await pedirGif(tipo);
+
+            if (!url) {
                 return await responder.texto(caption);
             }
-
-            const url = random(gifs);
 
             try {
                 await sock.sendMessage(jid, {
@@ -612,7 +217,15 @@ export default {
                     mentions
                 }, { quoted: msg });
             } catch (e) {
-                await responder.texto(caption);
+                try {
+                    await sock.sendMessage(jid, {
+                        image: { url },
+                        caption,
+                        mentions
+                    }, { quoted: msg });
+                } catch (e2) {
+                    await responder.texto(caption);
+                }
             }
 
         } catch (error) {
