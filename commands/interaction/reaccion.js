@@ -1,4 +1,11 @@
 import fetch from 'node-fetch';
+import { exec } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execP = promisify(exec);
 
 const APIs = [
     (tipo) => `https://api.waifu.pics/sfw/${tipo}`,
@@ -236,6 +243,60 @@ async function pedirGif(tipo) {
     return FALLBACK_GIFS[tipo] || FALLBACK_GIFS.default;
 }
 
+async function descargarBuffer(url) {
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    } catch (e) {
+        console.error('[REACCIONES] Error descargando buffer:', e.message);
+        return null;
+    }
+}
+
+function esGif(buffer) {
+    if (buffer.length < 6) return false;
+    const header = buffer.slice(0, 6).toString('ascii');
+    return header === 'GIF87a' || header === 'GIF89a';
+}
+
+function esMp4(buffer) {
+    if (buffer.length < 12) return false;
+    const ftyp = buffer.slice(4, 8).toString('ascii');
+    return ftyp === 'ftyp';
+}
+
+async function gifAMp4(gifBuffer) {
+    try {
+        await execP('ffmpeg -version', { timeout: 5000 });
+    } catch {
+        return null;
+    }
+
+    const tmp = os.tmpdir();
+    const inPath = path.join(tmp, 'rx_' + Date.now() + '.gif');
+    const outPath = path.join(tmp, 'rx_' + Date.now() + '.mp4');
+
+    try {
+        fs.writeFileSync(inPath, gifBuffer);
+        
+        await execP(
+            `ffmpeg -y -i "${inPath}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -f mp4 "${outPath}"`,
+            { timeout: 20000 }
+        );
+        
+        const mp4Buffer = fs.readFileSync(outPath);
+        return mp4Buffer;
+    } catch (e) {
+        console.error('[REACCIONES] ffmpeg error:', e.message);
+        return null;
+    } finally {
+        try { fs.unlinkSync(inPath); } catch {}
+        try { fs.unlinkSync(outPath); } catch {}
+    }
+}
+
 async function datosMencion(sock, jid) {
     try {
         if (jid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -259,7 +320,7 @@ export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...Object.keys(MENSAJES), ...Object.values(MENSAJES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime con múltiples APIs + fallback',
+    descripcion: 'Reacciones anime con descarga completa y conversión',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -304,19 +365,36 @@ export default {
             }
 
             const url = await pedirGif(tipo);
+            if (!url) return await responder.texto(caption);
+
+            const buffer = await descargarBuffer(url);
+            if (!buffer) return await responder.texto(caption);
+
+            let videoBuffer = buffer;
+            let mimetype = 'video/mp4';
+
+            if (esGif(buffer)) {
+                const mp4 = await gifAMp4(buffer);
+                if (mp4) {
+                    videoBuffer = mp4;
+                } else {
+                    mimetype = 'image/gif';
+                }
+            }
 
             try {
                 await sock.sendMessage(jid, {
-                    video: { url },
-                    mimetype: 'video/mp4',
-                    gifPlayback: true,
+                    video: videoBuffer,
+                    mimetype: mimetype,
+                    gifPlayback: mimetype === 'video/mp4',
                     caption,
                     mentions
                 }, { quoted: msg });
             } catch (e) {
+                console.error('[REACCIONES] Error enviando video:', e.message);
                 try {
                     await sock.sendMessage(jid, {
-                        image: { url },
+                        image: buffer,
                         caption,
                         mentions
                     }, { quoted: msg });
