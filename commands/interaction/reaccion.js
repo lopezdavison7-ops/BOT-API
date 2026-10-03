@@ -1,4 +1,40 @@
+import fetch from 'node-fetch';
+import { exec } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execP = promisify(exec);
 const WAIFU_BASE = 'https://api.waifu.pics/sfw/';
+
+let ffmpegDisponible = null;
+
+async function hayFfmpeg() {
+    if (ffmpegDisponible !== null) return ffmpegDisponible;
+    try {
+        await execP('ffmpeg -version');
+        ffmpegDisponible = true;
+    } catch {
+        ffmpegDisponible = false;
+    }
+    return ffmpegDisponible;
+}
+
+async function gifAMp4(gifBuffer) {
+    const tmp = os.tmpdir();
+    const inPath = path.join(tmp, 'rx_' + Date.now() + '.gif');
+    const outPath = path.join(tmp, 'rx_' + Date.now() + '.mp4');
+    fs.writeFileSync(inPath, gifBuffer);
+    try {
+        await execP(`ffmpeg -y -i "${inPath}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" "${outPath}"`, { timeout: 20000 });
+        const mp4 = fs.readFileSync(outPath);
+        return mp4;
+    } finally {
+        try { fs.unlinkSync(inPath); } catch {}
+        try { fs.unlinkSync(outPath); } catch {}
+    }
+}
 
 const WAIFU_MAP = {
     hug: 'hug', kiss: 'kiss', pat: 'pat', slap: 'slap', cuddle: 'cuddle',
@@ -124,13 +160,12 @@ function bold(texto) {
 async function pedirGif(tipo) {
     const endpoint = WAIFU_MAP[tipo] || 'waifu';
     try {
-        const res = await fetch(WAIFU_BASE + endpoint, {
-            signal: AbortSignal.timeout(10000)
-        });
+        const res = await fetch(WAIFU_BASE + endpoint, { signal: AbortSignal.timeout(10000) });
         if (!res.ok) return null;
         const json = await res.json();
         return json.url || null;
     } catch (e) {
+        console.error('[REACCIONES] waifu.pics falló:', e.message);
         return null;
     }
 }
@@ -158,7 +193,7 @@ export default {
     nombre: 'reaccion',
     categoria: 'Interacción',
     alias: [...Object.keys(MENSAJES), ...Object.values(MENSAJES).flatMap(d => d.alias), 'reacciones', 'reaction'],
-    descripcion: 'Reacciones anime (waifu.pics) 82 tipos',
+    descripcion: 'Reacciones anime animadas (waifu.pics + ffmpeg)',
     uso: '.<reaccion> [@usuario]',
     ejecutar: async ({ sock, msg, responder }) => {
         try {
@@ -183,7 +218,7 @@ export default {
 
             const tipo = MAPA[invocado];
             if (!tipo) {
-                return await responder.texto('❌ Reacción no válida. Usa .reacciones para ver las ' + Object.keys(MENSAJES).length + ' disponibles.');
+                return await responder.texto('❌ Reacción no válida. Usa .reacciones');
             }
 
             const d = MENSAJES[tipo];
@@ -203,29 +238,48 @@ export default {
             }
 
             const url = await pedirGif(tipo);
+            if (!url) return await responder.texto(caption);
 
-            if (!url) {
-                return await responder.texto(caption);
+            let gifBuffer = null;
+            try {
+                const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+                if (r.ok) gifBuffer = Buffer.from(await r.arrayBuffer());
+            } catch (e) {
+                console.error('[REACCIONES] descarga gif falló:', e.message);
+            }
+
+            if (!gifBuffer) return await responder.texto(caption);
+
+            let mp4 = null;
+            if (await hayFfmpeg()) {
+                try {
+                    mp4 = await gifAMp4(gifBuffer);
+                } catch (e) {
+                    console.error('[REACCIONES] ffmpeg falló:', e.message);
+                }
             }
 
             try {
                 await sock.sendMessage(jid, {
-                    video: { url },
+                    video: mp4 || gifBuffer,
                     mimetype: 'video/mp4',
                     gifPlayback: true,
                     caption,
                     mentions
                 }, { quoted: msg });
+                return;
             } catch (e) {
-                try {
-                    await sock.sendMessage(jid, {
-                        image: { url },
-                        caption,
-                        mentions
-                    }, { quoted: msg });
-                } catch (e2) {
-                    await responder.texto(caption);
-                }
+                console.error('[REACCIONES] envio video falló:', e.message);
+            }
+
+            try {
+                await sock.sendMessage(jid, {
+                    image: gifBuffer,
+                    caption,
+                    mentions
+                }, { quoted: msg });
+            } catch (e) {
+                await responder.texto(caption);
             }
 
         } catch (error) {
