@@ -1,7 +1,7 @@
 
 
 const ALYA_BASE = 'https://api.alyacore.xyz/sfw/interaction';
-const ALYA_KEY = 'oboe';
+const ALYA_KEY = 'AURA-BOT-JERIELB';
 
 function bold(texto) {
     return String(texto).replace(/[A-Za-z]/g, c => {
