@@ -4,7 +4,8 @@ import https from 'node:https';
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 12 });
 
 const API_KEY = '8ez2gm';
-const API_BUSCAR = `https://api.neoxr.eu/api/yts`;
+const API_BUSCAR_NEOXR = `https://api.neoxr.eu/api/yts`;
+const API_BUSCAR_DELIRIUS = `https://api.delirius.online/search/ytsearch`;
 const API_DESCARGA = `https://api.neoxr.eu/api/youtube`;
 
 const CACHE_TTL = 5 * 60 * 1000;
@@ -71,13 +72,67 @@ function normVideo(v) {
     };
 }
 
-async function buscarUna(query) {
-    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}&apikey=${API_KEY}`, 10000);
-    if (data.status !== true) throw new Error(data.message || 'API sin éxito');
+async function buscarEnNeoxr(query) {
+    console.log(`[PLAY-NEOXR] Buscando: "${query}"`);
+    const url = `${API_BUSCAR_NEOXR}?q=${encodeURIComponent(query)}&apikey=${API_KEY}`;
+    console.log(`[PLAY-NEOXR] URL: ${url}`);
+    
+    const data = await getJSON(url, 10000);
+    console.log(`[PLAY-NEOXR] Respuesta completa:`, JSON.stringify(data, null, 2).substring(0, 800));
+    
+    if (data.status !== true) {
+        throw new Error(`Neoxr: ${data.message || data.msg || 'Status no es true'}`);
+    }
+    
     const lista = data.data || [];
+    console.log(`[PLAY-NEOXR] Resultados encontrados: ${lista.length}`);
+    
+    if (!Array.isArray(lista) || lista.length === 0) {
+        throw new Error('Neoxr: Sin resultados');
+    }
+    
     const v = lista.find(x => x.type === 'video') || lista[0];
-    if (!v) throw new Error('Sin resultados');
+    if (!v) throw new Error('Neoxr: No se pudo extraer video');
+    
     return normVideo(v);
+}
+
+async function buscarEnDelirius(query) {
+    console.log(`[PLAY-DELIRIUS] Buscando: "${query}"`);
+    const url = `${API_BUSCAR_DELIRIUS}?q=${encodeURIComponent(query)}`;
+    console.log(`[PLAY-DELIRIUS] URL: ${url}`);
+    
+    const data = await getJSON(url, 10000);
+    console.log(`[PLAY-DELIRIUS] Respuesta completa:`, JSON.stringify(data, null, 2).substring(0, 800));
+    
+    if (data.status !== true && data.estado !== true) {
+        throw new Error(`Delirius: ${data.message || 'Status no es true'}`);
+    }
+    
+    const lista = data.data || data.datos || [];
+    console.log(`[PLAY-DELIRIUS] Resultados encontrados: ${lista.length}`);
+    
+    if (!Array.isArray(lista) || lista.length === 0) {
+        throw new Error('Delirius: Sin resultados');
+    }
+    
+    const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
+    if (!v) throw new Error('Delirius: No se pudo extraer video');
+    
+    return normVideo(v);
+}
+
+async function buscarUna(query) {
+    try {
+        return await buscarEnNeoxr(query);
+    } catch (errorNeoxr) {
+        console.log(`[PLAY] Neoxr falló: ${errorNeoxr.message}, intentando Delirius...`);
+        try {
+            return await buscarEnDelirius(query);
+        } catch (errorDelirius) {
+            throw new Error(`Ambas APIs fallaron. Neoxr: ${errorNeoxr.message} | Delirius: ${errorDelirius.message}`);
+        }
+    }
 }
 
 function videoDesdeURL(url) {
@@ -129,7 +184,7 @@ async function buscarYouTube(query) {
             }
         }
 
-        if (!video) throw new Error('Sin resultados');
+        if (!video) throw new Error('Sin resultados en ninguna variante');
     }
 
     if (global.playCache.size > 50) global.playCache.clear();
