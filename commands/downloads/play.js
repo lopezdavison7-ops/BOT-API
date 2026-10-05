@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
 
-const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 12 });
 
 const API_KEY = '8ez2gm';
 const API_BUSCAR = `https://api.neoxr.eu/api/yts`;
@@ -139,11 +139,26 @@ async function buscarYouTube(query) {
 }
 
 async function infoDescarga(url, tipo, calidad) {
-    const data = await getJSON(`${API_DESCARGA}?url=${encodeURIComponent(url)}&type=${tipo}&quality=${calidad}&apikey=${API_KEY}`, 20000);
-    if (data.status !== true) throw new Error(data.message || 'API descarga sin éxito');
+    const apiUrl = `${API_DESCARGA}?url=${encodeURIComponent(url)}&type=${tipo}&quality=${calidad}&apikey=${API_KEY}`;
+    console.log(`[PLAY] Descargando: ${apiUrl}`);
+    
+    const data = await getJSON(apiUrl, 25000);
+    
+    console.log(`[PLAY] Respuesta descarga:`, JSON.stringify(data, null, 2).substring(0, 500));
+    
+    if (data.status !== true) {
+        const errorMsg = data.message || data.msg || 'Error desconocido';
+        console.error(`[PLAY] API descarga falló:`, data);
+        throw new Error(`API descarga sin éxito: ${errorMsg}`);
+    }
     
     const info = data.data || {};
-    if (!info.url) throw new Error('Sin link de descarga');
+    if (!info.url) {
+        console.error(`[PLAY] Sin URL de descarga:`, data);
+        throw new Error('La API no devolvió link de descarga');
+    }
+    
+    console.log(`[PLAY] ✅ URL obtenida: ${info.url.substring(0, 80)}...`);
     
     return {
         titulo: data.title || 'Sin título',
@@ -156,14 +171,26 @@ async function infoDescarga(url, tipo, calidad) {
 }
 
 async function descargarBuffer(url, timeoutMs) {
+    console.log(`[PLAY] Descargando buffer de: ${url.substring(0, 100)}...`);
+    
     const res = await fetch(url, {
         agent: AGENTE,
         headers: { 'User-Agent': getUA(), 'Accept': '*/*' },
         signal: AbortSignal.timeout(timeoutMs)
     });
-    if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
+    
+    if (!res.ok) {
+        console.error(`[PLAY] Descarga buffer falló: HTTP ${res.status}`);
+        throw new Error('Descarga HTTP ' + res.status);
+    }
+    
     const buffer = Buffer.from(await res.arrayBuffer());
-    if (!buffer.length) throw new Error('Buffer vacío');
+    if (!buffer.length) {
+        console.error(`[PLAY] Buffer vacío`);
+        throw new Error('Buffer vacío');
+    }
+    
+    console.log(`[PLAY] ✅ Buffer descargado: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     return buffer;
 }
 
@@ -172,12 +199,14 @@ async function procesarAudio(sock, msg, video, responder) {
         await responder.texto('🎵 Descargando audio...');
 
         const info = await infoDescarga(video.url, 'audio', '128kbps');
-        const buffer = await descargarBuffer(info.downloadUrl, 60000);
+        const buffer = await descargarBuffer(info.downloadUrl, 90000);
 
         await sock.sendMessage(msg.key.remoteJid, {
             audio: buffer,
             mimetype: 'audio/mpeg'
         }, { quoted: msg });
+        
+        console.log(`[PLAY] ✅ Audio enviado exitosamente`);
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
         await responder.texto(
@@ -222,6 +251,8 @@ async function procesarVideo(sock, msg, video, responder) {
                 caption
             }, { quoted: msg });
         }
+        
+        console.log(`[PLAY] ✅ Video enviado exitosamente`);
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
