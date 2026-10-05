@@ -8,6 +8,8 @@ import path from 'node:path';
 const execAsync = promisify(exec);
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 15 });
 
+const YTDLP_PATH = '/home/container/.local/bin/yt-dlp';
+
 const APIS_BUSQUEDA = [
     { nombre: 'SiputzX', url: (q) => `https://api.siputzx.my.id/api/s/youtube?query=${encodeURIComponent(q)}` },
     { nombre: 'Caliph', url: (q) => `https://api.caliph.biz.id/api/yt/search?q=${encodeURIComponent(q)}&apikey=caliphkey` },
@@ -40,15 +42,15 @@ function formatearVistas(vistas) {
 }
 
 function esURL(input) {
-    return /^https?:\/\//i.test(input) || 
-           /youtube\.com\/watch/i.test(input) || 
+    return /^https?:\/\//i.test(input) ||
+           /youtube\.com\/watch/i.test(input) ||
            /youtu\.be\//i.test(input);
 }
 
 function extraerVideoId(url) {
     const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
     const match = url.match(regex);
-    return match ? match[1] : null;
+    return match? match[1] : null;
 }
 
 async function fetchJSON(url, timeoutMs, nombre) {
@@ -71,7 +73,6 @@ async function fetchJSON(url, timeoutMs, nombre) {
 
 function normVideo(v, source) {
     let duracionStr = '0:00';
-    
     if (v.duration) {
         if (typeof v.duration === 'string') {
             duracionStr = v.duration;
@@ -83,7 +84,6 @@ function normVideo(v, source) {
     } else if (v.timestamp) {
         duracionStr = String(v.timestamp);
     }
-    
     return {
         videoId: v.videoId || v.id || v.video_id,
         url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
@@ -101,24 +101,20 @@ async function probarAPIsBusqueda(query) {
         try {
             const url = api.url(query);
             const data = await fetchJSON(url, 10000, api.nombre);
-            
             if (data.status === false || data.error) {
                 console.log(`[PLAY-${api.nombre}] Status false o error`);
                 continue;
             }
-            
             const lista = data.data || data.result || data.results || data.videos || [];
             if (!Array.isArray(lista) || lista.length === 0) {
                 console.log(`[PLAY-${api.nombre}] Sin resultados`);
                 continue;
             }
-            
             const v = lista.find(x => x.type === 'video' || x.videoId) || lista[0];
             if (!v) {
                 console.log(`[PLAY-${api.nombre}] No se pudo extraer video`);
                 continue;
             }
-            
             console.log(`[PLAY-${api.nombre}] ✅ Encontrado: ${v.title || v.judul || 'Sin título'}`);
             return normVideo(v, api.nombre);
         } catch (error) {
@@ -132,7 +128,6 @@ async function probarAPIsBusqueda(query) {
 function videoDesdeURL(url) {
     const videoId = extraerVideoId(url);
     if (!videoId) throw new Error('URL de YouTube inválida');
-
     return {
         videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -147,27 +142,22 @@ function videoDesdeURL(url) {
 
 async function buscarYouTube(query) {
     const key = query.toLowerCase().trim();
-
     if (esURL(query)) {
         console.log(`[PLAY] 📎 URL directa detectada: ${query}`);
         return videoDesdeURL(query);
     }
-
     const cached = global.playCache.get(key);
     if (cached && Date.now() - cached.t < CACHE_TTL) {
         console.log(`[PLAY] ⚡ Caché: ${key}`);
         return cached.video;
     }
-
     let video = null;
     const esGenerica = key.length <= 5 || GENERICAS.has(key);
-
     if (!esGenerica) {
         video = await probarAPIsBusqueda(key);
     } else {
-        const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
+        const variantes = [key,...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
         console.log(`[PLAY] Genérica → variantes: ${variantes.join(' | ')}`);
-
         for (const variante of variantes) {
             try {
                 video = await probarAPIsBusqueda(variante);
@@ -177,31 +167,26 @@ async function buscarYouTube(query) {
                 continue;
             }
         }
-
         if (!video) throw new Error('Sin resultados en ninguna variante');
     }
-
     if (global.playCache.size > 50) global.playCache.clear();
     global.playCache.set(key, { video, t: Date.now() });
-
     return video;
 }
 
 async function descargarConYtdlp(url, tipo, outputPath) {
-    const formato = tipo === 'audio' 
-        ? '--extract-audio --audio-format mp3 --audio-quality 192K'
-        : '--format mp4 --write-thumbnail';
-    
-    const comando = `yt-dlp ${formato} --no-playlist --restrict-filenames --output "${outputPath}" "${url}"`;
-    
-    console.log(`[PLAY-YTDL] Ejecutando: ${comando.substring(0, 100)}...`);
-    
+    const formato = tipo === 'audio'
+       ? '--extract-audio --audio-format mp3 --audio-quality 192K'
+        : '-f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / bv*+ba/b" --merge-output-format mp4';
+
+    const comando = `${YTDLP_PATH} ${formato} --no-playlist --restrict-filenames --output "${outputPath}" "${url}"`;
+    console.log(`[PLAY-YTDL] Ejecutando: ${comando.substring(0, 120)}...`);
     try {
-        const { stdout, stderr } = await execAsync(comando, { 
+        const { stdout, stderr } = await execAsync(comando, {
             timeout: 120000,
-            maxBuffer: 50 * 1024 * 1024
+            maxBuffer: 50 * 1024 * 1024,
+            env: {...process.env, PATH: `${process.env.PATH}:/home/container/.local/bin:/home/container/.local/lib` }
         });
-        
         console.log(`[PLAY-YTDL] ✅ Descarga completada`);
         return true;
     } catch (error) {
@@ -215,32 +200,27 @@ async function descargarYT(url, tipo) {
     if (!fs.existsSync(tmpDir)) {
         fs.mkdirSync(tmpDir, { recursive: true });
     }
-    
     const videoId = extraerVideoId(url) || Date.now();
-    const ext = tipo === 'audio' ? 'mp3' : 'mp4';
+    const ext = tipo === 'audio'? 'mp3' : 'mp4';
     const outputPath = path.join(tmpDir, `${videoId}.%(ext)s`);
     const expectedPath = path.join(tmpDir, `${videoId}.${ext}`);
-    
     try {
         await descargarConYtdlp(url, tipo, outputPath);
-        
         if (fs.existsSync(expectedPath)) {
             const buffer = fs.readFileSync(expectedPath);
             fs.unlinkSync(expectedPath);
             return buffer;
         }
-        
-        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(videoId));
+        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(String(videoId)));
         if (archivos.length > 0) {
             const archivoPath = path.join(tmpDir, archivos[0]);
             const buffer = fs.readFileSync(archivoPath);
             fs.unlinkSync(archivoPath);
             return buffer;
         }
-        
         throw new Error('No se encontró el archivo descargado');
     } catch (error) {
-        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(videoId));
+        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(String(videoId)));
         archivos.forEach(f => {
             try { fs.unlinkSync(path.join(tmpDir, f)); } catch {}
         });
@@ -251,17 +231,13 @@ async function descargarYT(url, tipo) {
 async function procesarAudio(sock, msg, video, responder) {
     try {
         await responder.texto('🎵 Descargando audio...');
-
         const buffer = await descargarYT(video.url, 'audio');
-        
         console.log(`[PLAY] Buffer de audio: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
-
         await sock.sendMessage(msg.key.remoteJid, {
             audio: buffer,
             mimetype: 'audio/mpeg',
             ptt: false
         }, { quoted: msg });
-        
         console.log(`[PLAY] ✅ Audio enviado`);
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
@@ -278,13 +254,10 @@ async function procesarAudio(sock, msg, video, responder) {
 async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
-
         const buffer = await descargarYT(video.url, 'video');
-        
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
         const titulo = video.titulo;
         const autor = video.autor;
-
         const caption =
             '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
             '┃ 🎧 *' + titulo + '*\n' +
@@ -292,7 +265,6 @@ async function procesarVideo(sock, msg, video, responder) {
             '┃ 📊 MP4 | 📦 ' + tamañoMB + ' MB\n' +
             '┃ 📡 Fuente: yt-dlp\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
         if (buffer.length > 16 * 1024 * 1024) {
             await sock.sendMessage(msg.key.remoteJid, {
                 document: buffer,
@@ -307,7 +279,6 @@ async function procesarVideo(sock, msg, video, responder) {
                 caption
             }, { quoted: msg });
         }
-        
         console.log(`[PLAY] ✅ Video enviado`);
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
@@ -327,11 +298,9 @@ export default {
     alias: ['p', 'musica', 'reproducir', 'song', 'play2', 'playvideo', 'video'],
     descripcion: 'Busca en YouTube y elige audio o video con botones.',
     uso: '.play <nombre o URL>',
-
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const query = String(argumento || '').trim();
         const sender = msg.key.participant || msg.key.remoteJid;
-
         if (!query) {
             return await responder.texto(
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
@@ -339,29 +308,25 @@ export default {
                 '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplos:\n' +
-                '┃ ➪ .play hola remix\n' +
-                '┃ ➪ .play twice fancy\n' +
-                '┃ ➪ .play https://youtu.be/...\n' +
+                '┃ ➪.play hola remix\n' +
+                '┃ ➪.play twice fancy\n' +
+                '┃ ➪.play https://youtu.be/...\n' +
                 '┃\n' +
                 '┃ 🎯 Elige con botones o\n' +
-                '┃    responde *1* o *2*\n' +
+                '┃ responde *1* o *2*\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
-
         try {
             const video = await buscarYouTube(query);
-
             global.playSessions[sender] = { jid, video, timestamp: Date.now() };
-
             const ahora = Date.now();
             for (const key of Object.keys(global.playSessions)) {
                 if (ahora - global.playSessions[key].timestamp > 600000) {
                     delete global.playSessions[key];
                 }
             }
-
             const caption =
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
@@ -375,25 +340,21 @@ export default {
                 '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 📲 Presiona el botón\n' +
-                '┃    o responde *1* o *2*\n' +
+                '┃ o responde *1* o *2*\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
             const botones = [
                 { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🎵 Audio', id: 'playaudio' }) },
                 { name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🎬 Video', id: 'playvideo' }) }
             ];
-
             const mensajePreview = video.thumbnail
-                ? { image: { url: video.thumbnail }, caption, footer: '🎵 BOT-API • Elige formato', interactiveButtons: botones }
+               ? { image: { url: video.thumbnail }, caption, footer: '🎵 BOT-API • Elige formato', interactiveButtons: botones }
                 : { text: caption, footer: '🎵 BOT-API • Elige formato', interactiveButtons: botones };
-
             try {
                 await sock.sendMessage(jid, mensajePreview, { quoted: msg });
             } catch (e) {
                 await responder.texto(caption + '\n\nResponde *1* para audio o *2* para video');
             }
-
         } catch (error) {
             console.error('[PLAY] Error:', error?.message || error);
             await responder.texto(
@@ -401,7 +362,7 @@ export default {
                 '┃ ⚠️ ' + (error?.message || 'Error desconocido') + '\n' +
                 '┃\n' +
                 '┃ 💡 Intenta con otro nombre\n' +
-                '┃    o verifica tu conexión.\n' +
+                '┃ o verifica tu conexión.\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
