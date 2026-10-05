@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 
 const API_URL = 'https://ntphwaiqleggrlqkshiw.supabase.co/functions/v1/smart-task';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50cGh3YWlxbGVnZ3JscWtzaGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MjIxMDUsImV4cCI6MjA1OTM5ODEwNX0.7u-5oi0QO4q3Hugdf1i1OI2T-6l-Q1kmyT7TIDcj1HM';
 
 export default {
     nombre: 'rch2',
@@ -58,6 +59,8 @@ export default {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
                     'Origin': 'https://reactionsaluranwa.iwaw.my.id',
                     'Referer': 'https://reactionsaluranwa.iwaw.my.id/',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'
@@ -70,7 +73,8 @@ export default {
             });
 
             if (!res.ok) {
-                throw new Error('API respondió HTTP ' + res.status);
+                const errorText = await res.text();
+                throw new Error(`HTTP ${res.status}: ${errorText}`);
             }
 
             const data = await res.json();
@@ -103,6 +107,8 @@ export default {
 
             if (mensaje.includes('timeout') || mensaje.includes('aborted')) {
                 mensaje = 'La operación tardó demasiado.\n┃    Intenta de nuevo.';
+            } else if (mensaje.includes('401') || mensaje.includes('ditolak')) {
+                mensaje = 'Acceso denegado por la API.\n┃    Verifica las credenciales.';
             }
 
             await responder.texto(
