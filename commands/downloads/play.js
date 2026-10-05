@@ -3,10 +3,9 @@ import https from 'node:https';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
-const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
-const API_MP3 = 'https://api.delirius.online/download/ytmp3';
-const API_MP4 = 'https://api.delirius.online/download/ytmp4';
-const FORMATO_VIDEO = '360p';
+const API_KEY = '8ez2gm';
+const API_BUSCAR = `https://api.neoxr.eu/api/yts`;
+const API_DESCARGA = `https://api.neoxr.eu/api/youtube`;
 
 const CACHE_TTL = 5 * 60 * 1000;
 const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
@@ -41,7 +40,7 @@ function esURL(input) {
 }
 
 function extraerVideoId(url) {
-    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
     const match = url.match(regex);
     return match ? match[1] : null;
 }
@@ -52,7 +51,7 @@ async function getJSON(url, timeoutMs) {
         headers: {
             'Accept': 'application/json',
             'User-Agent': getUA(),
-            'Referer': 'https://www.youtube.com/'
+            'Referer': 'https://www.neoxr.eu/'
         },
         signal: AbortSignal.timeout(timeoutMs)
     });
@@ -64,29 +63,19 @@ function normVideo(v) {
     return {
         videoId: v.videoId,
         url: v.url || `https://www.youtube.com/watch?v=${v.videoId}`,
-        titulo: v.title || v.título || 'Sin título',
-        thumbnail: v.image || v.imagen || v.thumbnail || '',
-        duracion: v.duration || v.duración || '0:00',
-        vistas: v.views || v.vistas || 0,
-        autor: v.author?.name || v.author?.nombre || v.autor?.nombre || 'Desconocido'
-    };
-}
-
-function normInfo(i) {
-    return {
-        titulo: i.title || i.titulo || i.título || 'Sin título',
-        autor: i.author || i.autor || 'Desconocido',
-        thumbnail: i.image || i.imagen || '',
-        formato: i.format || i.formato || '',
-        downloadUrl: i.download || i.descarga
+        titulo: v.title || 'Sin título',
+        thumbnail: v.image || v.thumbnail || '',
+        duracion: v.duration?.timestamp || v.timestamp || '0:00',
+        vistas: v.views || 0,
+        autor: v.author?.name || 'Desconocido'
     };
 }
 
 async function buscarUna(query) {
-    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}`, 10000);
-    if (data.status !== true && data.estado !== true) throw new Error('API sin éxito');
-    const lista = data.data || data.datos || [];
-    const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
+    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}&apikey=${API_KEY}`, 10000);
+    if (data.status !== true) throw new Error(data.message || 'API sin éxito');
+    const lista = data.data || [];
+    const v = lista.find(x => x.type === 'video') || lista[0];
     if (!v) throw new Error('Sin resultados');
     return normVideo(v);
 }
@@ -94,7 +83,7 @@ async function buscarUna(query) {
 function videoDesdeURL(url) {
     const videoId = extraerVideoId(url);
     if (!videoId) throw new Error('URL de YouTube inválida');
-    
+
     return {
         videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -149,20 +138,21 @@ async function buscarYouTube(query) {
     return video;
 }
 
-async function infoAudio(url) {
-    const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(url)}`, 18000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP3 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
-}
-
-async function infoVideo(url) {
-    const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP4 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
+async function infoDescarga(url, tipo, calidad) {
+    const data = await getJSON(`${API_DESCARGA}?url=${encodeURIComponent(url)}&type=${tipo}&quality=${calidad}&apikey=${API_KEY}`, 20000);
+    if (data.status !== true) throw new Error(data.message || 'API descarga sin éxito');
+    
+    const info = data.data || {};
+    if (!info.url) throw new Error('Sin link de descarga');
+    
+    return {
+        titulo: data.title || 'Sin título',
+        autor: data.channel || 'Desconocido',
+        thumbnail: data.thumbnail || '',
+        formato: info.quality || calidad,
+        tamaño: info.size || 'Desconocido',
+        downloadUrl: info.url
+    };
 }
 
 async function descargarBuffer(url, timeoutMs) {
@@ -181,7 +171,7 @@ async function procesarAudio(sock, msg, video, responder) {
     try {
         await responder.texto('🎵 Descargando audio...');
 
-        const info = await infoAudio(video.url);
+        const info = await infoDescarga(video.url, 'audio', '128kbps');
         const buffer = await descargarBuffer(info.downloadUrl, 60000);
 
         await sock.sendMessage(msg.key.remoteJid, {
@@ -204,7 +194,7 @@ async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
 
-        const info = await infoVideo(video.url);
+        const info = await infoDescarga(video.url, 'video', '720p');
         const buffer = await descargarBuffer(info.downloadUrl, 120000);
 
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
@@ -215,7 +205,7 @@ async function procesarVideo(sock, msg, video, responder) {
             '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
             '┃ 🎧 *' + titulo + '*\n' +
             '┃ 👤 ' + autor + '\n' +
-            '┃ 📊 ' + (info.formato || FORMATO_VIDEO) + ' | 📦 ' + tamañoMB + ' MB\n' +
+            '┃ 📊 ' + info.formato + ' | 📦 ' + info.tamaño + '\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
         if (buffer.length > 16 * 1024 * 1024) {
@@ -262,7 +252,7 @@ export default {
                 '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplos:\n' +
-                '┃ ➪ .play hola\n' +
+                '┃ ➪ .play hola remix\n' +
                 '┃ ➪ .play twice fancy\n' +
                 '┃ ➪ .play https://youtu.be/...\n' +
                 '┃\n' +
