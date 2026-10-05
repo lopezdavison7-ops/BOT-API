@@ -1,22 +1,17 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+import path from 'node:path';
 
+const execAsync = promisify(exec);
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 15 });
 
 const APIS_BUSQUEDA = [
     { nombre: 'SiputzX', url: (q) => `https://api.siputzx.my.id/api/s/youtube?query=${encodeURIComponent(q)}` },
     { nombre: 'Caliph', url: (q) => `https://api.caliph.biz.id/api/yt/search?q=${encodeURIComponent(q)}&apikey=caliphkey` },
-    { nombre: 'Lann', url: (q) => `https://api.lann.me/api/search/youtube?q=${encodeURIComponent(q)}&apikey=free` },
-    { nombre: 'Riy', url: (q) => `https://api.riy.my.id/api/search/youtube?q=${encodeURIComponent(q)}` },
-    { nombre: 'Flyy', url: (q) => `https://api.flyy.my.id/api/search/youtube?q=${encodeURIComponent(q)}` },
-    { nombre: 'Botcahx', url: (q) => `https://api.botcahx.live/api/search/yt?q=${encodeURIComponent(q)}&apikey=Admin` },
-    { nombre: 'Vercel', url: (q) => `https://vercel-ytdl.vercel.app/api/search?query=${encodeURIComponent(q)}` }
-];
-
-const APIS_DESCARGA = [
-    { nombre: 'SiputzX', url: (url, tipo) => `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}` },
-    { nombre: 'Caliph', url: (url, tipo) => `https://api.caliph.biz.id/api/yt/download?url=${encodeURIComponent(url)}&apikey=caliphkey` },
-    { nombre: 'Vercel', url: (url, tipo) => `https://vercel-ytdl.vercel.app/api/download?url=${encodeURIComponent(url)}&type=${tipo}` }
+    { nombre: 'Lann', url: (q) => `https://api.lann.me/api/search/youtube?q=${encodeURIComponent(q)}&apikey=free` }
 ];
 
 const CACHE_TTL = 5 * 60 * 1000;
@@ -26,8 +21,7 @@ const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 
 const UAS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ];
 
 if (!global.playSessions) global.playSessions = {};
@@ -76,12 +70,26 @@ async function fetchJSON(url, timeoutMs, nombre) {
 }
 
 function normVideo(v, source) {
+    let duracionStr = '0:00';
+    
+    if (v.duration) {
+        if (typeof v.duration === 'string') {
+            duracionStr = v.duration;
+        } else if (typeof v.duration === 'object') {
+            duracionStr = v.duration.timestamp || v.duration.duration || v.duration.text || '0:00';
+        }
+    } else if (v.durasi) {
+        duracionStr = String(v.durasi);
+    } else if (v.timestamp) {
+        duracionStr = String(v.timestamp);
+    }
+    
     return {
         videoId: v.videoId || v.id || v.video_id,
         url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
         titulo: v.title || v.judul || 'Sin título',
         thumbnail: v.thumbnail || v.image || v.thumb || '',
-        duracion: v.duration || v.durasi || v.timestamp || '0:00',
+        duracion: duracionStr,
         vistas: v.views || v.viewers || 0,
         autor: v.author?.name || v.author || v.channel || 'Desconocido',
         source
@@ -179,77 +187,79 @@ async function buscarYouTube(query) {
     return video;
 }
 
-async function probarAPIsDescarga(url, tipo) {
-    for (const api of APIS_DESCARGA) {
-        try {
-            const apiUrl = api.url(url, tipo);
-            const data = await fetchJSON(apiUrl, 25000, `${api.nombre}-DL`);
-            
-            if (data.status === false || data.error) {
-                console.log(`[PLAY-${api.nombre}-DL] Status false o error`);
-                continue;
-            }
-            
-            const info = data.data || data.result || data;
-            const downloadUrl = info.url || info.download || info.link || info.mp3 || info.mp4;
-            
-            if (!downloadUrl) {
-                console.log(`[PLAY-${api.nombre}-DL] Sin URL de descarga`);
-                continue;
-            }
-            
-            console.log(`[PLAY-${api.nombre}-DL] ✅ URL obtenida`);
-            return {
-                titulo: info.title || info.judul || 'Sin título',
-                autor: info.author || info.channel || 'Desconocido',
-                thumbnail: info.thumbnail || info.image || '',
-                formato: info.quality || info.format || (tipo === 'audio' ? '128kbps' : '720p'),
-                tamaño: info.size || 'Desconocido',
-                downloadUrl,
-                source: api.nombre
-            };
-        } catch (error) {
-            console.log(`[PLAY-${api.nombre}-DL] ❌ ${error.message}`);
-            continue;
-        }
+async function descargarConYtdlp(url, tipo, outputPath) {
+    const formato = tipo === 'audio' 
+        ? '--extract-audio --audio-format mp3 --audio-quality 192K'
+        : '--format mp4 --write-thumbnail';
+    
+    const comando = `yt-dlp ${formato} --no-playlist --restrict-filenames --output "${outputPath}" "${url}"`;
+    
+    console.log(`[PLAY-YTDL] Ejecutando: ${comando.substring(0, 100)}...`);
+    
+    try {
+        const { stdout, stderr } = await execAsync(comando, { 
+            timeout: 120000,
+            maxBuffer: 50 * 1024 * 1024
+        });
+        
+        console.log(`[PLAY-YTDL] ✅ Descarga completada`);
+        return true;
+    } catch (error) {
+        console.error(`[PLAY-YTDL] ❌ Error: ${error.message}`);
+        throw error;
     }
-    throw new Error('Todas las APIs de descarga fallaron');
 }
 
-async function descargarBuffer(url, timeoutMs) {
-    console.log(`[PLAY] Descargando buffer: ${url.substring(0, 100)}...`);
-    
-    const res = await fetch(url, {
-        agent: AGENTE,
-        headers: { 'User-Agent': getUA(), 'Accept': '*/*' },
-        signal: AbortSignal.timeout(timeoutMs)
-    });
-    
-    if (!res.ok) {
-        console.error(`[PLAY] Descarga buffer falló: HTTP ${res.status}`);
-        throw new Error('Descarga HTTP ' + res.status);
+async function descargarYT(url, tipo) {
+    const tmpDir = path.join(process.cwd(), 'tmp');
+    if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
     }
     
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (!buffer.length) {
-        console.error(`[PLAY] Buffer vacío`);
-        throw new Error('Buffer vacío');
-    }
+    const videoId = extraerVideoId(url) || Date.now();
+    const ext = tipo === 'audio' ? 'mp3' : 'mp4';
+    const outputPath = path.join(tmpDir, `${videoId}.%(ext)s`);
+    const expectedPath = path.join(tmpDir, `${videoId}.${ext}`);
     
-    console.log(`[PLAY] ✅ Buffer: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
-    return buffer;
+    try {
+        await descargarConYtdlp(url, tipo, outputPath);
+        
+        if (fs.existsSync(expectedPath)) {
+            const buffer = fs.readFileSync(expectedPath);
+            fs.unlinkSync(expectedPath);
+            return buffer;
+        }
+        
+        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(videoId));
+        if (archivos.length > 0) {
+            const archivoPath = path.join(tmpDir, archivos[0]);
+            const buffer = fs.readFileSync(archivoPath);
+            fs.unlinkSync(archivoPath);
+            return buffer;
+        }
+        
+        throw new Error('No se encontró el archivo descargado');
+    } catch (error) {
+        const archivos = fs.readdirSync(tmpDir).filter(f => f.includes(videoId));
+        archivos.forEach(f => {
+            try { fs.unlinkSync(path.join(tmpDir, f)); } catch {}
+        });
+        throw error;
+    }
 }
 
 async function procesarAudio(sock, msg, video, responder) {
     try {
         await responder.texto('🎵 Descargando audio...');
 
-        const info = await probarAPIsDescarga(video.url, 'audio');
-        const buffer = await descargarBuffer(info.downloadUrl, 90000);
+        const buffer = await descargarYT(video.url, 'audio');
+        
+        console.log(`[PLAY] Buffer de audio: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
 
         await sock.sendMessage(msg.key.remoteJid, {
             audio: buffer,
-            mimetype: 'audio/mpeg'
+            mimetype: 'audio/mpeg',
+            ptt: false
         }, { quoted: msg });
         
         console.log(`[PLAY] ✅ Audio enviado`);
@@ -269,19 +279,18 @@ async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
 
-        const info = await probarAPIsDescarga(video.url, 'video');
-        const buffer = await descargarBuffer(info.downloadUrl, 120000);
-
+        const buffer = await descargarYT(video.url, 'video');
+        
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
-        const titulo = info.titulo || video.titulo;
-        const autor = info.autor || video.autor;
+        const titulo = video.titulo;
+        const autor = video.autor;
 
         const caption =
             '╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
             '┃ 🎧 *' + titulo + '*\n' +
             '┃ 👤 ' + autor + '\n' +
-            '┃ 📊 ' + info.formato + ' | 📦 ' + info.tamaño + '\n' +
-            '┃ 📡 Fuente: ' + info.source + '\n' +
+            '┃ 📊 MP4 | 📦 ' + tamañoMB + ' MB\n' +
+            '┃ 📡 Fuente: yt-dlp\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
         if (buffer.length > 16 * 1024 * 1024) {
