@@ -1,12 +1,23 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
 
-const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 12 });
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 15 });
 
-const API_KEY = '8ez2gm';
-const API_BUSCAR_NEOXR = `https://api.neoxr.eu/api/yts`;
-const API_BUSCAR_DELIRIUS = `https://api.delirius.online/search/ytsearch`;
-const API_DESCARGA = `https://api.neoxr.eu/api/youtube`;
+const APIS_BUSQUEDA = [
+    { nombre: 'SiputzX', url: (q) => `https://api.siputzx.my.id/api/s/youtube?query=${encodeURIComponent(q)}` },
+    { nombre: 'Caliph', url: (q) => `https://api.caliph.biz.id/api/yt/search?q=${encodeURIComponent(q)}&apikey=caliphkey` },
+    { nombre: 'Lann', url: (q) => `https://api.lann.me/api/search/youtube?q=${encodeURIComponent(q)}&apikey=free` },
+    { nombre: 'Riy', url: (q) => `https://api.riy.my.id/api/search/youtube?q=${encodeURIComponent(q)}` },
+    { nombre: 'Flyy', url: (q) => `https://api.flyy.my.id/api/search/youtube?q=${encodeURIComponent(q)}` },
+    { nombre: 'Botcahx', url: (q) => `https://api.botcahx.live/api/search/yt?q=${encodeURIComponent(q)}&apikey=Admin` },
+    { nombre: 'Vercel', url: (q) => `https://vercel-ytdl.vercel.app/api/search?query=${encodeURIComponent(q)}` }
+];
+
+const APIS_DESCARGA = [
+    { nombre: 'SiputzX', url: (url, tipo) => `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}` },
+    { nombre: 'Caliph', url: (url, tipo) => `https://api.caliph.biz.id/api/yt/download?url=${encodeURIComponent(url)}&apikey=caliphkey` },
+    { nombre: 'Vercel', url: (url, tipo) => `https://vercel-ytdl.vercel.app/api/download?url=${encodeURIComponent(url)}&type=${tipo}` }
+];
 
 const CACHE_TTL = 5 * 60 * 1000;
 const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
@@ -46,93 +57,68 @@ function extraerVideoId(url) {
     return match ? match[1] : null;
 }
 
-async function getJSON(url, timeoutMs) {
+async function fetchJSON(url, timeoutMs, nombre) {
+    console.log(`[PLAY-${nombre}] ${url}`);
     const res = await fetch(url, {
         agent: AGENTE,
         headers: {
             'Accept': 'application/json',
-            'User-Agent': getUA(),
-            'Referer': 'https://www.neoxr.eu/'
+            'User-Agent': getUA()
         },
         signal: AbortSignal.timeout(timeoutMs)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error(`[PLAY-${nombre}] HTTP ${res.status}: ${text.substring(0, 100)}`);
+        throw new Error(`HTTP ${res.status}`);
+    }
     return res.json();
 }
 
-function normVideo(v) {
+function normVideo(v, source) {
     return {
-        videoId: v.videoId,
-        url: v.url || `https://www.youtube.com/watch?v=${v.videoId}`,
-        titulo: v.title || 'Sin título',
-        thumbnail: v.image || v.thumbnail || '',
-        duracion: v.duration?.timestamp || v.timestamp || '0:00',
-        vistas: v.views || 0,
-        autor: v.author?.name || 'Desconocido'
+        videoId: v.videoId || v.id || v.video_id,
+        url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
+        titulo: v.title || v.judul || 'Sin título',
+        thumbnail: v.thumbnail || v.image || v.thumb || '',
+        duracion: v.duration || v.durasi || v.timestamp || '0:00',
+        vistas: v.views || v.viewers || 0,
+        autor: v.author?.name || v.author || v.channel || 'Desconocido',
+        source
     };
 }
 
-async function buscarEnNeoxr(query) {
-    console.log(`[PLAY-NEOXR] Buscando: "${query}"`);
-    const url = `${API_BUSCAR_NEOXR}?q=${encodeURIComponent(query)}&apikey=${API_KEY}`;
-    console.log(`[PLAY-NEOXR] URL: ${url}`);
-    
-    const data = await getJSON(url, 10000);
-    console.log(`[PLAY-NEOXR] Respuesta completa:`, JSON.stringify(data, null, 2).substring(0, 800));
-    
-    if (data.status !== true) {
-        throw new Error(`Neoxr: ${data.message || data.msg || 'Status no es true'}`);
-    }
-    
-    const lista = data.data || [];
-    console.log(`[PLAY-NEOXR] Resultados encontrados: ${lista.length}`);
-    
-    if (!Array.isArray(lista) || lista.length === 0) {
-        throw new Error('Neoxr: Sin resultados');
-    }
-    
-    const v = lista.find(x => x.type === 'video') || lista[0];
-    if (!v) throw new Error('Neoxr: No se pudo extraer video');
-    
-    return normVideo(v);
-}
-
-async function buscarEnDelirius(query) {
-    console.log(`[PLAY-DELIRIUS] Buscando: "${query}"`);
-    const url = `${API_BUSCAR_DELIRIUS}?q=${encodeURIComponent(query)}`;
-    console.log(`[PLAY-DELIRIUS] URL: ${url}`);
-    
-    const data = await getJSON(url, 10000);
-    console.log(`[PLAY-DELIRIUS] Respuesta completa:`, JSON.stringify(data, null, 2).substring(0, 800));
-    
-    if (data.status !== true && data.estado !== true) {
-        throw new Error(`Delirius: ${data.message || 'Status no es true'}`);
-    }
-    
-    const lista = data.data || data.datos || [];
-    console.log(`[PLAY-DELIRIUS] Resultados encontrados: ${lista.length}`);
-    
-    if (!Array.isArray(lista) || lista.length === 0) {
-        throw new Error('Delirius: Sin resultados');
-    }
-    
-    const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-    if (!v) throw new Error('Delirius: No se pudo extraer video');
-    
-    return normVideo(v);
-}
-
-async function buscarUna(query) {
-    try {
-        return await buscarEnNeoxr(query);
-    } catch (errorNeoxr) {
-        console.log(`[PLAY] Neoxr falló: ${errorNeoxr.message}, intentando Delirius...`);
+async function probarAPIsBusqueda(query) {
+    for (const api of APIS_BUSQUEDA) {
         try {
-            return await buscarEnDelirius(query);
-        } catch (errorDelirius) {
-            throw new Error(`Ambas APIs fallaron. Neoxr: ${errorNeoxr.message} | Delirius: ${errorDelirius.message}`);
+            const url = api.url(query);
+            const data = await fetchJSON(url, 10000, api.nombre);
+            
+            if (data.status === false || data.error) {
+                console.log(`[PLAY-${api.nombre}] Status false o error`);
+                continue;
+            }
+            
+            const lista = data.data || data.result || data.results || data.videos || [];
+            if (!Array.isArray(lista) || lista.length === 0) {
+                console.log(`[PLAY-${api.nombre}] Sin resultados`);
+                continue;
+            }
+            
+            const v = lista.find(x => x.type === 'video' || x.videoId) || lista[0];
+            if (!v) {
+                console.log(`[PLAY-${api.nombre}] No se pudo extraer video`);
+                continue;
+            }
+            
+            console.log(`[PLAY-${api.nombre}] ✅ Encontrado: ${v.title || v.judul || 'Sin título'}`);
+            return normVideo(v, api.nombre);
+        } catch (error) {
+            console.log(`[PLAY-${api.nombre}] ❌ ${error.message}`);
+            continue;
         }
     }
+    throw new Error('Todas las APIs de búsqueda fallaron');
 }
 
 function videoDesdeURL(url) {
@@ -146,7 +132,8 @@ function videoDesdeURL(url) {
         thumbnail: '',
         duracion: '0:00',
         vistas: 0,
-        autor: 'Desconocido'
+        autor: 'Desconocido',
+        source: 'URL directa'
     };
 }
 
@@ -168,19 +155,18 @@ async function buscarYouTube(query) {
     const esGenerica = key.length <= 5 || GENERICAS.has(key);
 
     if (!esGenerica) {
-        video = await buscarUna(key);
+        video = await probarAPIsBusqueda(key);
     } else {
         const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
         console.log(`[PLAY] Genérica → variantes: ${variantes.join(' | ')}`);
 
-        const resultados = await Promise.allSettled(variantes.map(v => buscarUna(v).then(r => ({ r, v }))));
-
-        for (const v of variantes) {
-            const exito = resultados.find(s => s.status === 'fulfilled' && s.value.v === v);
-            if (exito) {
-                video = exito.value.r;
-                console.log(`[PLAY] ✅ Variante ganadora: "${v}"`);
+        for (const variante of variantes) {
+            try {
+                video = await probarAPIsBusqueda(variante);
+                console.log(`[PLAY] ✅ Variante ganadora: "${variante}"`);
                 break;
+            } catch (e) {
+                continue;
             }
         }
 
@@ -193,40 +179,45 @@ async function buscarYouTube(query) {
     return video;
 }
 
-async function infoDescarga(url, tipo, calidad) {
-    const apiUrl = `${API_DESCARGA}?url=${encodeURIComponent(url)}&type=${tipo}&quality=${calidad}&apikey=${API_KEY}`;
-    console.log(`[PLAY] Descargando: ${apiUrl}`);
-    
-    const data = await getJSON(apiUrl, 25000);
-    
-    console.log(`[PLAY] Respuesta descarga:`, JSON.stringify(data, null, 2).substring(0, 500));
-    
-    if (data.status !== true) {
-        const errorMsg = data.message || data.msg || 'Error desconocido';
-        console.error(`[PLAY] API descarga falló:`, data);
-        throw new Error(`API descarga sin éxito: ${errorMsg}`);
+async function probarAPIsDescarga(url, tipo) {
+    for (const api of APIS_DESCARGA) {
+        try {
+            const apiUrl = api.url(url, tipo);
+            const data = await fetchJSON(apiUrl, 25000, `${api.nombre}-DL`);
+            
+            if (data.status === false || data.error) {
+                console.log(`[PLAY-${api.nombre}-DL] Status false o error`);
+                continue;
+            }
+            
+            const info = data.data || data.result || data;
+            const downloadUrl = info.url || info.download || info.link || info.mp3 || info.mp4;
+            
+            if (!downloadUrl) {
+                console.log(`[PLAY-${api.nombre}-DL] Sin URL de descarga`);
+                continue;
+            }
+            
+            console.log(`[PLAY-${api.nombre}-DL] ✅ URL obtenida`);
+            return {
+                titulo: info.title || info.judul || 'Sin título',
+                autor: info.author || info.channel || 'Desconocido',
+                thumbnail: info.thumbnail || info.image || '',
+                formato: info.quality || info.format || (tipo === 'audio' ? '128kbps' : '720p'),
+                tamaño: info.size || 'Desconocido',
+                downloadUrl,
+                source: api.nombre
+            };
+        } catch (error) {
+            console.log(`[PLAY-${api.nombre}-DL] ❌ ${error.message}`);
+            continue;
+        }
     }
-    
-    const info = data.data || {};
-    if (!info.url) {
-        console.error(`[PLAY] Sin URL de descarga:`, data);
-        throw new Error('La API no devolvió link de descarga');
-    }
-    
-    console.log(`[PLAY] ✅ URL obtenida: ${info.url.substring(0, 80)}...`);
-    
-    return {
-        titulo: data.title || 'Sin título',
-        autor: data.channel || 'Desconocido',
-        thumbnail: data.thumbnail || '',
-        formato: info.quality || calidad,
-        tamaño: info.size || 'Desconocido',
-        downloadUrl: info.url
-    };
+    throw new Error('Todas las APIs de descarga fallaron');
 }
 
 async function descargarBuffer(url, timeoutMs) {
-    console.log(`[PLAY] Descargando buffer de: ${url.substring(0, 100)}...`);
+    console.log(`[PLAY] Descargando buffer: ${url.substring(0, 100)}...`);
     
     const res = await fetch(url, {
         agent: AGENTE,
@@ -245,7 +236,7 @@ async function descargarBuffer(url, timeoutMs) {
         throw new Error('Buffer vacío');
     }
     
-    console.log(`[PLAY] ✅ Buffer descargado: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`[PLAY] ✅ Buffer: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     return buffer;
 }
 
@@ -253,7 +244,7 @@ async function procesarAudio(sock, msg, video, responder) {
     try {
         await responder.texto('🎵 Descargando audio...');
 
-        const info = await infoDescarga(video.url, 'audio', '128kbps');
+        const info = await probarAPIsDescarga(video.url, 'audio');
         const buffer = await descargarBuffer(info.downloadUrl, 90000);
 
         await sock.sendMessage(msg.key.remoteJid, {
@@ -261,7 +252,7 @@ async function procesarAudio(sock, msg, video, responder) {
             mimetype: 'audio/mpeg'
         }, { quoted: msg });
         
-        console.log(`[PLAY] ✅ Audio enviado exitosamente`);
+        console.log(`[PLAY] ✅ Audio enviado`);
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
         await responder.texto(
@@ -278,7 +269,7 @@ async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
 
-        const info = await infoDescarga(video.url, 'video', '720p');
+        const info = await probarAPIsDescarga(video.url, 'video');
         const buffer = await descargarBuffer(info.downloadUrl, 120000);
 
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
@@ -290,6 +281,7 @@ async function procesarVideo(sock, msg, video, responder) {
             '┃ 🎧 *' + titulo + '*\n' +
             '┃ 👤 ' + autor + '\n' +
             '┃ 📊 ' + info.formato + ' | 📦 ' + info.tamaño + '\n' +
+            '┃ 📡 Fuente: ' + info.source + '\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
         if (buffer.length > 16 * 1024 * 1024) {
@@ -307,7 +299,7 @@ async function procesarVideo(sock, msg, video, responder) {
             }, { quoted: msg });
         }
         
-        console.log(`[PLAY] ✅ Video enviado exitosamente`);
+        console.log(`[PLAY] ✅ Video enviado`);
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
         await responder.texto(
@@ -369,6 +361,7 @@ export default {
                 '┃ 👤 ' + video.autor + '\n' +
                 '┃ ⏱️ ' + video.duracion + '\n' +
                 '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
+                '┃ 📡 Fuente: ' + video.source + '\n' +
                 '┃\n' +
                 '┣━━〔 🎯 𝐄𝐋𝐈𝐆𝐄 〕━━⬣\n' +
                 '┃\n' +
