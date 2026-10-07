@@ -107,6 +107,47 @@ async function linksSiputzX(url) {
     return [{ calidad: d.resultado.quality || '360p', size: d.resultado.size || '', url: d.resultado.url }];
 }
 
+async function linksCobalt(url) {
+    const r = await fetch('https://api.cobalt.tools/api/json', {
+        method: 'POST',
+        agent: AGENTE,
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': HEADERS['User-Agent']
+        },
+        body: JSON.stringify({
+            url: url,
+            vCodec: 'h264',
+            vQuality: '720',
+            aFormat: 'mp3',
+            isAudioOnly: false
+        }),
+        signal: AbortSignal.timeout(45000)
+    });
+    if (!r.ok) throw new Error('Cobalt: HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.url) throw new Error('Cobalt: sin URL');
+    return [{ calidad: d.quality || '720p', size: '', url: d.url }];
+}
+
+async function linksY2Mate(url) {
+    const d = await req(`https://dlt-10376168668b6475d0d7.el.run/api/convert?url=${encodeURIComponent(url)}`, 45000);
+    if (!d.url) throw new Error('Y2Mate: sin URL');
+    return [{ calidad: d.quality || '720p', size: d.size || '', url: d.url }];
+}
+
+async function linksSaveFrom(url) {
+    const d = await req(`https://sfrom.net/api/getVideo?url=${encodeURIComponent(url)}`, 45000);
+    if (!d.url) throw new Error('SaveFrom: sin URL');
+    return [{ calidad: d.quality || '720p', size: '', url: d.url }];
+}
+
+async function linksVidPUB(url) {
+    const d = await req(`https://vidpub.net/api/convert?url=${encodeURIComponent(url)}`, 45000);
+    if (!d.url) throw new Error('VidPUB: sin URL');
+    return [{ calidad: d.quality || '720p', size: '', url: d.url }];
+}
+
 async function obtenerLink(item) {
     if (item.identifier) {
         const l = await linksArchive(item.identifier);
@@ -114,17 +155,30 @@ async function obtenerLink(item) {
         throw new Error('Archive sin archivos');
     }
 
-    const apis = [linksKronix, linksSiputzX];
-    let err = '';
-    for (const fn of apis) {
+    const apis = [
+        { nombre: 'Kronix', fn: linksKronix },
+        { nombre: 'Cobalt', fn: linksCobalt },
+        { nombre: 'SiputzX', fn: linksSiputzX },
+        { nombre: 'Y2Mate', fn: linksY2Mate },
+        { nombre: 'SaveFrom', fn: linksSaveFrom },
+        { nombre: 'VidPUB', fn: linksVidPUB }
+    ];
+
+    const errores = [];
+    for (const api of apis) {
         try {
-            const l = await fn(item.url);
-            if (l.length) return l[0];
+            console.log(`[PELI] Intentando ${api.nombre}...`);
+            const l = await api.fn(item.url);
+            if (l.length) {
+                console.log(`[PELI] ✅ ${api.nombre} funcionó`);
+                return l[0];
+            }
         } catch (e) {
-            err = e.message;
+            console.log(`[PELI] ❌ ${api.nombre}: ${e.message}`);
+            errores.push(`${api.nombre}: ${e.message}`);
         }
     }
-    throw new Error(err || 'Sin link de descarga');
+    throw new Error('Todas fallaron: ' + errores.slice(0, 3).join(' | '));
 }
 
 export default {
@@ -149,7 +203,7 @@ export default {
                 '┃ 📥 Descargar:\n' +
                 '┃ ➪ .peli 1\n' +
                 '┃\n' +
-                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -167,14 +221,14 @@ export default {
             }
 
             await responder.texto(
-                '╭━━〔  𝐃𝐒𝐂𝐀𝐑𝐆𝐀𝐍𝐃𝐎 〕━━⬣\n' +
+                '╭━━〔 ⏳ 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐍𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🎬 *' + item.titulo + '*\n' +
                 '┃ ⏱️ ' + item.duracion + '\n' +
                 '┃\n' +
-                '┃ ⏳ Preparando el archivo MP4...\n' +
-                '┃    Puede tardar varios minutos\n' +
-                '┃    según el tamaño 🙏\n' +
+                '┃ ⏳ Buscando link de descarga...\n' +
+                '┃    Probando 6 APIs diferentes\n' +
+                '┃    Puede tardar 1-3 minutos 🙏\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
@@ -185,12 +239,21 @@ export default {
             } catch (e) {
                 console.error('[PELI] Sin link:', e.message);
                 return await responder.texto(
-                    '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+                    '╭━━〔 ❌ 𝐍𝐎 𝐃𝐈𝐒𝐏𝐎𝐍𝐈𝐁𝐋𝐄 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ ⚠️ No se pudo obtener el link\n' +
+                    '┃ ⚠️ Ninguna API pudo generar\n' +
+                    '┃    el link de descarga\n' +
+                    '┃\n' +
+                    '┃ 💡 Puede ser por:\n' +
+                    '┃ • Video muy largo (+2h)\n' +
+                    '┃ • Copyright estricto\n' +
+                    '┃ • APIs caídas temporalmente\n' +
                     '┃\n' +
                     '┃ ▶️ Ver online:\n' +
                     '┃ ' + item.url + '\n' +
+                    '┃\n' +
+                    '┃ 💡 Prueba con otra película\n' +
+                    '┃    de la lista\n' +
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
@@ -215,7 +278,7 @@ export default {
             } catch (e) {
                 console.error('[PELI] Envío falló:', e.message);
                 await responder.texto(
-                    '╭━━〔  𝐄𝐑𝐑𝐎𝐑 𝐄𝐍𝐕𝐈𝐎 〕━━⬣\n' +
+                    '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 𝐄𝐍𝐕𝐈𝐎 〕━━⬣\n' +
                     '┃\n' +
                     '┃ ⚠️ El archivo es muy pesado\n' +
                     '┃    o el CDN falló\n' +
@@ -259,7 +322,7 @@ export default {
 
             cap +=
                 '┃\n' +
-                '┣━━〔  𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐑 〕━━⬣\n' +
+                '┣━━〔 📥 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐑 〕━━⬣\n' +
                 '┃\n' +
                 '┃ Recibir una: .peli <número>\n' +
                 '┃ Ejemplo: .peli 1\n' +
