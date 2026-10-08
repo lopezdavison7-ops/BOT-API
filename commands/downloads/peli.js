@@ -27,6 +27,25 @@ function sanear(t) {
     return String(t).replace(/[^\w\s.-]/g, '').trim().slice(0, 80) || 'pelicula';
 }
 
+async function verificarMp4(url) {
+    try {
+        const r = await fetch(url, {
+            agent: AGENTE,
+            headers: { 'Range': 'bytes=0-15', 'User-Agent': HEADERS['User-Agent'] },
+            signal: AbortSignal.timeout(15000)
+        });
+        if (!r.ok && r.status !== 206) return { ok: false, motivo: 'CDN HTTP ' + r.status };
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (buf.length < 12) return { ok: false, motivo: 'Archivo vacío' };
+        if (buf.toString('latin1', 4, 8) === 'ftyp') return { ok: true };
+        if (buf[0] === 0x1a && buf[1] === 0x45) return { ok: false, motivo: 'Es WebM/MKV (WhatsApp lo bloquea)' };
+        if (buf[0] === 0x3c) return { ok: false, motivo: 'El CDN devolvió HTML' };
+        return { ok: false, motivo: 'Formato no reconocido' };
+    } catch (e) {
+        return { ok: false, motivo: e.message };
+    }
+}
+
 async function getSize(url) {
     try {
         const r = await fetch(url, { method: 'HEAD', agent: AGENTE, signal: AbortSignal.timeout(5000) });
@@ -118,21 +137,33 @@ async function linksSiputzX(url, signal) {
     return { calidad: d.resultado.quality || '360p', size: d.resultado.size || '', url: d.resultado.url };
 }
 
+async function linkValido(fn, url, signal) {
+    const link = await fn(url, signal);
+    const v = await verificarMp4(link.url);
+    if (!v.ok) throw new Error(v.motivo);
+    return link;
+}
+
 async function obtenerLink(item) {
-    if (item.identifier) return await linksArchive(item.identifier);
+    if (item.identifier) {
+        const link = await linksArchive(item.identifier);
+        const v = await verificarMp4(link.url);
+        if (!v.ok) throw new Error(v.motivo);
+        return link;
+    }
 
     const ctrl = new AbortController();
     try {
         const link = await Promise.any([
-            linksKronix(item.url, ctrl.signal),
-            linksCobalt(item.url, ctrl.signal),
-            linksSiputzX(item.url, ctrl.signal)
+            linkValido(linksKronix, item.url, ctrl.signal),
+            linkValido(linksCobalt, item.url, ctrl.signal),
+            linkValido(linksSiputzX, item.url, ctrl.signal)
         ]);
         ctrl.abort();
         return link;
     } catch (e) {
         ctrl.abort();
-        throw new Error('Ninguna API generó link');
+        throw new Error('Ningún link pasó la validación MP4');
     }
 }
 
@@ -153,7 +184,7 @@ export default {
 
         if (!query) {
             return await responder.texto(
-                '╭━━〔 🎬 𝐏𝐄𝐋 〕━━\n' +
+                '╭━━〔 🎬 𝐏𝐄𝐋𝐈 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 💡 Buscar: .peli spiderman\n' +
                 '┃ 📥 Descargar: .peli 1\n' +
@@ -188,7 +219,8 @@ export default {
                 const caption =
                     '「🎬」 *' + item.titulo + '*\n' +
                     '◈ ' + (item.year || 'Película') + ' | ⏱️ ' + item.duracion + '\n' +
-                    '◈ Calidad: ' + link.calidad + (size ? ' | 📦 ' + size : '');
+                    '◈ Calidad: ' + link.calidad + (size ? ' | 📦 ' + size : '') + '\n' +
+                    '◈ ✅ MP4 verificado';
 
                 await sock.sendMessage(jid, {
                     document: { url: link.url },
@@ -198,7 +230,7 @@ export default {
                 }, { quoted: msg });
 
                 await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-                console.log(`[PELI] ✅ Enviada: ${item.titulo}`);
+                console.log(`[PELI] ✅ Enviada y verificada: ${item.titulo}`);
 
             } catch (e) {
                 console.error('[PELI] Error:', e.message);
@@ -206,7 +238,7 @@ export default {
                 await responder.texto(
                     '╭━━〔 ❌ 𝐍𝐎 𝐃𝐈𝐒𝐏𝐎𝐍𝐈𝐁𝐋𝐄 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ ⚠️ Ninguna API generó el link\n' +
+                    '┃ ⚠️ ' + e.message + '\n' +
                     '┃\n' +
                     '┃ ▶️ Ver online:\n' +
                     '┃ ' + item.url + '\n' +
@@ -234,14 +266,14 @@ export default {
             global.peliSessions.set(sender, { resultados, t: Date.now() });
 
             let cap =
-                '╭━━〔  𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
+                '╭━━〔 🎬 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🔍 *' + query + '* (' + resultados.length + ')\n' +
                 '┃\n';
 
             resultados.forEach((p, i) => {
                 cap += '┃ *' + (i + 1) + '.* ' + p.titulo + '\n';
-                cap += '┃    ⏱️ ' + p.duracion + (p.year ? ' | 📅 ' + p.year : '') + '\n';
+                cap += '┃    ️ ' + p.duracion + (p.year ? ' | 📅 ' + p.year : '') + '\n';
                 if (i < resultados.length - 1) cap += '┃\n';
             });
 
