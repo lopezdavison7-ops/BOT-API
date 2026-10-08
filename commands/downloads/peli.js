@@ -137,6 +137,38 @@ async function linksSiputzX(url, signal) {
     return { calidad: d.resultado.quality || '360p', size: d.resultado.size || '', url: d.resultado.url };
 }
 
+async function linksRapidAPI(url, signal) {
+    const r = await fetch(`https://yt-download-v1.p.rapidapi.com/download?url=${encodeURIComponent(url)}&format=mp4`, {
+        agent: AGENTE,
+        headers: {
+            'X-RapidAPI-Key': 'defaultkey',
+            'User-Agent': HEADERS['User-Agent']
+        },
+        signal: signal || AbortSignal.timeout(45000)
+    });
+    if (!r.ok) throw new Error('RapidAPI HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.url) throw new Error('RapidAPI sin URL');
+    return { calidad: '720p', size: '', url: d.url };
+}
+
+async function linksY2MateGG(url, signal) {
+    const videoId = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1];
+    if (!videoId) throw new Error('No se pudo extraer videoId');
+    
+    const r = await fetch(`https://api.y2mate.gg/api/convert`, {
+        method: 'POST',
+        agent: AGENTE,
+        headers: { 'Content-Type': 'application/json', 'User-Agent': HEADERS['User-Agent'] },
+        body: JSON.stringify({ videoId, format: 'mp4', quality: '720p' }),
+        signal: signal || AbortSignal.timeout(45000)
+    });
+    if (!r.ok) throw new Error('Y2Mate.gg HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.url) throw new Error('Y2Mate.gg sin URL');
+    return { calidad: '720p', size: '', url: d.url };
+}
+
 async function linkValido(fn, url, signal) {
     const link = await fn(url, signal);
     const v = await verificarMp4(link.url);
@@ -157,13 +189,15 @@ async function obtenerLink(item) {
         const link = await Promise.any([
             linkValido(linksKronix, item.url, ctrl.signal),
             linkValido(linksCobalt, item.url, ctrl.signal),
-            linkValido(linksSiputzX, item.url, ctrl.signal)
+            linkValido(linksSiputzX, item.url, ctrl.signal),
+            linkValido(linksRapidAPI, item.url, ctrl.signal),
+            linkValido(linksY2MateGG, item.url, ctrl.signal)
         ]);
         ctrl.abort();
         return link;
     } catch (e) {
         ctrl.abort();
-        throw new Error('Ningún link pasó la validación MP4');
+        throw new Error('Todas las APIs fallaron o devolvieron formato inválido');
     }
 }
 
@@ -236,16 +270,22 @@ export default {
                 console.error('[PELI] Error:', e.message);
                 await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } });
                 await responder.texto(
-                    '╭━━〔 ❌ 𝐍𝐎 𝐃𝐈𝐒𝐏𝐎𝐍𝐈𝐁𝐋𝐄 〕━━⬣\n' +
+                    '╭━━〔 ⚠️ 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀 𝐁𝐋𝐎𝐐𝐔𝐄𝐀𝐃𝐀 〕━━⬣\n' +
                     '┃\n' +
-                    '┃ ⚠️ ' + e.message + '\n' +
+                    '┃ YouTube bloqueó la descarga\n' +
+                    '┃ directa de esta película\n' +
+                    '┃ (copyright o formato inválido)\n' +
                     '┃\n' +
-                    '┃ ▶️ Ver online:\n' +
+                    '┃ 📺 Ver online (recomendado):\n' +
                     '┃ ' + item.url + '\n' +
                     '┃\n' +
-                    '┃ 💡 Prueba con otro número\n' +
+                    '┃ 💡 Opciones:\n' +
+                    '┃ • Probar con otro número\n' +
+                    '┃ • Buscar películas más antiguas\n' +
+                    '┃ • Buscar en Archive.org\n' +
+                    '┃    (.peli matrix 1999)\n' +
                     '┃\n' +
-                    '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                 );
             } finally {
                 global.peliBusy = false;
@@ -273,13 +313,16 @@ export default {
 
             resultados.forEach((p, i) => {
                 cap += '┃ *' + (i + 1) + '.* ' + p.titulo + '\n';
-                cap += '┃    ️ ' + p.duracion + (p.year ? ' | 📅 ' + p.year : '') + '\n';
+                cap += '┃    ⏱️ ' + p.duracion + (p.year ? ' | 📅 ' + p.year : '') + '\n';
                 if (i < resultados.length - 1) cap += '┃\n';
             });
 
             cap +=
                 '┃\n' +
                 '┃ 📥 .peli 1  ← para recibir\n' +
+                '┃\n' +
+                '┃ ⚠️ Las películas con copyright\n' +
+                '┃    pueden no descargarse\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
