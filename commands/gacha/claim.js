@@ -11,7 +11,7 @@ export default {
 
     alias: [
         'reclamar',
-        'reclamo'
+        'c'
     ],
 
     descripcion:
