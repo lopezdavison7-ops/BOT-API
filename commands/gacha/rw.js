@@ -118,7 +118,7 @@ function crearMensaje(carta) {
 ┃
 ╰━━━━━━━━━━━━━━━━⬣
 
-> 🔒 Solo tú puedes reclamarlo, responde con *.claim*
+> 🔒 Solo tú puedes reclamarlo, responde con >.claim oh *.c*
 
 ╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣`
     );
