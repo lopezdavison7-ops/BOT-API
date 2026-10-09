@@ -14,13 +14,56 @@ function fmtDur(s) {
 
 function parseLyrics(raw) {
     if (!raw) return '';
+    
     try {
+        // Intento 1: Parsear como JSON directo
         const parsed = JSON.parse(raw);
-        if (typeof parsed === 'string') return parsed;
-        return parsed.text || '';
-    } catch {
-        return String(raw);
+        
+        // Si es string, retornarlo
+        if (typeof parsed === 'string') {
+            return parsed;
+        }
+        
+        // Si es objeto con campo "text"
+        if (parsed && typeof parsed === 'object' && parsed.text) {
+            return parsed.text;
+        }
+        
+        return '';
+    } catch (e) {
+        // Intento 2: Si falla, intentar parsear string escapado manualmente
+        try {
+            // Remover comillas exteriores y escapes
+            const cleaned = raw.replace(/^\{.*?"text":\s*"(.*)".*\}$/s, '$1');
+            if (cleaned !== raw) {
+                // Unescape caracteres
+                return cleaned
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\"/g, '"')
+                    .replace(/\\\\/g, '\\');
+            }
+        } catch (e2) {
+            // Último recurso: retornar como está
+            return String(raw);
+        }
     }
+    
+    return '';
+}
+
+function formatLyrics(text) {
+    if (!text) return '';
+    
+    // Limpiar y formatear
+    const lines = text
+        .split(/\n|\[Verse|\[Chorus|\[Bridge|\[Pre-Chorus|\[Outro/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith(']'))
+        .slice(0, 6); // Solo 6 líneas
+    
+    if (lines.length === 0) return '';
+    
+    return lines.join('\n┃ ');
 }
 
 export default {
@@ -58,9 +101,12 @@ export default {
             const duracion = fmtDur(song.duration);
             const mood = song.mood || 'N/A';
             const tags = Array.isArray(song.tags) ? song.tags.slice(0, 5).join(', ') : '';
-            const lyrics = parseLyrics(song.lyrics).substring(0, 800);
+            
+            // Parsear y formatear letra
+            const rawLyrics = parseLyrics(song.lyrics);
+            const lyrics = formatLyrics(rawLyrics);
 
-            const caption =
+            let caption =
                 '╭━━〔 🎵 𝐌𝐔́𝐒𝐈𝐂𝐀 𝐈𝐀 〕━━⬣\n' +
                 '┃\n' +
                 '┃ 🎧 *' + (song.title || 'Sin título') + '*\n' +
@@ -71,9 +117,16 @@ export default {
                 '┃ 🌐 Idioma › ' + (song.language || 'N/A') + '\n' +
                 '┃ 💫 Mood › ' + mood + '\n' +
                 (tags ? '┃ 🏷️ Tags › ' + tags + '\n' : '') +
-                '┃\n' +
-                (lyrics ? '┣━━〔 📝 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n┃\n┃ ' + lyrics.replace(/\n/g, '\n┃ ') + '...\n┃\n' : '') +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+                '┃\n';
+
+            if (lyrics) {
+                caption += '┣━━〔 📝 𝐋𝐄𝐓𝐑𝐀 〕━━⬣\n' +
+                           '┃\n' +
+                           '┃ ' + lyrics + '\n' +
+                           '┃\n';
+            }
+
+            caption += '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
             if (song.cover_image) {
                 try {
