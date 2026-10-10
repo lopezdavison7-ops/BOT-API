@@ -127,11 +127,11 @@ export default {
                 return await responder.texto('❌ Ese número no existe.\nPrimero usa: .mf <url de carpeta>');
             }
             await responder.texto('⏳ Descargando *' + (item.filename || item['nombre de archivo'] || 'archivo') + '*...');
-            try {
-                await descargarYEnviar(sock, msg, jid, item, responder);
-            } catch (e) {
-                await responder.texto('❌ Error: ' + (e?.message || 'Intenta de nuevo'));
-            }
+                    try {
+                        await descargarYEnviar(sock, msg, jid, item, responder);
+                    } catch (e) {
+                        try { await responder.texto('❌ Error: ' + (e?.message || 'Intenta de nuevo')).catch(() => {}); } catch {}
+                    }
             return;
         }
 
@@ -140,8 +140,8 @@ export default {
         }
 
         try {
-            const res = await fetch(API + encodeURIComponent(q));
-            const json = await res.json();
+        const res = await fetch(API + encodeURIComponent(q), { signal: AbortSignal.timeout(15000) });
+        const json = await res.json();
 
             if (Array.isArray(json.data) && json.data.length > 0) {
                 const datos = json.data;

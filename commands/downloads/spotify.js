@@ -1,4 +1,7 @@
 import fetch from 'node-fetch';
+import https from 'node:https';
+
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 const API_SEARCH = 'https://api.delirius.online/search/spotify?q=';
 const API_DOWNLOAD = 'https://api.delirius.online/download/spotifydl?url=';
@@ -14,6 +17,7 @@ function pick(obj, keys) {
 async function downloadAndSend(track, sock, jid, msg) {
     try {
         const res = await fetch(API_DOWNLOAD + encodeURIComponent(track.url), {
+            agent: AGENTE,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
@@ -36,6 +40,7 @@ async function downloadAndSend(track, sock, jid, msg) {
         }
 
         const audioRes = await fetch(downloadUrl, {
+            agent: AGENTE,
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(45000)
         });

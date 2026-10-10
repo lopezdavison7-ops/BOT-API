@@ -4,7 +4,7 @@ const API_BUSCAR = 'https://api.delirius.online/search/applemusic?query=';
 const API_DESCARGAR = 'https://api.delirius.online/download/applemusic?url=';
 
 async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
-    const res = await fetch(API_DESCARGAR + encodeURIComponent(urlCancion));
+    const res = await fetch(API_DESCARGAR + encodeURIComponent(urlCancion), { signal: AbortSignal.timeout(15000) });
     const json = await res.json();
 
     const d = json.data || json.datos;
@@ -36,10 +36,12 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
 
     if (imagen) {
         try {
-            await responder.imagen({ url: imagen }, caption);
-        } catch (e) {
-            await responder.texto(caption);
-        }
+        await responder.imagen({ url: imagen }, caption).catch(() => {
+            responder.texto(caption).catch(() => {});
+        });
+    } else {
+        await responder.texto(caption).catch(() => {});
+    }
     } else {
         await responder.texto(caption);
     }
@@ -131,7 +133,7 @@ export default {
         }
 
         try {
-            const res = await fetch(API_BUSCAR + encodeURIComponent(q));
+            const res = await fetch(API_BUSCAR + encodeURIComponent(q), { signal: AbortSignal.timeout(15000) });
             const json = await res.json();
 
             const datos = json.data || json.datos;
@@ -177,7 +179,9 @@ export default {
 
             if (primeraImg) {
                 try {
-                    await responder.imagen({ url: primeraImg }, txt);
+                    await responder.imagen({ url: primeraImg }, txt).catch(() => {
+                        responder.texto(txt).catch(() => {});
+                    });
                     return;
                 } catch (e) {}
             }

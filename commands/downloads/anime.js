@@ -35,10 +35,13 @@ async function enviarDetalle(responder, item, indice) {
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
     try {
-        await responder.imagen({ url: item.imagen }, texto);
+        await responder.imagen({ url: item.imagen }, texto).catch(async () => {
+            await responder.texto(texto).catch(() => {});
+        });
     } catch (e) {
-
-        await responder.texto(texto);
+        try {
+            await responder.texto(texto).catch(() => {});
+        } catch {}
     }
 }
 
@@ -91,7 +94,7 @@ export default {
         }
 
         try {
-            const res = await fetch(API + encodeURIComponent(input));
+            const res = await fetch(API + encodeURIComponent(input), { signal: AbortSignal.timeout(15000) });
             const text = await res.text();
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`);

@@ -8,13 +8,14 @@
     "gacha": "node lib/gacha-selector.cjs"
   },
   "dependencies": {
-"@napi-rs/canvas": "^0.1.65",  
-"@hapi/boom": "^10.0.1",
+    "@hapi/boom": "^10.0.1",
     "@img/sharp-wasm32": "^0.35.3",
+    "@napi-rs/canvas": "^0.1.65",
     "axios": "^1.19.0",
     "baileys": "git@github.com:Andresv27728/baileys-beta.git",
     "dotenv": "^17.4.2",
     "fastify": "^4.28.1",
+    "fluent-ffmpeg": "^2.1.3",
     "jimp": "1.6.1",
     "moment-timezone": "^0.5.45",
     "node-cache": "^5.1.2",

@@ -13,8 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { handleMessage } from './handler.js';
-import { loadCommands } from './lib/cmdManager.js';
+import { handleMessage, cargarComandosHandler } from './handler.js';
 import { manejarDespedida } from './commands/group/despedida.js';
 import { invalidarMetadata } from './lib/grupos.js';
 import './lib/logs.js';
@@ -240,7 +239,7 @@ async function iniciarBot() {
             console.warn('⚠️ No se pudo obtener la versión de Baileys.');
         }
 
-        comandos = await loadCommands();
+        comandos = await cargarComandosHandler();
         listaComandosUnica = Array.from(new Set(comandos.values()));
         console.log(`📦 Comandos cargados: ${comandos.size}`);
 

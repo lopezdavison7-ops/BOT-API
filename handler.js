@@ -21,15 +21,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_CONFIG = path.join(__dirname, 'database', 'config.json');
 
+let _prefijoCache = '.';
+let _prefijoLeidoEn = 0;
+const PREFIJO_TTL_MS = 5000;
+
 function obtenerPrefijoActual() {
+    const ahora = Date.now();
+    if (ahora - _prefijoLeidoEn < PREFIJO_TTL_MS) {
+        return _prefijoCache;
+    }
+    _prefijoLeidoEn = ahora;
     try {
-        if (fs.existsSync(RUTA_CONFIG)) {
-            const raw = fs.readFileSync(RUTA_CONFIG, 'utf8');
-            const config = JSON.parse(raw);
-            return config.prefijo || '.';
-        }
+        const config = JSON.parse(fs.readFileSync(RUTA_CONFIG, 'utf8'));
+        _prefijoCache = config.prefijo || '.';
     } catch (e) {}
-    return '.';
+    return _prefijoCache;
 }
 
 let comandos = null;
@@ -119,7 +125,10 @@ function extraerButtonId(msg) {
     return null;
 }
 
+let _rutaPlayCache = null;
+
 function buscarArchivoPlay() {
+    if (_rutaPlayCache) return _rutaPlayCache;
     const base = path.join(__dirname, 'commands');
     function buscarEn(dir) {
         try {
@@ -136,7 +145,9 @@ function buscarArchivoPlay() {
         } catch (e) {}
         return null;
     }
-    return buscarEn(base);
+    const encontrado = buscarEn(base);
+    if (encontrado) _rutaPlayCache = encontrado;
+    return encontrado;
 }
 
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
@@ -324,10 +335,7 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
             }
         }
 
-        let cmd = comandos.get(nombreComando);
-        if (!cmd) {
-            cmd = [...comandos.values()].find(c => c.alias?.includes(nombreComando));
-        }
+        const cmd = comandos.get(nombreComando);
         if (!cmd) return;
 
         try {

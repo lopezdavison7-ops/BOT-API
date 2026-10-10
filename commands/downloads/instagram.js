@@ -52,7 +52,7 @@ export default {
 
         try {
 
-            const res = await fetch(API + encodeURIComponent(url));
+            const res = await fetch(API + encodeURIComponent(url), { signal: AbortSignal.timeout(15000) });
             const json = await res.json();
 
             const datos = json.data || json.datos;
@@ -69,7 +69,7 @@ export default {
             }
 
             if (items.length > 1) {
-                await responder.texto('⏳ Descargando *' + items.length + '* archivos de Instagram...');
+                await responder.texto('⏳ Descargando *' + items.length + '* archivos de Instagram...').catch(() => {});
             }
 
             const resultados = await Promise.allSettled(

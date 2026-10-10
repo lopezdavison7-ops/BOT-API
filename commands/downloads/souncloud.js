@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
+import https from 'node:https';
 
-const API_SEARCH = 'https://api.delirius.online/search/soundcloud?q=';
-const API_DOWNLOAD = 'https://api.delirius.online/download/soundcloud?url=';
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 function pick(obj, keys) {
     if (!obj) return undefined;
@@ -22,6 +22,7 @@ function formatDuration(ms) {
 async function downloadAndSend(track, sock, jid, msg) {
     try {
         const res = await fetch(API_DOWNLOAD + encodeURIComponent(track.link), {
+            agent: AGENTE,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
@@ -41,6 +42,7 @@ async function downloadAndSend(track, sock, jid, msg) {
         }
 
         const audioRes = await fetch(downloadUrl, {
+            agent: AGENTE,
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(30000)
         });

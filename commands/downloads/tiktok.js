@@ -15,14 +15,15 @@ export default {
         }
 
         try {
-            await responder.texto('⏳ Descargando video...');
+            const aviso = responder.texto('⏳ Descargando video...').catch(() => {});
 
             const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(consulta)}`;
 
             const res = await fetch(apiUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0'
-                }
+                },
+                signal: AbortSignal.timeout(15000)
             });
 
             if (!res.ok) {
@@ -40,7 +41,8 @@ export default {
             const videoRes = await fetch(linkVideo, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0'
-                }
+                },
+                signal: AbortSignal.timeout(90000)
             });
 
             if (!videoRes.ok) {
@@ -48,6 +50,8 @@ export default {
             }
 
             const buffer = Buffer.from(await videoRes.arrayBuffer());
+
+            await aviso;
 
             await sock.sendMessage(
                 jid,

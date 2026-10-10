@@ -28,7 +28,7 @@ export default {
 
         try {
             const apiUrl = `https://api.delirius.online/download/facebook?url=${encodeURIComponent(url)}`;
-            const res = await fetch(apiUrl);
+            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
 
             if (!res.ok) {
                 return await responder.texto('❌ Error al conectar con la API');
@@ -45,40 +45,41 @@ export default {
             const calidad = mejorCalidad.quality || 'Desconocida';
 
             if (json.thumb) {
-                await responder.imagen(
-                    { url: json.thumb },
-                    `╭━━〔 📘 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐋 〕━━⬣\n` +
-                    `┃\n` +
-                    `┃ 🎬 *Video de Facebook*\n` +
-                    `┃ 🎥 Calidad: ${calidad}\n` +
-                    `┃\n` +
-                    `┃ 📥 Enviando video...\n` +
-                    `┃\n` +
-                    `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`
-                );
+                try {
+                    await responder.imagen(
+                        { url: json.thumb },
+                        `╭━━〔 📘 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐋 〕━━⬣\n` +
+                        `┃\n` +
+                        `┃ 🎬 *Video de Facebook*\n` +
+                        `┃ 🎥 Calidad: ${calidad}\n` +
+                        `┃\n` +
+                        `┃ 📥 Enviando video...\n` +
+                        `┃\n` +
+                        `╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`
+                    ).catch(() => {});
+                } catch {}
             }
 
             try {
                 await responder.video(
                     { url: videoUrl },
                     `📘 *Facebook Video*\n🎥 Calidad: ${calidad}`
-                );
+                ).catch(async () => {
+                    await responder.texto(
+                        '╭━━〔 📘 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐋 〕━━⬣\n' +
+                        '┃\n' +
+                        '┃ 🎬 *Video de Facebook*\n' +
+                        '┃ 🎥 Calidad: ' + calidad + '\n' +
+                        '┃\n' +
+                        '┃ ⚠️ Video muy grande para WhatsApp\n' +
+                        '┃\n' +
+                        '┃ 🔗 *Link de descarga:*\n' +
+                        '┃ ' + videoUrl + '\n' +
+                        '┃\n' +
+                        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                    ).catch(() => {});
+                });
             } catch (e) {
-
-                await responder.texto(
-                    '╭━━〔 📘 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 𝐃𝐋 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ 🎬 *Video de Facebook*\n' +
-                    '┃ 🎥 Calidad: ' + calidad + '\n' +
-                    '┃\n' +
-                    '┃ ⚠️ Video muy grande para WhatsApp\n' +
-                    '┃\n' +
-                    '┃ 🔗 *Link de descarga:*\n' +
-                    '┃ ' + videoUrl + '\n' +
-                    '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-                );
-            }
 
         } catch (error) {
             console.error('[FB] Error:', error?.message || error);
