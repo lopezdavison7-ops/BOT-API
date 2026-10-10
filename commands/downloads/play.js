@@ -1,7 +1,13 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
 
-const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
+const AGENTE = new https.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 15000,
+    maxSockets: 16,
+    maxFreeSockets: 8,
+    scheduling: 'lifo'
+});
 
 const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
 const API_MP3 = 'https://api.delirius.online/download/ytmp3';
@@ -9,8 +15,17 @@ const API_MP4 = 'https://api.delirius.online/download/ytmp4';
 const FORMATO_VIDEO = '360p';
 
 const CACHE_TTL = 5 * 60 * 1000;
+const INFO_TTL = 10 * 60 * 1000;
+const SESION_TTL = 10 * 60 * 1000;
+
+const MAX_AUDIO_BYTES = 64 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 256 * 1024 * 1024;
+const LIMITE_DOCUMENTO = 16 * 1024 * 1024;
+const BUFFER_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+
 const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
 const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 'que', 'aaa', 'a']);
+const YT_ID = /^[a-zA-Z0-9_-]{11}$/;
 
 const UAS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -20,10 +35,94 @@ const UAS = [
 ];
 
 if (!global.playSessions) global.playSessions = {};
-if (!global.playCache) global.playCache = new Map();
+
+const _cacheLazy = setInterval(() => {
+    const ahora = Date.now();
+    const sesiones = global.playSessions;
+    for (const clave of Object.keys(sesiones)) {
+        if (ahora - sesiones[clave].timestamp > SESION_TTL) delete sesiones[clave];
+    }
+}, 60000);
+if (_cacheLazy.unref) _cacheLazy.unref();
+
+function crearCache(ttl, max) {
+    const mapa = new Map();
+    return {
+        get(clave) {
+            const entrada = mapa.get(clave);
+            if (!entrada) return undefined;
+            if (Date.now() - entrada.t > ttl) {
+                mapa.delete(clave);
+                return undefined;
+            }
+            mapa.delete(clave);
+            mapa.set(clave, entrada);
+            return entrada.v;
+        },
+        set(clave, valor) {
+            mapa.delete(clave);
+            mapa.set(clave, { v: valor, t: Date.now() });
+            while (mapa.size > max) mapa.delete(mapa.keys().next().value);
+        },
+        clear() {
+            mapa.clear();
+        }
+    };
+}
+
+const cacheBusqueda = crearCache(CACHE_TTL, 60);
+const cacheInfo = crearCache(INFO_TTL, 120);
+
+const enVuelo = new Map();
+function unificar(clave, fn) {
+    const pendiente = enVuelo.get(clave);
+    if (pendiente) return pendiente;
+    const promesa = Promise.resolve().then(fn).finally(() => enVuelo.delete(clave));
+    enVuelo.set(clave, promesa);
+    return promesa;
+}
+
+const cacheBuffer = new Map();
+let bytesBuffer = 0;
+
+function bufferCacheado(url) {
+    const entrada = cacheBuffer.get(url);
+    if (!entrada) return null;
+    if (Date.now() - entrada.t > CACHE_TTL) {
+        cacheBuffer.delete(url);
+        bytesBuffer -= entrada.buffer.length;
+        return null;
+    }
+    return entrada.buffer;
+}
+
+function guardarBuffer(url, buffer) {
+    if (buffer.length > BUFFER_CACHE_MAX_BYTES / 2) return;
+    const previo = cacheBuffer.get(url);
+    if (previo) {
+        bytesBuffer -= previo.buffer.length;
+        cacheBuffer.delete(url);
+    }
+    cacheBuffer.set(url, { buffer, t: Date.now() });
+    bytesBuffer += buffer.length;
+    while (bytesBuffer > BUFFER_CACHE_MAX_BYTES && cacheBuffer.size) {
+        const primera = cacheBuffer.keys().next().value;
+        bytesBuffer -= cacheBuffer.get(primera).buffer.length;
+        cacheBuffer.delete(primera);
+    }
+}
 
 function getUA() {
     return UAS[Math.floor(Math.random() * UAS.length)];
+}
+
+function pick(obj, claves) {
+    if (!obj) return undefined;
+    for (const clave of claves) {
+        const valor = obj[clave];
+        if (valor !== undefined && valor !== null && valor !== '') return valor;
+    }
+    return undefined;
 }
 
 function formatearVistas(vistas) {
@@ -35,15 +134,38 @@ function formatearVistas(vistas) {
 }
 
 function esURL(input) {
-    return /^https?:\/\//i.test(input) || 
-           /youtube\.com\/watch/i.test(input) || 
-           /youtu\.be\//i.test(input);
+    return /^(https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)\//i.test(String(input).trim());
 }
 
 function extraerVideoId(url) {
-    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
+    const texto = String(url).trim();
+    const coincidencia = texto.match(
+        /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/))([a-zA-Z0-9_-]{11})/
+    );
+    return coincidencia ? coincidencia[1] : null;
+}
+
+function parsearDirecto(query) {
+    const texto = String(query).trim();
+    if (esURL(texto)) {
+        const videoId = extraerVideoId(texto);
+        if (!videoId) throw new Error('URL de YouTube inválida');
+        return videoId;
+    }
+    if (YT_ID.test(texto)) return texto;
+    return null;
+}
+
+function videoDesdeURL(videoId) {
+    return {
+        videoId,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        titulo: 'Cargando...',
+        thumbnail: '',
+        duracion: '0:00',
+        vistas: 0,
+        autor: 'Desconocido'
+    };
 }
 
 async function getJSON(url, timeoutMs) {
@@ -62,23 +184,23 @@ async function getJSON(url, timeoutMs) {
 
 function normVideo(v) {
     return {
-        videoId: v.videoId,
-        url: v.url || `https://www.youtube.com/watch?v=${v.videoId}`,
-        titulo: v.title || v.título || 'Sin título',
-        thumbnail: v.image || v.imagen || v.thumbnail || '',
-        duracion: v.duration || v.duración || '0:00',
-        vistas: v.views || v.vistas || 0,
-        autor: v.author?.name || v.author?.nombre || v.autor?.nombre || 'Desconocido'
+        videoId: v.videoId || v.id,
+        url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id}`,
+        titulo: pick(v, ['title', 'titulo', 'título']) || 'Sin título',
+        thumbnail: pick(v, ['image', 'imagen', 'thumbnail']) || '',
+        duracion: pick(v, ['duration', 'duración', 'duracion']) || '0:00',
+        vistas: pick(v, ['views', 'vistas']) || 0,
+        autor: v.author?.name || v.author?.nombre || v.autor?.nombre || v.channel?.name || 'Desconocido'
     };
 }
 
 function normInfo(i) {
     return {
-        titulo: i.title || i.titulo || i.título || 'Sin título',
-        autor: i.author || i.autor || 'Desconocido',
-        thumbnail: i.image || i.imagen || '',
-        formato: i.format || i.formato || '',
-        downloadUrl: i.download || i.descarga
+        titulo: pick(i, ['title', 'titulo', 'título']) || 'Sin título',
+        autor: pick(i, ['author', 'autor']) || 'Desconocido',
+        thumbnail: pick(i, ['image', 'imagen']) || '',
+        formato: pick(i, ['format', 'formato']) || '',
+        downloadUrl: pick(i, ['download', 'descarga', 'downloadUrl', 'dl', 'link', 'url'])
     };
 }
 
@@ -86,111 +208,133 @@ async function buscarUna(query) {
     const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}`, 10000);
     if (data.status !== true && data.estado !== true) throw new Error('API sin éxito');
     const lista = data.data || data.datos || [];
+    if (!Array.isArray(lista) || !lista.length) throw new Error('Sin resultados');
     const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-    if (!v) throw new Error('Sin resultados');
     return normVideo(v);
 }
 
-function videoDesdeURL(url) {
-    const videoId = extraerVideoId(url);
-    if (!videoId) throw new Error('URL de YouTube inválida');
-
-    return {
-        videoId,
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        titulo: 'Cargando...',
-        thumbnail: '',
-        duracion: '0:00',
-        vistas: 0,
-        autor: 'Desconocido'
-    };
+function primerExito(promesas) {
+    return Promise.any(promesas).catch(() => {
+        throw new Error('Sin resultados');
+    });
 }
 
 async function buscarYouTube(query) {
-    const key = query.toLowerCase().trim();
+    const directo = parsearDirecto(query);
+    if (directo) return videoDesdeURL(directo);
 
-    if (esURL(query)) {
-        console.log(`[PLAY] 📎 URL directa detectada: ${query}`);
-        return videoDesdeURL(query);
-    }
+    const clave = query.toLowerCase().trim();
+    const cacheada = cacheBusqueda.get(clave);
+    if (cacheada) return cacheada;
 
-    const cached = global.playCache.get(key);
-    if (cached && Date.now() - cached.t < CACHE_TTL) {
-        console.log(`[PLAY] ⚡ Caché: ${key}`);
-        return cached.video;
-    }
+    return unificar('s:' + clave, async () => {
+        const enCache = cacheBusqueda.get(clave);
+        if (enCache) return enCache;
 
-    let video = null;
-    const esGenerica = key.length <= 5 || GENERICAS.has(key);
+        const esGenerica = clave.length <= 5 || GENERICAS.has(clave);
+        let video;
 
-    if (!esGenerica) {
-        video = await buscarUna(key);
-    } else {
-        const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
-        console.log(`[PLAY] Genérica → variantes: ${variantes.join(' | ')}`);
-
-        const resultados = await Promise.allSettled(variantes.map(v => buscarUna(v).then(r => ({ r, v }))));
-
-        for (const v of variantes) {
-            const exito = resultados.find(s => s.status === 'fulfilled' && s.value.v === v);
-            if (exito) {
-                video = exito.value.r;
-                console.log(`[PLAY] ✅ Variante ganadora: "${v}"`);
-                break;
+        if (esGenerica) {
+            const variantes = [clave, ...MODIFICADORES.map(m => `${clave} ${m}`)].slice(0, 4);
+            video = await primerExito(variantes.map(v => buscarUna(v)));
+        } else {
+            try {
+                video = await buscarUna(clave);
+            } catch {
+                video = await primerExito(MODIFICADORES.map(m => buscarUna(`${clave} ${m}`)));
             }
         }
 
-        if (!video) throw new Error('Sin resultados');
-    }
-
-    if (global.playCache.size > 50) global.playCache.clear();
-    global.playCache.set(key, { video, t: Date.now() });
-
-    return video;
+        cacheBusqueda.set(clave, video);
+        return video;
+    });
 }
 
 async function infoAudio(url) {
-    const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(url)}`, 18000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP3 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
+    const cacheada = cacheInfo.get('a:' + url);
+    if (cacheada) return cacheada;
+    return unificar('ia:' + url, async () => {
+        const enCache = cacheInfo.get('a:' + url);
+        if (enCache) return enCache;
+        const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(url)}`, 18000);
+        if (data.status !== true && data.estado !== true) throw new Error('API MP3 sin éxito');
+        const info = normInfo(data.data || data.datos || {});
+        if (!info.downloadUrl) throw new Error('Sin link de descarga');
+        cacheInfo.set('a:' + url, info);
+        return info;
+    });
 }
 
 async function infoVideo(url) {
-    const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
-    if (data.status !== true && data.estado !== true) throw new Error('API MP4 sin éxito');
-    const info = normInfo(data.data || data.datos || {});
-    if (!info.downloadUrl) throw new Error('Sin link de descarga');
-    return info;
+    const cacheada = cacheInfo.get('v:' + url);
+    if (cacheada) return cacheada;
+    return unificar('iv:' + url, async () => {
+        const enCache = cacheInfo.get('v:' + url);
+        if (enCache) return enCache;
+        const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(url)}&format=${FORMATO_VIDEO}`, 18000);
+        if (data.status !== true && data.estado !== true) throw new Error('API MP4 sin éxito');
+        const info = normInfo(data.data || data.datos || {});
+        if (!info.downloadUrl) throw new Error('Sin link de descarga');
+        cacheInfo.set('v:' + url, info);
+        return info;
+    });
 }
 
-async function descargarBuffer(url, timeoutMs) {
+async function leerBuffer(res, maxBytes) {
+    if (!res.body) return Buffer.alloc(0);
+    const trozos = [];
+    let total = 0;
+    for await (const trozo of res.body) {
+        total += trozo.length;
+        if (maxBytes && total > maxBytes) {
+            if (typeof res.body.destroy === 'function') res.body.destroy();
+            throw new Error(`Archivo demasiado grande (> ${(maxBytes / 1048576).toFixed(0)} MB)`);
+        }
+        trozos.push(trozo);
+    }
+    return Buffer.concat(trozos, total);
+}
+
+async function descargarBuffer(url, timeoutMs, maxBytes) {
     const res = await fetch(url, {
         agent: AGENTE,
         headers: { 'User-Agent': getUA(), 'Accept': '*/*' },
         signal: AbortSignal.timeout(timeoutMs)
     });
     if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = await leerBuffer(res, maxBytes);
     if (!buffer.length) throw new Error('Buffer vacío');
     return buffer;
 }
 
+function nombreSeguro(titulo) {
+    return String(titulo || 'video').replace(/[^\w\s.-]/g, '').trim().slice(0, 80) || 'video';
+}
+
 async function procesarAudio(sock, msg, video, responder) {
+    const jid = msg.key.remoteJid;
     try {
-        await responder.texto('🎵 Descargando audio...');
+        const aviso = responder?.texto
+            ? responder.texto('🎵 Descargando audio...').catch(() => {})
+            : Promise.resolve();
 
-        const info = await infoAudio(video.url);
-        const buffer = await descargarBuffer(info.downloadUrl, 60000);
+        let buffer = bufferCacheado(video.url);
+        if (!buffer) {
+            const info = await infoAudio(video.url);
+            buffer = await unificar('da:' + info.downloadUrl, () =>
+                descargarBuffer(info.downloadUrl, 60000, MAX_AUDIO_BYTES)
+            );
+            guardarBuffer(video.url, buffer);
+        }
 
-        await sock.sendMessage(msg.key.remoteJid, {
+        await aviso;
+        await sock.sendMessage(jid, {
             audio: buffer,
             mimetype: 'audio/mpeg'
         }, { quoted: msg });
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
-        await responder.texto(
+        await responder?.texto(
             '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el audio.\n' +
             '┃\n' +
@@ -201,13 +345,20 @@ async function procesarAudio(sock, msg, video, responder) {
 }
 
 async function procesarVideo(sock, msg, video, responder) {
+    const jid = msg.key.remoteJid;
     try {
-        await responder.texto('🎬 Descargando video...');
+        const aviso = responder?.texto
+            ? responder.texto('🎬 Descargando video...').catch(() => {})
+            : Promise.resolve();
 
         const info = await infoVideo(video.url);
-        const buffer = await descargarBuffer(info.downloadUrl, 120000);
+        const buffer = await unificar('dv:' + info.downloadUrl, () =>
+            descargarBuffer(info.downloadUrl, 120000, MAX_VIDEO_BYTES)
+        );
 
-        const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
+        await aviso;
+
+        const tamañoMB = (buffer.length / 1048576).toFixed(2);
         const titulo = info.titulo || video.titulo;
         const autor = info.autor || video.autor;
 
@@ -218,15 +369,15 @@ async function procesarVideo(sock, msg, video, responder) {
             '┃ 📊 ' + (info.formato || FORMATO_VIDEO) + ' | 📦 ' + tamañoMB + ' MB\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-        if (buffer.length > 16 * 1024 * 1024) {
-            await sock.sendMessage(msg.key.remoteJid, {
+        if (buffer.length > LIMITE_DOCUMENTO) {
+            await sock.sendMessage(jid, {
                 document: buffer,
                 mimetype: 'video/mp4',
-                fileName: `${String(titulo).replace(/[^\w\s.-]/g, '').slice(0, 80)}.mp4`,
+                fileName: `${nombreSeguro(titulo)}.mp4`,
                 caption
             }, { quoted: msg });
         } else {
-            await sock.sendMessage(msg.key.remoteJid, {
+            await sock.sendMessage(jid, {
                 video: buffer,
                 mimetype: 'video/mp4',
                 caption
@@ -234,7 +385,7 @@ async function procesarVideo(sock, msg, video, responder) {
         }
     } catch (error) {
         console.error('[PLAY-VIDEO] Error:', error?.message || error);
-        await responder.texto(
+        await responder?.texto(
             '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃ No se pudo enviar el video.\n' +
             '┃\n' +
@@ -277,13 +428,6 @@ export default {
             const video = await buscarYouTube(query);
 
             global.playSessions[sender] = { jid, video, timestamp: Date.now() };
-
-            const ahora = Date.now();
-            for (const key of Object.keys(global.playSessions)) {
-                if (ahora - global.playSessions[key].timestamp > 600000) {
-                    delete global.playSessions[key];
-                }
-            }
 
             const caption =
                 '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
