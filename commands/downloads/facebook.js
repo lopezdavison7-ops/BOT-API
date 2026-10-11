@@ -79,8 +79,7 @@ export default {
                         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     ).catch(() => {});
                 });
-            } catch (e) {
-
+            } catch (e) {}
         } catch (error) {
             console.error('[FB] Error:', error?.message || error);
             await responder.texto('❌ Error procesando el video: ' + (error?.message || 'Intenta de nuevo'));

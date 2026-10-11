@@ -35,15 +35,11 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
     if (imagen) {
-        try {
         await responder.imagen({ url: imagen }, caption).catch(() => {
             responder.texto(caption).catch(() => {});
         });
     } else {
         await responder.texto(caption).catch(() => {});
-    }
-    } else {
-        await responder.texto(caption);
     }
 
     try {
