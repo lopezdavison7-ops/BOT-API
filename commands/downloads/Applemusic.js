@@ -2,29 +2,25 @@
 
 const API_BUSCAR = 'https://api.delirius.online/search/applemusic?query=';
 const API_DESCARGAR = 'https://api.delirius.online/download/applemusic?url=';
+const API_YT_SEARCH = 'https://api.delirius.online/search/ytsearch?q=';
+const API_YT_MP3 = 'https://api.delirius.online/download/ytmp3?url=';
 
-async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
-    const res = await fetch(API_DESCARGAR + encodeURIComponent(urlCancion), { signal: AbortSignal.timeout(15000) });
-    const json = await res.json();
+const CABECERA = '╭━━〔 🎵 𝐀𝐏𝐏𝐋𝐄 𝐌𝐔𝐒𝐈𝐂 〕━━⬣\n';
+const PIE = '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-    const d = json.data || json.datos;
-
-    if (!json.status || !d) {
-        return await responder.texto('❌ No se pudo procesar la canción.\nVerifica que el enlace sea válido.');
+function queryDesdeUrl(url) {
+    const coincidencia = String(url || '').match(/\/album\/([^/]+)\//);
+    if (!coincidencia) return '';
+    try {
+        return decodeURIComponent(coincidencia[1]).replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+    } catch {
+        return coincidencia[1].replace(/-/g, ' ').trim();
     }
+}
 
-    const titulo = d.title || d.título || 'Sin título';
-    const artista = d.artist || d.artista || 'Desconocido';
-    const album = d.album || d.álbum || null;
-    const imagen = d.image || d.imagen || null;
-    const link = d.download || d.descargar || null;
-
-    if (!link) {
-        return await responder.texto('❌ La API no devolvió link de descarga.');
-    }
-
+async function enviarAudio(sock, msg, jid, { buffer, link, titulo, artista, album, imagen, responder }) {
     const caption =
-        '╭━━〔 🎵 𝐀𝐏𝐏𝐋𝐄 𝐌𝐔𝐒𝐈𝐂 〕━━⬣\n' +
+        CABECERA +
         '┃\n' +
         '┃ 🎶 *' + titulo + '*\n' +
         '┃ 🎤 ' + artista + '\n' +
@@ -32,7 +28,7 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         '┃\n' +
         '┃ 📥 Enviando audio...\n' +
         '┃\n' +
-        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+        PIE;
 
     if (imagen) {
         await responder.imagen({ url: imagen }, caption).catch(() => {
@@ -42,21 +38,26 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
         await responder.texto(caption).catch(() => {});
     }
 
+    const nombreArchivo = (titulo + ' - ' + artista).slice(0, 120) + '.mp3';
+
+    if (buffer) {
+        return await sock.sendMessage(
+            jid,
+            { audio: buffer, mimetype: 'audio/mpeg', fileName: nombreArchivo, ptt: false },
+            { quoted: msg }
+        );
+    }
+
     try {
         await sock.sendMessage(
             jid,
-            {
-                audio: { url: link },
-                mimetype: 'audio/mpeg',
-                fileName: titulo + ' - ' + artista + '.mp3',
-                ptt: false
-            },
+            { audio: { url: link }, mimetype: 'audio/mpeg', fileName: nombreArchivo, ptt: false },
             { quoted: msg }
         );
     } catch (errorAudio) {
         console.error('[APPLEMUSIC] Error por URL:', errorAudio?.message || errorAudio);
 
-        const resAudio = await fetch(link);
+        const resAudio = await fetch(link, { signal: AbortSignal.timeout(60000) });
         if (!resAudio.ok) throw new Error('HTTP ' + resAudio.status + ' descargando audio');
 
         const buffer = Buffer.from(await resAudio.arrayBuffer());
@@ -64,15 +65,90 @@ async function descargarYEnviar(sock, msg, jid, urlCancion, responder) {
 
         await sock.sendMessage(
             jid,
-            {
-                audio: buffer,
-                mimetype: 'audio/mpeg',
-                fileName: titulo + ' - ' + artista + '.mp3',
-                ptt: false
-            },
+            { audio: buffer, mimetype: 'audio/mpeg', fileName: nombreArchivo, ptt: false },
             { quoted: msg }
         );
     }
+}
+
+async function descargarDesdeYouTube(sock, msg, jid, query, meta, responder) {
+    const texto = String(query || '').trim();
+    if (!texto) {
+        return await responder.texto('❌ No se pudo obtener información de la canción.');
+    }
+
+    const bus = await fetch(API_YT_SEARCH + encodeURIComponent(texto), { signal: AbortSignal.timeout(15000) });
+    const busJson = await bus.json();
+    const resultados = busJson.data || busJson.datos;
+
+    if (!busJson.status || !Array.isArray(resultados) || resultados.length === 0) {
+        return await responder.texto('❌ No se pudo procesar la canción.\nVerifica que el enlace sea válido.');
+    }
+
+    const video = resultados.find(v => (v.type || v.tipo) === 'video' && !(v.isLive || v.enVivo)) || resultados[0];
+    const videoUrl = video.url || (video.videoId ? 'https://www.youtube.com/watch?v=' + video.videoId : null);
+
+    if (!videoUrl) {
+        return await responder.texto('❌ No se pudo procesar la canción.\nVerifica que el enlace sea válido.');
+    }
+
+    const info = await fetch(API_YT_MP3 + encodeURIComponent(videoUrl), { signal: AbortSignal.timeout(20000) });
+    const infoJson = await info.json();
+    const d = infoJson.data || infoJson.datos;
+
+    if (!infoJson.status || !d || !d.download) {
+        return await responder.texto('❌ No se pudo procesar la canción.\nVerifica que el enlace sea válido.');
+    }
+
+    const descarga = await fetch(d.download, { signal: AbortSignal.timeout(90000) });
+    if (!descarga.ok) {
+        return await responder.texto('❌ No se pudo descargar el audio (HTTP ' + descarga.status + ').');
+    }
+
+    const buffer = Buffer.from(await descarga.arrayBuffer());
+    if (!buffer.length) {
+        return await responder.texto('❌ El audio vino vacío.');
+    }
+
+    return await enviarAudio(sock, msg, jid, {
+        buffer,
+        titulo: meta?.titulo || d.title || video.title || 'Sin título',
+        artista: meta?.artista || d.author || video.author?.name || video.author || 'Desconocido',
+        album: meta?.album || null,
+        imagen: meta?.imagen || video.image || video.thumbnail || null,
+        responder
+    });
+}
+
+async function descargarYEnviar(sock, msg, jid, urlCancion, responder, meta) {
+    try {
+        const res = await fetch(API_DESCARGAR + encodeURIComponent(urlCancion), { signal: AbortSignal.timeout(15000) });
+        const json = await res.json();
+        const d = json.data || json.datos;
+
+        if (json.status && d) {
+            const link = d.download || d.descargar || null;
+
+            if (link) {
+                return await enviarAudio(sock, msg, jid, {
+                    link,
+                    titulo: d.title || d.título || meta?.titulo || 'Sin título',
+                    artista: d.artist || d.artista || meta?.artista || 'Desconocido',
+                    album: d.album || d.álbum || meta?.album || null,
+                    imagen: d.image || d.imagen || meta?.imagen || null,
+                    responder
+                });
+            }
+        }
+    } catch (error) {
+        console.error('[APPLEMUSIC] Falló API Apple, usando respaldo:', error?.message || error);
+    }
+
+    const query = meta?.titulo
+        ? (meta.artista ? meta.titulo + ' ' + meta.artista : meta.titulo)
+        : queryDesdeUrl(urlCancion);
+
+    return await descargarDesdeYouTube(sock, msg, jid, query, meta, responder);
 }
 
 export default {
@@ -110,7 +186,7 @@ export default {
             }
 
             try {
-                await descargarYEnviar(s, msg, chatJid, cancion.url, responder);
+                await descargarYEnviar(s, msg, chatJid, cancion.url, responder, cancion);
             } catch (error) {
                 console.error('[APPLEMUSIC] Error:', error?.message || error);
                 await responder.texto('❌ Error descargando: ' + (error?.message || 'Intenta de nuevo'));
@@ -144,7 +220,12 @@ export default {
                 const unica = lista[0];
                 const urlUnica = unica.url || unica.enlace;
                 if (urlUnica) {
-                    return await descargarYEnviar(s, msg, chatJid, urlUnica, responder);
+                    return await descargarYEnviar(s, msg, chatJid, urlUnica, responder, {
+                        titulo: unica.title || unica.título || null,
+                        artista: unica.artist || unica.artista || null,
+                        album: unica.album || null,
+                        imagen: unica.image || unica.imagen || null
+                    });
                 }
             }
 
@@ -161,6 +242,7 @@ export default {
                 global.amMap[jid][i + 1] = {
                     titulo: item.title || item.título || 'Sin título',
                     artista: item.artist || item.artista || 'Desconocido',
+                    album: item.album || null,
                     imagen: item.image || item.imagen || null,
                     url: item.url || item.enlace || null
                 };

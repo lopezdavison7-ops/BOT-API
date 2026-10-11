@@ -26,18 +26,32 @@ export default {
             return await responder.texto('❌ La URL debe ser de Facebook');
         }
 
+        if (/facebook\.com\/share\/v\/?$/i.test(url) || /facebook\.com\/share\/r\/?$/i.test(url)) {
+            return await responder.texto(
+                '❌ El enlace está incompleto.\n' +
+                '👉 Copia el enlace completo desde la app.\n' +
+                'Ej: https://www.facebook.com/share/v/XXXXXXXX/'
+            );
+        }
+
         try {
             const apiUrl = `https://api.delirius.online/download/facebook?url=${encodeURIComponent(url)}`;
-            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(20000) });
 
-            if (!res.ok) {
-                return await responder.texto('❌ Error al conectar con la API');
-            }
+            let json = null;
+            try {
+                json = await res.json();
+            } catch {}
 
-            const json = await res.json();
-
-            if (!json.status || !json.list || json.list.length === 0) {
-                return await responder.texto('❌ No se pudo procesar el video. Verifica que la URL sea correcta.');
+            if (!json || json.status === false || !Array.isArray(json.list) || json.list.length === 0) {
+                const detalle = json?.msg || json?.message;
+                if (detalle && /status code 500/i.test(detalle)) {
+                    return await responder.texto('❌ El enlace no es válido o el video ya no está disponible.');
+                }
+                if (detalle) {
+                    return await responder.texto('❌ No se pudo procesar el video: ' + detalle);
+                }
+                return await responder.texto('❌ Error al conectar con la API (' + res.status + ')');
             }
 
             const mejorCalidad = json.list[0];
