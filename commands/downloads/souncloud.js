@@ -3,6 +3,9 @@ import https from 'node:https';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
+const API_SEARCH = 'https://api.delirius.online/search/soundcloud?q=';
+const API_DOWNLOAD = 'https://api.delirius.online/download/soundcloud?url=';
+
 function pick(obj, keys) {
     if (!obj) return undefined;
     for (const k of keys) {
@@ -35,7 +38,12 @@ async function downloadAndSend(track, sock, jid, msg) {
         const data = await res.json();
 
         const info = pick(data, ['datos', 'data', 'result']) || {};
+
         const downloadUrl = pick(info, ['descargar', 'download', 'url', 'dl', 'audio', 'mp3']);
+        const titulo = pick(info, ['título', 'title', 'titulo', 'name']) || track.titulo;
+        const autor = pick(info, ['autor', 'author', 'artist', 'username']) || track.artista;
+        const imagen = pick(info, ['imagen', 'image', 'thumbnail', 'artwork']) || track.imagen;
+        const duracion = Number(pick(info, ['duración', 'duration', 'duration_ms', 'dur']) || track.duracion || 0);
 
         if (!downloadUrl) {
             throw new Error('La API no devolvió link de descarga');
@@ -54,22 +62,33 @@ async function downloadAndSend(track, sock, jid, msg) {
 
         if (buffer.length < 1000) throw new Error('Buffer vacío');
 
-        const cleanTitle = String(track.titulo || 'track').replace(/[^\w\s.-]/g, '').trim().slice(0, 40);
-        const cleanAuthor = String(track.artista || 'soundcloud').replace(/[^\w\s.-]/g, '').trim().slice(0, 20);
+        const cleanTitle = String(titulo || 'track').replace(/[^\w\s.-]/g, '').trim().slice(0, 40);
+        const cleanAuthor = String(autor || 'soundcloud').replace(/[^\w\s.-]/g, '').trim().slice(0, 20);
         const fileName = `${cleanTitle} - ${cleanAuthor}.mp3`;
+
+        const caption =
+            '╭━━〔  𝐒𝐎𝐔𝐍𝐃𝐂𝐋𝐎𝐔𝐃 〕━━⬣\n' +
+            '┃\n' +
+            '┃ 🎧 *' + titulo + '*\n' +
+            '┃ 👤 ' + autor + '\n' +
+            (duracion ? '┃ ⏱️ ' + formatDuration(duracion) + '\n' : '') +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+        if (imagen) {
+            try {
+                await sock.sendMessage(jid, {
+                    image: { url: imagen },
+                    caption
+                }, { quoted: msg });
+            } catch {}
+        }
 
         await sock.sendMessage(jid, {
             document: buffer,
             mimetype: 'audio/mpeg',
             fileName: fileName,
-            caption:
-                '╭━━〔  𝐒𝐎𝐔𝐍𝐃𝐂𝐋𝐎𝐔𝐃 〕━━⬣\n' +
-                '┃\n' +
-                '┃ 🎧 *' + track.titulo + '*\n' +
-                '┃ 👤 ' + track.artista + '\n' +
-                '┃ ⏱️ ' + formatDuration(track.duracion) + '\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            caption
         }, { quoted: msg });
 
     } catch (error) {
@@ -99,7 +118,7 @@ export default {
                 '┃ 💡 Ejemplo:\n' +
                 '┃ ➪ .sc dalex hola\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
