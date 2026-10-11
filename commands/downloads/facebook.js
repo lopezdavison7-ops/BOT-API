@@ -17,7 +17,7 @@ function esFacebookURL(url) {
     return /facebook\.com|fb\.watch/i.test(url);
 }
 
-async function fetchJSON(url, t = 20000) {
+async function fetchJSON(url, t = 25000) {
     const r = await fetch(url, { 
         agent: AGENTE, 
         headers: HEADERS, 
@@ -29,24 +29,23 @@ async function fetchJSON(url, t = 20000) {
 
 async function fbDelirius(url) {
     const apiUrl = `https://api.delirius.online/download/facebook?url=${encodeURIComponent(url)}`;
-    const d = await fetchJSON(apiUrl, 25000);
+    const d = await fetchJSON(apiUrl, 30000);
     
-    if (d.status !== true && d.estado !== true) {
+    if (d.status !== true) {
         throw new Error('Delirius: ' + (d.message || 'Error desconocido'));
     }
     
-    const info = d.data || d.datos || {};
-    const downloadUrl = info.download || info.descarga || info.url;
+    // Delirius devuelve list[] con múltiples calidades
+    const list = d.list || [];
     
-    if (!downloadUrl) {
-        throw new Error('Delirius: sin link de descarga');
+    if (!list.length) {
+        throw new Error('Delirius: no se encontraron videos');
     }
     
-    return [{
-        calidad: info.quality || info.calidad || 'HD',
-        url: downloadUrl,
-        size: info.size || info.tamaño || ''
-    }];
+    return list.map(item => ({
+        calidad: item.quality || 'HD',
+        url: item.url
+    }));
 }
 
 export default {
@@ -79,29 +78,28 @@ export default {
             const links = await fbDelirius(url);
             
             if (links.length === 1) {
+                // Solo una calidad disponible
                 const link = links[0];
                 let caption = 
                     '╭━━〔 📹 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 〕━━⬣\n' +
                     '┃\n' +
                     '┃ ✅ Video listo para descargar\n' +
                     '┃\n' +
-                    '┃ 📊 Calidad › *' + link.calidad + '*\n';
-                
-                if (link.size) {
-                    caption += '┃ 📦 Tamaño › ' + link.size + '\n';
-                }
-                
-                caption += 
+                    '┃ 📊 Calidad › *' + link.calidad + '*\n' +
                     '┃ 📡 Fuente › Delirius API\n' +
                     '┃\n' +
                     '┃ 🔗 Link de descarga:\n' +
                     '┃ ' + link.url + '\n' +
+                    '┃\n' +
+                    '┃ 💡 Copia el link y pégalo en\n' +
+                    '┃    tu navegador\n' +
                     '┃\n' +
                     '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
                 await sock.sendMessage(jid, { text: caption }, { quoted: msg });
                 
             } else {
+                // Múltiples calidades disponibles
                 let cap =
                     '╭━━〔 📹 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 〕━━⬣\n' +
                     '┃\n' +
@@ -113,11 +111,10 @@ export default {
 
                 links.forEach((link, i) => {
                     cap += '┃ *' + (i + 1) + '.* ' + link.calidad + '\n';
-                    if (link.size) cap += '┃    📦 ' + link.size + '\n';
                     cap += '┃ ' + link.url + '\n┃\n';
                 });
 
-                cap += '┃ 💡 Responde con el número\n┃    para descargar\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+                cap += '┃ 💡 Copia el link de la calidad\n┃    que prefieras\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
                 await sock.sendMessage(jid, { text: cap }, { quoted: msg });
             }
