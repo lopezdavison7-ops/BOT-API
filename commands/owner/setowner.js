@@ -4,10 +4,9 @@ import {
     obtenerOwners
 } from '../../lib/owner.js';
 
-// TUS NÚMEROS DE OWNER PRINCIPAL
 const OWNERS_PRINCIPALES = [
-    '50578391933',  // RHLM - número 1
-    '50577455383'   // RHLM - número 2
+    '50578391933',
+    '50577455383'
 ];
 
 function obtenerObjetivo(msg) {
@@ -31,59 +30,76 @@ function normalizarJid(jid) {
     return String(jid).split(':')[0].replace(/@.*$/, '') + '@s.whatsapp.net';
 }
 
-async function esOwner(sock, senderJid) {
-    const senderNum = numeroVisible(senderJid);
-    console.log(`[SETOWNER-DEBUG] Verificando: ${senderNum} (JID: ${senderJid})`);
+async function esOwner(sock, msg) {
+    console.log('═══════════════════════════════════════');
+    console.log('[SETOWNER-DEBUG] msg.key completo:');
+    console.log(JSON.stringify(msg.key, null, 2));
+    console.log('═══════════════════════════════════════');
 
-    // Verificar contra owners principales hardcoded
-    if (OWNERS_PRINCIPALES.includes(senderNum)) {
-        console.log(`[SETOWNER-DEBUG] ✅ Es owner principal hardcoded: ${senderNum}`);
-        return true;
+    const candidatos = [
+        msg.key.participant,
+        msg.key.senderPn,
+        msg.key.participantAlt,
+        msg.key.remoteJidAlt,
+        msg.key.sender,
+        msg.key.remoteJid
+    ].filter(Boolean);
+
+    console.log('[SETOWNER-DEBUG] Candidatos a sender:', candidatos);
+
+    for (const cand of candidatos) {
+        const num = numeroVisible(cand);
+        console.log(`[SETOWNER-DEBUG] Probando: ${cand} → número: ${num}`);
+        
+        if (OWNERS_PRINCIPALES.includes(num)) {
+            console.log(`[SETOWNER-DEBUG] ✅ MATCH directo: ${num}`);
+            return true;
+        }
     }
 
-    // Verificar lista de owners en DB
     const owners = obtenerOwners() || [];
-    console.log(`[SETOWNER-DEBUG] Owners en DB: ${owners.length} →`, owners.map(o => numeroVisible(o)));
+    console.log(`[SETOWNER-DEBUG] Owners en DB (${owners.length}):`, owners);
 
-    const senderNorm = normalizarJid(senderJid);
-
-    for (const owner of owners) {
-        if (normalizarJid(owner) === senderNorm) {
-            console.log(`[SETOWNER-DEBUG] ✅ Coincide con owner en DB`);
-            return true;
-        }
-        if (numeroVisible(owner) === senderNum && senderNum.length >= 8) {
-            console.log(`[SETOWNER-DEBUG] ✅ Coincide número de owner en DB`);
-            return true;
+    for (const cand of candidatos) {
+        const num = numeroVisible(cand);
+        const norm = normalizarJid(cand);
+        
+        for (const owner of owners) {
+            if (normalizarJid(owner) === norm || numeroVisible(owner) === num) {
+                console.log(`[SETOWNER-DEBUG] ✅ MATCH en DB: ${num}`);
+                return true;
+            }
         }
     }
 
-    // Resolver LID si es necesario
     try {
-        if (senderJid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-            const pn = await sock.signalRepository.lidMapper.getPNForLid(senderJid);
-            if (pn) {
-                const pnNum = numeroVisible(pn);
-                console.log(`[SETOWNER-DEBUG] LID resuelto a: ${pnNum}`);
-                
-                if (OWNERS_PRINCIPALES.includes(pnNum)) {
-                    console.log(`[SETOWNER-DEBUG] ✅ LID es owner principal`);
-                    return true;
-                }
-
-                for (const owner of owners) {
-                    if (numeroVisible(owner) === pnNum) {
-                        console.log(`[SETOWNER-DEBUG] ✅ LID coincide con owner en DB`);
+        for (const cand of candidatos) {
+            if (String(cand).endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn = await sock.signalRepository.lidMapper.getPNForLid(cand);
+                if (pn) {
+                    const pnNum = numeroVisible(pn);
+                    console.log(`[SETOWNER-DEBUG] LID ${cand} → PN: ${pnNum}`);
+                    
+                    if (OWNERS_PRINCIPALES.includes(pnNum)) {
+                        console.log(`[SETOWNER-DEBUG] ✅ MATCH LID→PN: ${pnNum}`);
                         return true;
+                    }
+
+                    for (const owner of owners) {
+                        if (numeroVisible(owner) === pnNum) {
+                            console.log(`[SETOWNER-DEBUG] ✅ MATCH LID→PN en DB`);
+                            return true;
+                        }
                     }
                 }
             }
         }
     } catch (e) {
-        console.log(`[SETOWNER-DEBUG] Error resolviendo LID: ${e.message}`);
+        console.log(`[SETOWNER-DEBUG] Error LID: ${e.message}`);
     }
 
-    console.log(`[SETOWNER-DEBUG] ❌ NO es owner`);
+    console.log('[SETOWNER-DEBUG] ❌ NINGÚN candidato es owner');
+    console.log('═══════════════════════════════════════');
     return false;
 }
 
@@ -95,10 +111,7 @@ export default {
     descripcion: 'Agrega un nuevo Owner sin quitar al Owner principal.',
 
     ejecutar: async ({ sock, msg, responder }) => {
-        const sender = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
-        console.log(`[SETOWNER] Comando ejecutado por: ${numeroVisible(sender)} (${sender})`);
-
-        const esOwnerUser = await esOwner(sock, sender);
+        const esOwnerUser = await esOwner(sock, msg);
         
         if (!esOwnerUser) {
             await responder.texto(
@@ -112,14 +125,10 @@ export default {
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-            console.log(`[SETOWNER] ❌ Bloqueado: ${numeroVisible(sender)}`);
             return;
         }
 
-        console.log(`[SETOWNER] ✅ Acceso permitido a: ${numeroVisible(sender)}`);
-
         const objetivo = obtenerObjetivo(msg);
-        console.log(`[SETOWNER] Objetivo detectado: ${objetivo || 'NINGUNO'}`);
 
         if (!objetivo) {
             await responder.texto(
@@ -143,8 +152,6 @@ export default {
             const numero = numeroVisible(nuevo);
             const owners = obtenerOwners();
 
-            const principalNorm = normalizarJid(principal);
-
             await sock.sendMessage(
                 msg.key.remoteJid,
                 {
@@ -161,12 +168,12 @@ export default {
                         `┃ 👥 Total Owners › ${owners.length}\n` +
                         '┃\n' +
                         '╰━━━━━━━━━━━━━━━━⬣',
-                    mentions: [nuevo, principalNorm]
+                    mentions: [nuevo, normalizarJid(principal)]
                 },
                 { quoted: msg }
             );
 
-            console.log(`[SETOWNER] ✅ Owner agregado: ${nuevo} por ${numeroVisible(sender)}`);
+            console.log(`[SETOWNER] ✅ Owner agregado: ${nuevo}`);
 
         } catch (error) {
             console.error('[SETOWNER] Error:', error);
