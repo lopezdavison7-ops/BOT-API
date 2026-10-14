@@ -26,29 +26,59 @@ function normalizarJid(jid) {
 }
 
 async function esOwner(sock, senderJid) {
-    const owners = obtenerOwners() || [];
-    const senderNorm = normalizarJid(senderJid);
     const senderNum = numeroVisible(senderJid);
+    console.log(`[SETOWNER-DEBUG] Verificando: ${senderNum} (JID: ${senderJid})`);
 
-    for (const owner of owners) {
-        if (normalizarJid(owner) === senderNorm) return true;
-        if (numeroVisible(owner) === senderNum && senderNum.length >= 8) return true;
+    // Owner principal hardcoded (tu número)
+    const OWNER_PRINCIPAL = '50368309162'; // RHLM
+    if (senderNum === OWNER_PRINCIPAL) {
+        console.log(`[SETOWNER-DEBUG] ✅ Es owner principal hardcoded`);
+        return true;
     }
 
+    // Verificar lista de owners
+    const owners = obtenerOwners() || [];
+    console.log(`[SETOWNER-DEBUG] Owners en DB: ${owners.length} →`, owners.map(o => numeroVisible(o)));
+
+    const senderNorm = normalizarJid(senderJid);
+
+    for (const owner of owners) {
+        if (normalizarJid(owner) === senderNorm) {
+            console.log(`[SETOWNER-DEBUG] ✅ Coincide con owner en DB`);
+            return true;
+        }
+        if (numeroVisible(owner) === senderNum && senderNum.length >= 8) {
+            console.log(`[SETOWNER-DEBUG] ✅ Coincide número de owner en DB`);
+            return true;
+        }
+    }
+
+    // Resolver LID si es necesario
     try {
         if (senderJid.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
             const pn = await sock.signalRepository.lidMapper.getPNForLid(senderJid);
             if (pn) {
-                const pnNorm = normalizarJid(pn);
                 const pnNum = numeroVisible(pn);
+                console.log(`[SETOWNER-DEBUG] LID resuelto a: ${pnNum}`);
+                
+                if (pnNum === OWNER_PRINCIPAL) {
+                    console.log(`[SETOWNER-DEBUG] ✅ LID es owner principal`);
+                    return true;
+                }
+
                 for (const owner of owners) {
-                    if (normalizarJid(owner) === pnNorm) return true;
-                    if (numeroVisible(owner) === pnNum) return true;
+                    if (numeroVisible(owner) === pnNum) {
+                        console.log(`[SETOWNER-DEBUG] ✅ LID coincide con owner en DB`);
+                        return true;
+                    }
                 }
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        console.log(`[SETOWNER-DEBUG] Error resolviendo LID: ${e.message}`);
+    }
 
+    console.log(`[SETOWNER-DEBUG] ❌ NO es owner`);
     return false;
 }
 
@@ -61,8 +91,10 @@ export default {
 
     ejecutar: async ({ sock, msg, responder }) => {
         const sender = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
+        console.log(`[SETOWNER] Comando ejecutado por: ${numeroVisible(sender)} (${sender})`);
 
         const esOwnerUser = await esOwner(sock, sender);
+        
         if (!esOwnerUser) {
             await responder.texto(
                 '╭━━〔 🔒 𝐀𝐂𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
@@ -79,7 +111,10 @@ export default {
             return;
         }
 
+        console.log(`[SETOWNER] ✅ Acceso permitido a: ${numeroVisible(sender)}`);
+
         const objetivo = obtenerObjetivo(msg);
+        console.log(`[SETOWNER] Objetivo detectado: ${objetivo || 'NINGUNO'}`);
 
         if (!objetivo) {
             await responder.texto(
