@@ -59,15 +59,6 @@ async function esOwner(sock, msg) {
     }
 
     try {
-        const db = cargarDB();
-        const ownersDb = db.owners || [];
-        for (const cand of candidatos) {
-            const n = numeroVisible(cand);
-            if (ownersDb.some(o => numeroVisible(o) === n)) return true;
-        }
-    } catch (e) {}
-
-    try {
         for (const cand of candidatos) {
             if (String(cand).endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
                 const pn = await sock.signalRepository.lidMapper.getPNForLid(cand);
@@ -84,13 +75,13 @@ export default {
     categoria: 'Economy',
     alias: ['darcoins', 'sumarcoins', 'quitarcoins', 'restarcoins', 'removecoins'],
     owner: true,
-    descripcion: 'Agrega o quita coins a un usuario (solo owner)',
+    descripcion: 'Agrega o quita coins (dinero + banco) a un usuario',
     uso: '.addcoins 5000 @user',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         if (!(await esOwner(sock, msg))) {
             return await responder.texto(
-                '╭━━〔 🔒 𝐀𝐂𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
+                '╭━━〔  𝐀𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ⛔ Este comando es exclusivo\n' +
                 '┃    para el *Owner principal*\n' +
@@ -123,7 +114,7 @@ export default {
                 '┃ ➪ .quitarcoins 500 @user\n' +
                 '┃ ➪ .addcoins 5000 (a ti mismo)\n' +
                 '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
@@ -152,29 +143,49 @@ export default {
         const db = cargarDB();
         if (!db[target]) db[target] = { dinero: 0, banco: 0, nombre: '' };
 
-        const antes = num(db[target].dinero);
-        let despues = antes + Math.round(monto);
-        if (despues < 0) despues = 0;
-        db[target].dinero = despues;
+        const dineroAntes = num(db[target].dinero);
+        const bancoAntes = num(db[target].banco);
+        const totalAntes = dineroAntes + bancoAntes;
+
+        let dinero = dineroAntes;
+        let banco = bancoAntes;
+        const cambio = Math.round(monto);
+
+        if (cambio >= 0) {
+            dinero += cambio;
+        } else {
+            let porQuitar = -cambio;
+            const deDinero = Math.min(dinero, porQuitar);
+            dinero -= deDinero;
+            porQuitar -= deDinero;
+            if (porQuitar > 0) {
+                banco = Math.max(0, banco - porQuitar);
+            }
+        }
+
+        db[target].dinero = dinero;
+        db[target].banco = banco;
         guardarDB(db);
 
+        const totalDespues = dinero + banco;
         const numTarget = numeroVisible(target);
-        const accion = monto >= 0 ? '➕ Agregaste' : '➖ Quitaste';
+        const accion = cambio >= 0 ? '➕ Agregaste' : '➖ Quitaste';
 
         await sock.sendMessage(jid, {
             text:
-                '╭━━〔 💰 𝐂𝐎𝐈𝐍𝐒 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐃𝐎𝐒 〕━━⬣\n' +
+                '╭━━〔  𝐂𝐈𝐍𝐒 𝐀𝐂𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐃𝐎𝐒 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ' + accion + ' › *' + fmt(Math.abs(Math.round(monto))) + '*\n' +
+                '┃ ' + accion + ' › *' + fmt(Math.abs(cambio)) + '*\n' +
                 '┃  Usuario › @' + numTarget + '\n' +
                 '┃\n' +
-                '┃ 💵 Saldo anterior › ' + fmt(antes) + '\n' +
-                '┃ 💵 Saldo nuevo › *' + fmt(despues) + '*\n' +
+                '┃ 👛 Dinero › ' + fmt(dineroAntes) + ' → *' + fmt(dinero) + '*\n' +
+                '┃ 🏦 Banco › ' + fmt(bancoAntes) + ' → *' + fmt(banco) + '*\n' +
+                '┃ 💎 Total › ' + fmt(totalAntes) + ' → *' + fmt(totalDespues) + '*\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣',
             mentions: [target]
         }, { quoted: msg });
 
-        console.log(`[ADDCOINS] ${numeroVisible(msg.key.participant || msg.key.remoteJid)} → ${monto >= 0 ? '+' : ''}${Math.round(monto)} a @${numTarget}`);
+        console.log(`[ADDCOINS] ${numeroVisible(msg.key.participant || msg.key.remoteJid)} → ${cambio >= 0 ? '+' : ''}${cambio} a @${numTarget} (total: ${totalDespues})`);
     }
 };
