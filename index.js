@@ -1,12 +1,9 @@
-
-
 import 'dotenv/config';
 
 import * as baileysNS from 'baileys';
 import { Boom } from '@hapi/boom';
 import Fastify from 'fastify';
 import pino from 'pino';
-import QRCode from 'qrcode';
 import NodeCache from 'node-cache';
 import readline from 'readline';
 import fs from 'fs';
@@ -16,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { handleMessage, cargarComandosHandler } from './handler.js';
 import { manejarDespedida } from './commands/group/despedida.js';
 import { invalidarMetadata } from './lib/grupos.js';
+import { bienvenidaActivada, construirWelcome } from './lib/bienvenidaStore.js';
 import './lib/logs.js';
 
 const baileys = baileysNS.default ?? baileysNS;
@@ -33,9 +31,7 @@ if (typeof makeWASocket !== 'function') {
 const PORT = Number(process.env.PORT) || 3000;
 const AUTH_FOLDER = './auth_info';
 
-let metodoConexion = null;
 let numeroTelefono = null;
-let ultimoQR = null;
 let intentos = 0;
 let iniciando = false;
 
@@ -109,67 +105,12 @@ app.post('/guardar', async (req, reply) => {
     }
 });
 
-app.get('/qr', async (req, reply) => {
-    if (!ultimoQR) {
-        return reply.type('text/html').send(`
-            <!doctype html>
-            <html>
-            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOT-API</title></head>
-            <body style="background:#0b0b12;color:#fff;font-family:Arial;text-align:center;padding:40px;">
-                <h2>🤖 BOT-API</h2>
-                <p>No hay un QR disponible.</p>
-                <p>Actualiza la página en unos segundos.</p>
-            </body>
-            </html>
-        `);
-    }
-    try {
-        const imagen = await QRCode.toDataURL(ultimoQR);
-        return reply.type('text/html').send(`
-            <!doctype html>
-            <html>
-            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOT-API QR</title></head>
-            <body style="background:linear-gradient(135deg,#080812,#15152b);color:#fff;font-family:Arial;text-align:center;padding:30px;">
-                <h1>🤖 BOT-API</h1>
-                <h2>📱 Escanea el QR</h2>
-                <p>WhatsApp → Dispositivos vinculados</p>
-                <img src="${imagen}" style="width:300px;max-width:90%;background:#fff;padding:10px;border-radius:20px;">
-                <p>Si el QR expira, actualiza la página.</p>
-            </body>
-            </html>
-        `);
-    } catch (error) {
-        console.error('Error creando QR:', error?.message || error);
-        return reply.type('text/html').send('<h2>Error generando QR.</h2>');
-    }
-});
-
 app.listen({ port: PORT, host: '0.0.0.0' })
     .then(() => console.log(`🌐 Servidor activo en puerto ${PORT}`))
     .catch(error => console.error('❌ Error iniciando servidor:', error?.message || error));
 
 const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
 const esperar = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-function preguntarOpcion() {
-    return new Promise(resolve => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        console.log('\n======================================\n             🤖 BOT-API\n======================================\n');
-        console.log('¿Cómo quieres conectar el bot?\n');
-        console.log('1️⃣ Código de emparejamiento');
-        console.log('2️⃣ Código QR\n');
-        rl.question('👉 Escribe 1 o 2: ', respuesta => {
-            rl.close();
-            const opcion = respuesta.trim();
-            if (opcion !== '1' && opcion !== '2') {
-                console.log('❌ Opción inválida.');
-                resolve(preguntarOpcion());
-                return;
-            }
-            resolve(opcion);
-        });
-    });
-}
 
 function preguntarNumero() {
     return new Promise(resolve => {
@@ -186,22 +127,16 @@ function preguntarNumero() {
 }
 
 async function configurarConexion() {
-    metodoConexion = await preguntarOpcion();
-    if (metodoConexion === '1') {
-        numeroTelefono = await preguntarNumero();
-        if (!numeroTelefono || numeroTelefono.length < 8 || numeroTelefono.length > 15) {
-            console.log('❌ Número inválido.');
-            return configurarConexion();
-        }
-        console.log('\n✅ Número aceptado.\n⏳ Preparando código...');
-    } else {
-        numeroTelefono = null;
-        console.log('\n📱 Preparando conexión mediante QR...');
+    numeroTelefono = await preguntarNumero();
+    if (!numeroTelefono || numeroTelefono.length < 8 || numeroTelefono.length > 15) {
+        console.log('❌ Número inválido.');
+        return configurarConexion();
     }
+    console.log('\n✅ Número aceptado.\n⏳ Preparando código de emparejamiento...');
 }
 
 async function generarCodigo(sock) {
-    if (metodoConexion !== '1' || !numeroTelefono) return;
+    if (!numeroTelefono) return;
     try {
         await esperar(3000);
         if (sock.authState?.creds?.registered) return;
@@ -228,7 +163,6 @@ async function iniciarBot() {
         if (!state.creds.registered) {
             await configurarConexion();
         } else {
-            metodoConexion = 'sesion';
             console.log('\n✅ Sesión existente encontrada.\n🔄 Conectando automáticamente...');
         }
         let version;
@@ -292,6 +226,8 @@ async function iniciarBot() {
             try {
                 if (action !== 'add' || !Array.isArray(participants) || participants.length === 0) return;
 
+                if (!bienvenidaActivada(id)) return;
+
                 let metadata;
                 try {
                     metadata = await sock.groupMetadata(id);
@@ -301,6 +237,7 @@ async function iniciarBot() {
                 }
 
                 const nombreGrupo = metadata?.subject || 'este grupo';
+                const membersCount = metadata?.participants?.length || 0;
 
                 for (const participante of participants) {
                     try {
@@ -372,6 +309,14 @@ async function iniciarBot() {
                             nombreUsuario = nombreUsuario.slice(0, 35) + '…';
                         }
 
+                        const w = construirWelcome({
+                            jid: id,
+                            userJid: participanteJid,
+                            userName: nombreUsuario,
+                            groupName: nombreGrupo,
+                            membersCount
+                        });
+
                         let fotoPerfil = null;
 
                         try {
@@ -379,8 +324,6 @@ async function iniciarBot() {
                         } catch {
                             fotoPerfil = null;
                         }
-
-                        const bienvenida = `╭━━━〔 ✨ *BIENVENIDO/A* 〕━━━╮\n┃\n┃ 👤 *${nombreUsuario}*\n┃\n┃ 🎉 ¡Bienvenido/a a\n┃    *${nombreGrupo}*!\n┃\n┃ 🤝 Esperamos que disfrutes\n┃    tu estancia con nosotros.\n┃\n┃ 📜 Escribe *.menu* para\n┃    ver los comandos.\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n              🤖 *BOT-API*`;
 
                         if (fotoPerfil) {
                             try {
@@ -392,8 +335,8 @@ async function iniciarBot() {
                                     if (buffer.length > 0) {
                                         await sock.sendMessage(id, {
                                             image: buffer,
-                                            caption: bienvenida,
-                                            mentions: [participanteJid]
+                                            caption: w.texto,
+                                            mentions: w.mentions
                                         });
 
                                         continue;
@@ -405,8 +348,8 @@ async function iniciarBot() {
                         }
 
                         await sock.sendMessage(id, {
-                            text: bienvenida,
-                            mentions: [participanteJid]
+                            text: w.texto,
+                            mentions: w.mentions
                         });
 
                     } catch (error) {
@@ -419,17 +362,10 @@ async function iniciarBot() {
         });
 
         sock.ev.on('connection.update', async update => {
-            const { connection, lastDisconnect, qr } = update;
-
-            if (qr && metodoConexion === '2') {
-                ultimoQR = qr;
-
-                console.log('\n======================================\n📱 QR GENERADO\n======================================\nAbre la ruta /qr de tu servidor y escanea el QR.\n======================================\n');
-            }
+            const { connection, lastDisconnect } = update;
 
             if (connection === 'open') {
                 intentos = 0;
-                ultimoQR = null;
 
                 console.log('\n======================================\n          ✅ BOT CONECTADO\n======================================\n');
                 console.log('🤖 BOT-API está funcionando.\n🎉 Sistema de bienvenida: ACTIVO\n👋 Sistema de despedida: DISPONIBLE\n🖼️ Foto de perfil: ACTIVA\n\nPrueba: .ping o .menu\n');
@@ -470,7 +406,7 @@ async function iniciarBot() {
             handleMessage(sock, m, '.', listaComandosUnica);
         });
 
-        if (!state.creds.registered && metodoConexion === '1') {
+        if (!state.creds.registered) {
             setTimeout(() => generarCodigo(sock), 4000);
         }
 
