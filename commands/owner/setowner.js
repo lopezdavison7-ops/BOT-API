@@ -4,6 +4,12 @@ import {
     obtenerOwners
 } from '../../lib/owner.js';
 
+// TUS NÚMEROS DE OWNER PRINCIPAL
+const OWNERS_PRINCIPALES = [
+    '50578391933',  // RHLM - número 1
+    '50577455383'   // RHLM - número 2
+];
+
 function obtenerObjetivo(msg) {
     const contexto = msg?.message?.extendedTextMessage?.contextInfo;
     const mencionado = contexto?.mentionedJid?.[0];
@@ -29,14 +35,13 @@ async function esOwner(sock, senderJid) {
     const senderNum = numeroVisible(senderJid);
     console.log(`[SETOWNER-DEBUG] Verificando: ${senderNum} (JID: ${senderJid})`);
 
-    // Owner principal hardcoded (tu número)
-    const OWNER_PRINCIPAL = '50368309162'; // RHLM
-    if (senderNum === OWNER_PRINCIPAL) {
-        console.log(`[SETOWNER-DEBUG] ✅ Es owner principal hardcoded`);
+    // Verificar contra owners principales hardcoded
+    if (OWNERS_PRINCIPALES.includes(senderNum)) {
+        console.log(`[SETOWNER-DEBUG] ✅ Es owner principal hardcoded: ${senderNum}`);
         return true;
     }
 
-    // Verificar lista de owners
+    // Verificar lista de owners en DB
     const owners = obtenerOwners() || [];
     console.log(`[SETOWNER-DEBUG] Owners en DB: ${owners.length} →`, owners.map(o => numeroVisible(o)));
 
@@ -61,7 +66,7 @@ async function esOwner(sock, senderJid) {
                 const pnNum = numeroVisible(pn);
                 console.log(`[SETOWNER-DEBUG] LID resuelto a: ${pnNum}`);
                 
-                if (pnNum === OWNER_PRINCIPAL) {
+                if (OWNERS_PRINCIPALES.includes(pnNum)) {
                     console.log(`[SETOWNER-DEBUG] ✅ LID es owner principal`);
                     return true;
                 }
