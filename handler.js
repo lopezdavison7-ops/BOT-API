@@ -5,7 +5,6 @@ import { manejarMensajeTrivia } from './lib/trivia.js';
 import { manejarMensajeTetris } from './lib/tetris.js';
 import { manejarMensajeAdivinanza } from './lib/adivinanza.js';
 import { manejarMensajeTTT } from './lib/ttt.js';
-import { manejarMemoriaIA } from './lib/memoria.js';
 import { manejarRespuestaAhorcado } from './commands/economy/ahorcado.js';
 import { categoriaActiva } from './lib/categoriaConfig.js';
 import { obtenerAfk, quitarAfk } from './lib/afkStore.js';
@@ -296,11 +295,6 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
             if (fueTTT) return;
         }
 
-        if (!fromMe) {
-            const fueMemoria = await manejarMemoriaIA(sock, msg);
-            if (fueMemoria) return;
-        }
-
         if (!texto) return;
 
         if (/^\d+$/.test(texto.trim())) {
@@ -344,7 +338,7 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
                             '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
                             '┃ 🚫 Comando: ' + prefijo + nombreComando + '\n' +
@@ -352,7 +346,7 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                             '┃ 🟢 Reactiva con:\n' +
                             '┃ ➪ ' + prefijo + 'activar ' + catCmd + '\n' +
                             '┃\n' +
-                            '╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏 ⚡ 〕━━⬣'
+                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
                     return;
                 }
