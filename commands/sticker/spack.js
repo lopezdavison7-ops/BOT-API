@@ -1,292 +1,316 @@
+import fetch from 'node-fetch';
+import https from 'node:https';
 
-
-import axios from 'axios';
-import sharp from 'sharp';
-import config from '../../config.js';
-
-const LEMPI_API = 'https://api.lempi.lat';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-
-const HEADERS = {
-    'User-Agent': USER_AGENT,
-    'Accept': 'application/json',
-    'Content-Type': 'application/json'
+const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
+const HEADERS = { 
+    'Accept': 'application/json', 
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
 const MAX_STICKERS = 15;
+const DELAY_MS = 250;
+const API_SEARCH = 'https://api.delirius.online/search/stickerly';
+const API_DOWNLOAD = 'https://api.delirius.online/download/stickerly';
 
-function truncarTexto(texto, max = 40) {
-    const t = String(texto || '').trim();
-    return t.length > max ? t.substring(0, max - 3) + '...' : t;
-}
+if (!global.spackSessions) global.spackSessions = new Map();
+const SESSION_TTL = 5 * 60 * 1000;
 
-async function buscarStickerPacks(query, apikey) {
-    try {
-        const url = `${LEMPI_API}/s/stickers?q=${encodeURIComponent(query)}&apikey=${apikey}`;
-        const res = await axios.get(url, { headers: HEADERS, timeout: 15000 });
-        const data = res.data;
-
-        if (!data.status || !data.resultados?.length) {
-            return null;
-        }
-
-        return data.resultados.map(p => ({
-            titulo: p.titulo,
-            autor: p.autor,
-            url: p.url,
-            icono: p.icono,
-            animado: p.animado,
-            total: p.total,
-            zip: p.zip,
-            stickers: p.stickers || []
-        }));
-    } catch (e) {
-        console.error('[LEMPI STICKER SEARCH] Error:', e.message);
-        return null;
-    }
-}
-
-async function descargarImagen(url) {
-    try {
-        const res = await axios.get(url, {
-            responseType: 'arraybuffer',
-            headers: { 'User-Agent': USER_AGENT },
-            timeout: 15000,
-            maxContentLength: 10 * 1024 * 1024
-        });
-        return Buffer.from(res.data);
-    } catch (e) {
-        console.error('[DOWNLOAD IMAGE] Error:', e.message);
-        return null;
-    }
-}
-
-async function convertirASticker(buffer) {
-    try {
-        return await sharp(buffer)
-            .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-            .webp({ quality: 90, lossless: false })
-            .toBuffer();
-    } catch (e) {
-        console.error('[CONVERT STICKER] Error:', e.message);
-        return null;
-    }
-}
-
-async function prepararStickers(urls) {
-    console.log(`[SPACK] Preparando ${urls.length} stickers en paralelo...`);
-
-    const resultados = await Promise.allSettled(
-        urls.map(async (url) => {
-            const img = await descargarImagen(url);
-            if (!img) throw new Error('descarga falló');
-
-            const webp = await convertirASticker(img);
-            if (!webp) throw new Error('conversión falló');
-
-            return webp;
-        })
-    );
-
-    const validos = [];
-    resultados.forEach((r, i) => {
-        if (r.status === 'fulfilled') validos.push(r.value);
-        else console.error(`[SPACK] Falló sticker ${i + 1}:`, r.reason?.message || r.reason);
+async function reqJSON(url, timeout = 15000) {
+    const res = await fetch(url, { 
+        agent: AGENTE, 
+        headers: HEADERS, 
+        signal: AbortSignal.timeout(timeout) 
     });
-
-    console.log(`[SPACK] Preparados: ${validos.length}/${urls.length}`);
-    return validos;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
 }
 
-async function enviarComoPack(sock, jid, msg, buffers, nombre) {
-    const nombrePack = truncarTexto(nombre, 25);
-    const publisher = 'BOT-API ⚡';
-
-    if (typeof sock.stickerPackMessage === 'function') {
-        await sock.stickerPackMessage(jid, {
-            name: nombrePack,
-            publisher,
-            stickers: buffers.map(b => ({ data: b, emojis: ['😀'] })),
-            cover: buffers[0]
-        }, { quoted: msg });
-        return 'pack nativo';
-    }
-
-    try {
-        await sock.sendMessage(jid, {
-            stickerPack: {
-                name: nombrePack,
-                publisher,
-                stickers: buffers.map(b => ({ data: b, emojis: ['😀'] })),
-                cover: buffers[0]
-            }
-        }, { quoted: msg });
-        return 'pack nativo';
-    } catch (e) {
-        console.log('[SPACK] Formato stickerPack no soportado:', e.message);
-    }
-
-    await sock.sendMessage(jid, {
-        cover: buffers[0],
-        stickers: buffers.map(b => ({ data: b })),
-        name: `📦 ${nombrePack}`,
-        publisher: `🌟 ${publisher}`,
-        description: 'Pack enviado por BOT-API'
-    }, { quoted: msg });
-
-    return 'pack nativo';
+function esURL(s) {
+    return /sticker\.ly\/s\//i.test(s) || /^https?:\/\//i.test(s);
 }
 
-async function enviarEnBloque(sock, jid, msg, buffers) {
-    let enviados = 0;
+function fmtNum(n) {
+    const num = Number(n) || 0;
+    if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return String(num);
+}
 
-    for (let i = 0; i < buffers.length; i++) {
-        try {
-            await sock.sendMessage(
-                jid,
-                { sticker: buffers[i] },
-                i === 0 ? { quoted: msg } : {}
-            );
-            enviados++;
-        } catch (e) {
-            console.error(`[SPACK] Error enviando sticker ${i + 1}:`, e.message);
-        }
+function limpiarPackName(s) {
+    return String(s).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim().slice(0, 40) || 'BOT-API Pack';
+}
+
+async function buscarPacks(query) {
+    const data = await reqJSON(`${API_SEARCH}?q=${encodeURIComponent(query)}`, 15000);
+    if (data.estado !== true && data.status !== true) {
+        throw new Error('API sin resultados');
     }
+    const lista = data.datos || data.data || [];
+    if (!Array.isArray(lista) || !lista.length) throw new Error('Sin resultados');
+    return lista.slice(0, 8).map(p => ({
+        nombre: p.nombre || p.name || 'Sin nombre',
+        autor: p.autor || p.author || 'Desconocido',
+        stickers: p.sticker_count || 0,
+        vistas: p.view_count || 0,
+        descargas: p.export_count || 0,
+        animado: p.isAnimated || false,
+        preview: p.vista || p.preview || p.vista_previa || '',
+        url: p.url || ''
+    }));
+}
 
-    return enviados;
+async function obtenerPack(url) {
+    const data = await reqJSON(`${API_DOWNLOAD}?url=${encodeURIComponent(url)}`, 20000);
+    if (data.estado !== true && data.status !== true) {
+        throw new Error('API sin datos del pack');
+    }
+    const pack = data.datos || data.data || {};
+    return {
+        nombre: pack.nombre || pack.name || 'Sin nombre',
+        autor: pack.autora || pack.autor || pack.author || 'Desconocido',
+        username: pack.username || '',
+        seguidores: pack.seguidores || 0,
+        privado: pack.isPrivate || false,
+        avatar: pack.avatar || '',
+        total: pack.total || pack.sticker_count || 0,
+        vistas: pack.viewCount || pack.view_count || 0,
+        descargas: pack.exportCount || pack.export_count || 0,
+        animado: pack.isAnimated || false,
+        preview: pack.vista || pack.preview || pack.vista_previa || '',
+        url: pack.url || url,
+        compartir: pack.compartir || pack.share || '',
+        stickers: pack.pegatinas || pack.stickers || []
+    };
+}
+
+async function descargarBuffer(url, timeout = 20000) {
+    const res = await fetch(url, {
+        agent: AGENTE,
+        headers: { ...HEADERS, 'Accept': '*/*' },
+        signal: AbortSignal.timeout(timeout)
+    });
+    if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
+    return Buffer.from(await res.arrayBuffer());
 }
 
 export default {
     nombre: 'spack',
+    categoria: 'Stickers',
+    alias: ['stickerpack', 'stickers', 'packsticker', 'pack', 'stickerly'],
+    descripcion: 'Busca y descarga packs de stickers de Stickerly',
+    uso: '.spack <nombre> | .spack <url> | .spack <número>',
 
-    categoria: 'stickers',
+    ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
+        const query = String(argumento || '').trim();
+        const sender = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
 
-    alias: ['stickerpack', 'stickers', 'pk'],
-
-    descripcion:
-        'Busca y envía un pack de stickers completo. Uso: .spack <tema>',
-
-    ejecutar: async ({ sock, msg, responder, argumento }) => {
-
-        const chatJid = msg.key.remoteJid;
-        const apikey = config.LEMPI_API_KEY || '';
-
-        if (!apikey) {
-            await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂𝐊 〕⬣\n' +
+        if (!query) {
+            return await responder.texto(
+                '╭━━〔 🎨 𝐒𝐓𝐈𝐂𝐊𝐄𝐑 𝐏𝐀𝐂𝐊 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ *API Key de Lempi no configurada.*\n' +
+                '┃ ❌ Escribe el nombre del\n' +
+                '┃    pack o pega la URL\n' +
                 '┃\n' +
-                '┃ Agrega tu key en config.js:\n' +
-                '┃ LEMPI_API_KEY: "tu_key_aqui"\n' +
+                '┃ 💡 Ejemplos:\n' +
+                '┃ ➪ .spack my melody\n' +
+                '┃ ➪ .spack https://sticker.ly/s/XXX\n' +
+                '┃ ➪ .spack 1 (tras buscar)\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-            return;
         }
 
-        const consulta = argumento?.trim();
+        const esNumero = /^\d+$/.test(query);
 
-        if (!consulta) {
-            await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂 〕⬣\n' +
-                '┃\n' +
-                '┃ ❌ *Falta el tema a buscar.*\n' +
-                '┃\n' +
-                '┃ 📌 *Uso:* .spack gatos\n' +
-                '┃ 📌 *Uso:* .spack anime\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
+        if (esNumero) {
+            const num = parseInt(query);
+            const session = global.spackSessions.get(sender);
+
+            if (!session || Date.now() - session.t > SESSION_TTL) {
+                return await responder.texto(
+                    '❌ Sesión expirada. Busca de nuevo:\n➪ *.spack my melody*'
+                );
+            }
+
+            const item = session.resultados[num - 1];
+            if (!item) {
+                return await responder.texto(
+                    '❌ Número inválido. Elige del 1 al ' + session.resultados.length
+                );
+            }
+
+            return await enviarPack(sock, msg, responder, jid, item.url);
         }
 
-        await responder.texto(
-            '╭〔 🔍 𝐒𝐏𝐀𝐂𝐊 〕⬣\n' +
-            '┃\n' +
-            `┃ Buscando packs: *${consulta}*\n` +
-            '┃ 🔎 En Lempi API...\n' +
-            '┃\n' +
-            '╰━━━━━━━━━━━━━━━━⬣'
-        );
-
-        const packs = await buscarStickerPacks(consulta, apikey);
-
-        if (!packs || packs.length === 0) {
-            await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂 〕⬣\n' +
-                '┃\n' +
-                '┃ No se encontraron packs de stickers.\n' +
-                '┃ Intenta con otro tema.\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
+        if (esURL(query)) {
+            await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
+            return await enviarPack(sock, msg, responder, jid, query);
         }
 
-        const pack = packs[0];
-        const urls = pack.stickers.slice(0, MAX_STICKERS);
-        const totalPack = pack.total || pack.stickers.length || urls.length;
-
-        await responder.texto(
-            '╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n' +
-            '┃\n' +
-            `┃ 🎨 *${truncarTexto(pack.titulo)}*\n` +
-            `┃ 👤 @${pack.autor}\n` +
-            `┃ 🖼️ ${totalPack} stickers en total\n` +
-            `┃ ⏳ Preparando ${urls.length} stickers...\n` +
-            '┃\n' +
-            '╰━━━━━━━━━━━━━━━━'
-        );
-
-        const buffers = await prepararStickers(urls);
-
-        if (!buffers.length) {
-            await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂 〕⬣\n' +
-                '┃\n' +
-                '┃ No pude descargar ningún sticker.\n' +
-                '┃ Intenta con otro pack.\n' +
-                '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
-            );
-            return;
-        }
-
-        let enviados = 0;
-        let modo = '';
+        await sock.sendMessage(jid, { react: { text: '🔍', key: msg.key } });
 
         try {
-            modo = await enviarComoPack(sock, chatJid, msg, buffers, pack.titulo || consulta);
-            enviados = buffers.length;
-        } catch (errorPack) {
-            console.error('[SPACK] Pack nativo no soportado por tu Baileys:', errorPack?.message || errorPack);
-            modo = 'bloque';
-            enviados = await enviarEnBloque(sock, chatJid, msg, buffers);
-        }
+            const resultados = await buscarPacks(query);
 
-        if (!enviados) {
+            global.spackSessions.set(sender, { 
+                resultados, 
+                t: Date.now() 
+            });
+
+            let cap =
+                '╭━━〔 🎨 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
+                '┃\n' +
+                '┃ 🔍 *' + query + '*\n' +
+                '┃ 📊 ' + resultados.length + ' packs encontrados\n' +
+                '┃\n';
+
+            resultados.forEach((p, i) => {
+                cap += '┃ *' + (i + 1) + '.* ' + p.nombre.slice(0, 35) + '\n';
+                cap += '┃    👤 ' + p.autor + ' | 📸 ' + p.stickers + '\n';
+                cap += '┃    👁️ ' + fmtNum(p.vistas) + ' | ⬇️ ' + fmtNum(p.descargas);
+                if (p.animado) cap += ' | 🎬 ANIM';
+                cap += '\n';
+                if (i < resultados.length - 1) cap += '┃\n';
+            });
+
+            cap +=
+                '┃\n' +
+                '┣━━〔 📥 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐑 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ➪ .spack 1\n' +
+                '┃ ➪ .spack 2\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+            if (resultados[0]?.preview) {
+                try {
+                    await sock.sendMessage(jid, {
+                        image: { url: resultados[0].preview },
+                        caption: cap
+                    }, { quoted: msg });
+                    return;
+                } catch {}
+            }
+
+            await responder.texto(cap);
+
+        } catch (error) {
+            console.error('[SPACK-SEARCH] Error:', error?.message || error);
+            await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } });
             await responder.texto(
-                '╭〔 ❌ 𝐒𝐏𝐀𝐂 〕⬣\n' +
+                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
                 '┃\n' +
-                '┃ No pude enviar los stickers.\n' +
+                '┃ ⚠️ ' + (error?.message || 'No se encontraron packs') + '\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '┃ 💡 Intenta con otro nombre\n' +
+                '┃    o pega la URL directa\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
-            return;
         }
-
-        await responder.texto(
-            '╭〔 💻𝐁𝐎𝐓-𝐀𝐏𝐈⚡ 〕⬣\n' +
-            '┃\n' +
-            '┃ ✅ *Pack enviado*\n' +
-            `┃ 🎨 ${truncarTexto(pack.titulo)}\n` +
-            `┃ 📤 Enviados: *${enviados}*\n` +
-            `┃ 📦 Modo: *${modo}*\n` +
-            '┃\n' +
-            `┃ 🔗 Ver más: ${pack.url}\n` +
-            '┃\n' +
-            '╰━━━━━━━━━━━━━━━━⬣'
-        );
     }
 };
+
+async function enviarPack(sock, msg, responder, jid, url) {
+    try {
+        const pack = await obtenerPack(url);
+
+        const stickers = pack.stickers.slice(0, MAX_STICKERS);
+
+        if (!stickers.length) {
+            return await responder.texto(
+                '╭━━〔 ⚠️ 𝐒𝐈𝐍 𝐒𝐓𝐈𝐂𝐊𝐄𝐑𝐒 〕━━⬣\n' +
+                '┃\n' +
+                '┃ La API no devolvió los\n' +
+                '┃ stickers del pack\n' +
+                '┃\n' +
+                '┃ 📥 Instala directo desde:\n' +
+                '┃ ' + (pack.compartir || pack.url) + '\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
+        }
+
+        const packName = limpiarPackName(pack.nombre);
+        const packAuthor = limpiarPackName(pack.autor);
+
+        await responder.texto(
+            '╭━━〔 🎨 𝐄𝐍𝐕𝐈𝐀𝐍𝐃𝐎 𝐏𝐀𝐂𝐊 〕━━⬣\n' +
+            '┃\n' +
+            '┃ 📦 *' + pack.nombre + '*\n' +
+            '┃ 👤 ' + pack.autor + '\n' +
+            '┃ 📸 ' + stickers.length + ' stickers\n' +
+            '┃ ' + (pack.animado ? '🎬 Animado' : '🖼️ Estático') + '\n' +
+            '┃\n' +
+            '┃ ⏳ Recibirás el pack ahora...\n' +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+        );
+
+        let enviados = 0;
+
+        for (const stickerUrl of stickers) {
+            try {
+                const buffer = await descargarBuffer(stickerUrl, 20000);
+                
+                if (!buffer.length) continue;
+
+                await sock.sendMessage(jid, {
+                    sticker: buffer,
+                    mimetype: 'image/webp',
+                    isAnimated: pack.animado || false,
+                    packname: packName,
+                    author: packAuthor
+                });
+
+                enviados++;
+                await new Promise(r => setTimeout(r, DELAY_MS));
+            } catch (e) {
+                console.log(`[SPACK] Sticker falló: ${e.message}`);
+            }
+        }
+
+        if (enviados > 0) {
+            await responder.texto(
+                '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
+                '┃\n' +
+                '┃ 📤 ' + enviados + '/' + stickers.length + ' stickers\n' +
+                '┃ 📦 Pack › *' + packName + '*\n' +
+                '┃\n' +
+                '┃ 💡 Mantén presionado un\n' +
+                '┃    sticker → "Añadir a mis\n' +
+                '┃    stickers" para guardarlo\n' +
+                '┃\n' +
+                (pack.total > MAX_STICKERS 
+                    ? '┃ ⚠️ Pack completo: ' + pack.total + '\n┃\n'
+                    : '') +
+                '┃ 📥 Instala el pack completo:\n' +
+                '┃ ' + (pack.compartir || pack.url) + '\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
+
+            await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
+            console.log(`[SPACK] ✅ Pack nativo enviado: ${pack.nombre} (${enviados} stickers)`);
+        } else {
+            await responder.texto(
+                '❌ No se pudo enviar ningún sticker.\n' +
+                '📥 Instala directo: ' + (pack.compartir || pack.url)
+            );
+        }
+
+    } catch (error) {
+        console.error('[SPACK] Error:', error?.message || error);
+        await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } });
+        await responder.texto(
+            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+            '┃\n' +
+            '┃ ⚠️ ' + (error?.message || 'No se pudo obtener el pack') + '\n' +
+            '┃\n' +
+            '┃ 💡 Verifica que la URL sea\n' +
+            '┃    válida de sticker.ly\n' +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+        );
+    }
+}
