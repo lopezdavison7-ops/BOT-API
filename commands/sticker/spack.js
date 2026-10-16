@@ -1,8 +1,8 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
-import axios from 'axios';
 import sharp from 'sharp';
 import { crc32 } from 'zlib';
+import { Readable } from 'stream';
 import {
     MEDIA_PATH_MAP,
     MEDIA_HKDF_KEY_MAPPING,
@@ -30,8 +30,6 @@ const API_DOWNLOAD = 'https://api.delirius.online/download/stickerly';
 
 if (!global.spackSessions) global.spackSessions = new Map();
 const SESSION_TTL = 5 * 60 * 1000;
-
-const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function reqJSON(url, timeout = 15000) {
     const res = await fetch(url, { 
@@ -64,7 +62,7 @@ function apiOk(data) {
 
 // Verificar si es WebP
 const isWebp = (b) =>
-    b.length >= 12 &&
+    b && b.length >= 12 &&
     b.toString('ascii', 0, 4) === 'RIFF' &&
     b.toString('ascii', 8, 12) === 'WEBP';
 
@@ -140,6 +138,16 @@ async function descargarBuffer(url, timeout = 20000) {
     return Buffer.from(await res.arrayBuffer());
 }
 
+// Convertir Buffer a Stream legible
+function bufferToStream(buffer) {
+    return new Readable({
+        read() {
+            this.push(buffer);
+            this.push(null);
+        }
+    });
+}
+
 // Enviar sticker pack nativo
 async function sendStickerPack(sock, jid, { name, publisher, description, stickers, cover, quoted }) {
     if (!stickers.length) throw new Error('Pack vacío');
@@ -166,17 +174,48 @@ async function sendStickerPack(sock, jid, { name, publisher, description, sticke
 
     const zipBuffer = makeZip(files);
 
-    const up = await encryptedStream(zipBuffer, 'sticker-pack', { logger: sock.logger });
-    const { directPath } = await sock.waUploadToServer(up.encFilePath, {
-        fileEncSha256B64: up.fileEncSha256.toString('base64'),
-        mediaType: 'sticker-pack'
-    });
+    console.log(`[SPACK] ZIP creado: ${(zipBuffer.length / 1024).toFixed(2)} KB`);
 
+    // Convertir buffer a stream antes de cifrar
+    const zipStream = bufferToStream(zipBuffer);
+
+    // Cifrar el stream
+    let up;
+    try {
+        up = await encryptedStream(zipStream, 'sticker-pack', { 
+            logger: sock.logger || { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+        });
+    } catch (e) {
+        console.error('[SPACK] Error en encryptedStream:', e.message);
+        throw new Error('No se pudo cifrar el pack: ' + e.message);
+    }
+
+    console.log('[SPACK] Pack cifrado, subiendo a WhatsApp...');
+
+    // Subir a WhatsApp
+    let uploadResult;
+    try {
+        uploadResult = await sock.waUploadToServer(up.encFilePath, {
+            fileEncSha256B64: up.fileEncSha256.toString('base64'),
+            mediaType: 'sticker-pack'
+        });
+    } catch (e) {
+        console.error('[SPACK] Error en waUploadToServer:', e.message);
+        throw new Error('No se pudo subir el pack: ' + e.message);
+    }
+
+    if (!uploadResult || !uploadResult.directPath) {
+        throw new Error('Upload falló: sin directPath');
+    }
+
+    console.log('[SPACK] Pack subido, enviando mensaje...');
+
+    // Construir mensaje de sticker pack
     const content = {
         stickerPackMessage: {
             name,
             publisher,
-            packDescription: description,
+            packDescription: description || '',
             stickerPackId: packId,
             stickerPackOrigin: proto.Message.StickerPackMessage.StickerPackOrigin.THIRD_PARTY,
             stickerPackSize: zipBuffer.length,
@@ -184,15 +223,22 @@ async function sendStickerPack(sock, jid, { name, publisher, description, sticke
             fileSha256: up.fileSha256,
             fileEncSha256: up.fileEncSha256,
             mediaKey: up.mediaKey,
-            directPath,
-            fileLength: up.fileLength,
+            directPath: uploadResult.directPath,
+            fileLength: up.fileLength || zipBuffer.length,
             mediaKeyTimestamp: unixTimestampSeconds(),
             trayIconFileName
         }
     };
 
-    const m = generateWAMessageFromContent(jid, content, { quoted, userJid: sock.user.id });
+    // Enviar usando relayMessage
+    const m = generateWAMessageFromContent(jid, content, { 
+        quoted, 
+        userJid: sock.user.id 
+    });
+    
     await sock.relayMessage(jid, m.message, { messageId: m.key.id });
+    
+    console.log(`[SPACK] ✅ Pack nativo enviado: ${name} (${meta.length} stickers)`);
     return m;
 }
 
@@ -405,11 +451,18 @@ async function enviarPack(sock, msg, responder, jid, url) {
             throw new Error('No se pudo procesar ningún sticker');
         }
 
-        // Crear portada
-        const cover = await sharp(await descargarBuffer(pack.preview, 15000))
-            .resize(96, 96, { fit: 'cover' })
-            .webp({ quality: 80 })
-            .toBuffer();
+        // Crear portada (con fallback si falla)
+        let cover;
+        try {
+            const coverBuf = await descargarBuffer(pack.preview, 15000);
+            cover = await sharp(coverBuf)
+                .resize(96, 96, { fit: 'cover' })
+                .webp({ quality: 80 })
+                .toBuffer();
+        } catch (e) {
+            console.log('[SPACK] Cover falló, usando primer sticker como cover');
+            cover = stickersProcesados[0].sticker;
+        }
 
         // Enviar pack nativo
         await sendStickerPack(sock, jid, {
