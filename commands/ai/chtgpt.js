@@ -1,36 +1,63 @@
-import axios from "axios"
+import axios from 'axios';
 
 export default {
-  name: ["chatgpt", "gpt", "ia"],
-  description: "Conversa con ChatGPT",
-  category: "ia",
-  ownerOnly: false,
-  async run({ sock, from, msg, text, reply, react }) {
-    if (!text) {
-      return reply("¿Qué querés preguntarle a ChatGPT? Ej: *.chatgpt hola, cómo estás*")
-    }
+    nombre: 'chatgpt',
+    categoria: 'IA',
+    alias: ['gpt', 'ia', 'chat'],
+    descripcion: 'Conversa con ChatGPT.',
 
-    try {
-      await react("🤖")
+    ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
+        const text = String(argumento || '').trim();
 
-      const { data } = await axios.get("https://api.alyacore.xyz/ai/chatgpt", {
-        params: {
-          text,
-          key: "Duarte-zz12"
+        if (!text) {
+            return await responder.texto(
+                '╭━━〔 🤖 𝐂𝐇𝐀𝐓𝐆𝐏𝐓 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ❓ ¿Qué querés preguntarle?\n' +
+                '┃\n' +
+                '┃ 💡 Ejemplos:\n' +
+                '┃ › .chatgpt hola, cómo estás\n' +
+                '┃ › .gpt dame una idea de negocio\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
         }
-      })
 
-      if (!data.status || !data.result) {
-        await react("❌")
-        return reply("No pude obtener respuesta de ChatGPT, intentá de nuevo.")
-      }
+        try {
+            await responder.reaccion('🤖');
 
-      await reply(data.result)
-      await react("✅")
-    } catch (err) {
-      console.error(err)
-      await react("❌")
-      reply("Ocurrió un error al conectar con la API de ChatGPT.")
+            const { data } = await axios.get('https://api.alyacore.xyz/ai/chatgpt', {
+                params: {
+                    text: text,
+                    key: 'Duarte-zz12'
+                }
+            });
+
+            if (!data.status || !data.result) {
+                await responder.reaccion('❌');
+                return await responder.texto(
+                    '❌ No pude obtener respuesta de ChatGPT.\n' +
+                    'Intentá de nuevo más tarde.'
+                );
+            }
+
+            await responder.texto(
+                '╭━━〔 🤖 𝐑𝐄𝐒𝐏𝐔𝐄𝐒𝐓𝐀 〕━━⬣\n' +
+                '┃\n' +
+                `┃ ${data.result}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+            
+            await responder.reaccion('✅');
+
+        } catch (err) {
+            console.error('[CHATGPT] Error:', err?.message || err);
+            await responder.reaccion('❌');
+            await responder.texto(
+                '❌ Ocurrió un error al conectar con la API de ChatGPT.\n' +
+                'Verifica tu conexión o intentá más tarde.'
+            );
+        }
     }
-  }
-}
+};
