@@ -18,7 +18,7 @@ const clean = (value) => typeof value === 'string' ? value.trim() : '';
 function getStickerMeta(senderNum, pushName) {
   const nombre = pushName || senderNum.split('@')[0];
   return {
-    packname: '⚔️ BOT-API',
+    packname: '⚡BOT-API',
     author: `@${nombre}`
   };
 }
