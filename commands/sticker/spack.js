@@ -10,8 +10,9 @@ export default {
     alias: ['stickerpack', 'packstickers'],
     descripcion: 'Descarga un pack completo de Stickerly',
     
-    ejecutar: async (sock, msg, args) => {
-        const query = args.join(' ');
+    ejecutar: async (sock, msg, texto, args) => {
+        // Si args es undefined, extraer de texto
+        const query = args && args.length > 0 ? args.join(' ') : (texto || '').trim();
         
         if (!query) {
             return sock.sendMessage(msg.key.remoteJid, {
@@ -52,7 +53,7 @@ export default {
             
             // Enviar todos los stickers con mismo packname/author
             const author = 'BOT-API Pack';
-            const cleanPackName = packName.slice(0, 30); // WhatsApp limita a 30 chars
+            const cleanPackName = packName.slice(0, 30);
             
             await sock.sendMessage(msg.key.remoteJid, {
                 text: `📦 Enviando pack: *${cleanPackName}* (${stickers.length} stickers)`
@@ -67,7 +68,7 @@ export default {
                         author: author
                     }, { quoted: msg });
                     enviados++;
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Evitar rate limit
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 } catch (err) {
                     console.log('Error enviando sticker:', err.message);
                 }
