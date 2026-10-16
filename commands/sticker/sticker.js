@@ -6,7 +6,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { createRequire } from 'module';
 import { downloadMediaMessage } from 'baileys';
-import config from '../../config.js';
 
 const require = createRequire(import.meta.url);
 const webp = require('node-webpmux');
@@ -18,6 +17,9 @@ const tmp = path.join(__dirname, '..', '..', 'tmp');
 const RUTA_META = path.join(__dirname, '..', '..', 'database', 'stickerMeta.json');
 
 if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
+
+const BOT_PACK = '⚡ BOT-API ⚡';
+const BOT_AUTHOR = '© DevLuis';
 
 const clean = (value) => typeof value === 'string' ? value.trim() : '';
 
@@ -37,14 +39,14 @@ function getStickerMeta(senderNum, pushName) {
 
     if (userMeta && (userMeta.pack || userMeta.author)) {
         return {
-            packname: clean(userMeta.pack) || clean(config.packname) || '⚡ BOT-API ',
+            packname: clean(userMeta.pack) || BOT_PACK,
             author: clean(userMeta.author) || `@${nombre}`
         };
     }
 
     return {
-        packname: clean(config.packname) || '⚡ BOT-API ⚡',
-        author: clean(config.author) || `@${nombre}`
+        packname: BOT_PACK,
+        author: `@${nombre}`
     };
 }
 
@@ -161,7 +163,7 @@ async function limpiarSticker(buffer) {
 export default {
     nombre: 'sticker',
     categoria: 'Stickers',
-    alias: ['s', 'stik', 'stick', 'sticker'],
+    alias: ['s', 'stik', 'stick'],
     descripcion: 'Crea stickers desde imagen, video o sticker.',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
@@ -207,9 +209,9 @@ export default {
             if (!targetMsg) {
                 await reaccion('❌');
                 return await responder.texto(
-                    '╭━━〔 🖼️ 𝐒𝐓𝐈𝐂𝐊𝐄𝐑 〕━━⬣\n' +
+                    '╭━━〔 🖼️ 𝐒𝐓𝐂𝐊𝐄 〕━━⬣\n' +
                     '┃\n' +
-                    '┃  Envía o responde una imagen,\n' +
+                    '  Envía o responde una imagen,\n' +
                     '┃    video (máx 15s) o sticker.\n' +
                     '┃\n' +
                     '┃  Ejemplos:\n' +
