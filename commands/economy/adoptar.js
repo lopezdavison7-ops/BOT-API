@@ -25,6 +25,40 @@ function guardarAdopcion(adoptante, adoptado) {
     fs.writeFileSync(RUTA_ADOPCIONES, JSON.stringify(db, null, 2), 'utf8');
 }
 
+async function obtenerNombre(sock, jid, msg) {
+    // Si es el mismo que mandó el mensaje, usar pushName
+    if (jid === msg.key.participant || jid === msg.key.remoteJid) {
+        return msg.pushName || jid.split('@')[0];
+    }
+
+    // Intentar obtener desde el store de contactos
+    try {
+        if (sock?.store?.contacts?.[jid]?.name) {
+            return sock.store.contacts[jid].name;
+        }
+        if (sock?.store?.contacts?.[jid]?.notify) {
+            return sock.store.contacts[jid].notify;
+        }
+    } catch {}
+
+    // Intentar obtener desde metadata del grupo
+    try {
+        if (msg.key.remoteJid?.endsWith('@g.us')) {
+            const metadata = await sock.groupMetadata(msg.key.remoteJid);
+            const participante = metadata.participants?.find(p => {
+                const pJid = typeof p === 'string' ? p : p.id || p.jid;
+                return pJid === jid;
+            });
+            if (participante?.name || participante?.notify) {
+                return participante.name || participante.notify;
+            }
+        }
+    } catch {}
+
+    // Fallback: número limpio
+    return jid.split('@')[0].replace(/\D/g, '');
+}
+
 export default {
     nombre: 'adoptar',
     categoria: 'Diversión',
@@ -44,11 +78,14 @@ export default {
             const db = leerAdopciones();
             const lista = db[objetivo] || [];
 
+            // Obtener nombre real del usuario
+            const nombreObjetivo = await obtenerNombre(sock, objetivo, msg);
+
             if (lista.length === 0) {
                 return await responder.texto(
-                    '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
+                    '╭━━〔 👶 𝐀𝐃𝐏𝐓𝐀𝐎𝐒 〕━━\n' +
                     '┃\n' +
-                    `┃ 📭 *@${objetivo.split('@')[0]}* no ha adoptado a nadie aún.\n` +
+                    `┃ 📭 *${nombreObjetivo}* no ha adoptado a nadie aún.\n` +
                     '┃\n' +
                     '┃ 💡 Usa *.adoptar @usuario* para empezar tu familia.\n' +
                     '┃\n' +
@@ -57,18 +94,21 @@ export default {
             }
 
             let texto =
-                '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐓𝐀𝐃𝐎𝐒 〕━━\n' +
+                '╭━━〔 👶 𝐀𝐃𝐏𝐓𝐀𝐎𝐒 〕━━\n' +
                 '┃\n' +
-                `┃ 👑 *@${objetivo.split('@')[0]}* tiene *${lista.length}* adoptado(s):\n` +
+                `┃ 👑 *${nombreObjetivo}* tiene *${lista.length}* adoptado(s):\n` +
                 '┃\n';
 
-            lista.forEach((adoptadoJid, i) => {
-                texto += `┃ ${i + 1}. @${adoptadoJid.split('@')[0]}\n`;
-            });
+            // Obtener nombres de los adoptados
+            for (let i = 0; i < lista.length; i++) {
+                const adoptadoJid = lista[i];
+                const nombreAdoptado = await obtenerNombre(sock, adoptadoJid, msg);
+                texto += `┃ ${i + 1}. @${adoptadoJid.split('@')[0]} (${nombreAdoptado})\n`;
+            }
 
             texto +=
-                '┃\n' +
-                '┃ 📅 Registrados en BOT-API\n' +
+                '\n' +
+                '┃  Registrados en BOT-API\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣';
 
@@ -81,13 +121,13 @@ export default {
         // ───────────── .adoptar ─────────────
         if (!adoptado || adoptado === adoptante) {
             return await responder.texto(
-                '╭━━〔 👶 𝐀𝐎𝐏𝐂𝐎́𝐍 〕━━⬣\n' +
+                '╭━━〔 👶 𝐀𝐃𝐏𝐂𝐈𝐎́𝐍 〕━━\n' +
                 '┃\n' +
-                '┃  Debes mencionar a alguien para adoptar.\n' +
-                '┃\n' +
+                '┃ ❌ Debes mencionar a alguien para adoptar.\n' +
+                '\n' +
                 '┃ 💡 Ejemplo: .adoptar @usuario\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '━━━━━━━━━━━━━━━━⬣'
             );
         }
 
@@ -96,15 +136,19 @@ export default {
 
             guardarAdopcion(adoptante, adoptado);
 
+            // Obtener nombres reales
+            const nombreAdoptante = await obtenerNombre(sock, adoptante, msg);
+            const nombreAdoptado = await obtenerNombre(sock, adoptado, msg);
+
             const certificado =
-                '╭━━━〔 📜 𝐂𝐄𝐓𝐈𝐅𝐈𝐂𝐀𝐎 𝐃𝐄 𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━━╮\n' +
+                '╭━━━〔 📜 𝐂𝐄𝐑𝐓𝐈𝐅𝐈𝐂𝐀𝐃𝐎 𝐃𝐄 𝐀𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━━╮\n' +
                 '┃\n' +
                 '┃  🍼 *¡NUEVA ADOPCIÓN REGISTRADA!*\n' +
                 '┃\n' +
-                `┃  👑 *Padre/Madre:* @${adoptante.split('@')[0]}\n` +
-                `┃  👶 *Hijo/a:* @${adoptado.split('@')[0]}\n` +
-                '\n' +
-                '┃  ━━━━━━━━━━━━━━━━━━━━━━\n' +
+                `┃  👑 *Padre/Madre:* @${adoptante.split('@')[0]} (${nombreAdoptante})\n` +
+                `┃  👶 *Hijo/a:* @${adoptado.split('@')[0]} (${nombreAdoptado})\n` +
+                '┃\n' +
+                '┃  ━━━━━━━━━━━━━━━━━━━━━━━\n' +
                 '┃\n' +
                 '┃  "Por la presente se certifica que\n' +
                 '┃   se ha realizado una adopción oficial\n' +
@@ -113,7 +157,7 @@ export default {
                 '┃  ━━━━━━━━━━━━━━━━━━━━━━━\n' +
                 '┃\n' +
                 `┃  📅 Fecha: ${new Date().toLocaleDateString('es-ES')}\n` +
-                '┃  🏛️ Registrado por: ⚡ BOT-API\n' +
+                '┃  🏛️ Registrado por:  BOT-API\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯';
 
