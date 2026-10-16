@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import { Sticker, createSticker, StickerTypes } from 'wa-sticker-formatter';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const HEADERS = { 
@@ -8,7 +9,6 @@ const HEADERS = {
 };
 
 const MAX_STICKERS = 15;
-const DELAY_MS = 250;
 const API_SEARCH = 'https://api.delirius.online/search/stickerly';
 const API_DOWNLOAD = 'https://api.delirius.online/download/stickerly';
 
@@ -37,7 +37,7 @@ function fmtNum(n) {
 }
 
 function limpiarPackName(s) {
-    return String(s).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim().slice(0, 40) || 'BOT-API Pack';
+    return String(s).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim().slice(0, 24) || 'BOT-API Pack';
 }
 
 function apiOk(data) {
@@ -92,6 +92,21 @@ async function descargarBuffer(url, timeout = 20000) {
     });
     if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
     return Buffer.from(await res.arrayBuffer());
+}
+
+async function crearStickerBuffer(buffer, packname, author, isAnimated) {
+    try {
+        const sticker = new Sticker(buffer, {
+            pack: packname,
+            author: author,
+            type: isAnimated ? StickerTypes.FULL : StickerTypes.DEFAULT,
+            quality: 50
+        });
+        return await sticker.toBuffer();
+    } catch (e) {
+        console.error('[SPACK] Error creando sticker:', e.message);
+        return buffer;
+    }
 }
 
 export default {
@@ -231,64 +246,107 @@ async function enviarPack(sock, msg, responder, jid, url) {
         const packAuthor = limpiarPackName(pack.autor);
 
         await responder.texto(
-            '╭━━〔 🎨 𝐄𝐍𝐕𝐈𝐀𝐍𝐃𝐎 𝐏𝐀𝐂𝐊 〕━━⬣\n' +
+            '╭━━〔 🎨 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 〕━━⬣\n' +
             '┃\n' +
             '┃ 📦 *' + pack.nombre + '*\n' +
             '┃ 👤 ' + pack.autor + '\n' +
-            '┃ 📸 Enviando ' + stickers.length + ' stickers\n' +
+            '┃ 📸 ' + stickers.length + ' stickers\n' +
             '┃ ' + (pack.animado ? '🎬 Animado' : '🖼️ Estático') + '\n' +
             '┃\n' +
-            '┃ ⏳ Recibirás el pack ahora...\n' +
+            '┃ ⏳ Enviando como pack...\n' +
+            '┃    (esto puede tardar)\n' +
             '┃\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
 
-        let enviados = 0;
+        // Descargar todos los stickers primero
+        const stickerBuffers = [];
         for (const stickerUrl of stickers) {
             try {
                 const buffer = await descargarBuffer(stickerUrl, 20000);
-                if (!buffer.length) continue;
-
-                await sock.sendMessage(jid, {
-                    sticker: buffer,
-                    mimetype: 'image/webp',
-                    isAnimated: pack.animado || false,
-                    packname: packName,
-                    author: packAuthor
-                });
-
-                enviados++;
-                await new Promise(r => setTimeout(r, DELAY_MS));
+                if (buffer.length > 0) {
+                    stickerBuffers.push(buffer);
+                }
             } catch (e) {
-                console.log(`[SPACK] Sticker falló: ${e.message}`);
+                console.log(`[SPACK] Falló descarga: ${e.message}`);
             }
         }
 
-        if (enviados > 0) {
-            await responder.texto(
-                '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
-                '┃\n' +
-                '┃ 📤 ' + enviados + '/' + stickers.length + ' stickers\n' +
-                '┃ 📦 Pack › *' + packName + '*\n' +
-                '┃\n' +
-                '┃ 💡 Mantén presionado un\n' +
-                '┃    sticker → "Añadir a mis\n' +
-                '┃    stickers" para guardarlo\n' +
-                '┃\n' +
-                (pack.total > MAX_STICKERS 
-                    ? '┃ ⚠️ Pack completo: ' + pack.total + '\n┃\n'
-                    : '') +
-                '┃ 📥 Instala el pack completo:\n' +
-                '┃ ' + (pack.compartir || pack.url) + '\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
-
-            await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-            console.log(`[SPACK] ✅ Pack nativo: ${pack.nombre} (${enviados}/${stickers.length})`);
-        } else {
-            throw new Error('No se pudo enviar ningún sticker');
+        if (!stickerBuffers.length) {
+            throw new Error('No se pudo descargar ningún sticker');
         }
+
+        // Enviar como pack nativo usando la función de Baileys
+        try {
+            // Método 1: Enviar como stickernode (pack nativo)
+            const stickernode = {
+                stickernode: {
+                    packname: packName,
+                    authorname: packAuthor,
+                    publisher: packAuthor,
+                    id: 'pack_' + Date.now(),
+                    version: 1,
+                    stickers: stickerBuffers.map(buffer => ({
+                        pngimage: buffer,
+                        isAnimated: pack.animado || false
+                    }))
+                }
+            };
+
+            await sock.sendMessage(jid, stickernode, { quoted: msg });
+            
+        } catch (e) {
+            console.log('[SPACK] Stickernode falló, usando método alternativo');
+            
+            // Método 2: Enviar stickers individuales con metadata de pack
+            let enviados = 0;
+            for (const buffer of stickerBuffers) {
+                try {
+                    const stickerBuffer = await crearStickerBuffer(buffer, packName, packAuthor, pack.animado);
+                    
+                    await sock.sendMessage(jid, {
+                        sticker: stickerBuffer,
+                        mimetype: 'image/webp',
+                        isAnimated: pack.animado || false,
+                        packname: packName,
+                        author: packAuthor
+                    }, { quoted: msg });
+
+                    enviados++;
+                    await new Promise(r => setTimeout(r, 200));
+                } catch (e) {
+                    console.log(`[SPACK] Sticker falló: ${e.message}`);
+                }
+            }
+
+            if (enviados === 0) {
+                throw new Error('No se pudo enviar ningún sticker');
+            }
+        }
+
+        await responder.texto(
+            '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
+            '┃\n' +
+            '┃ 📦 Pack › *' + packName + '*\n' +
+            '┃ 👤 Autor › *' + packAuthor + '*\n' +
+            '┃ 📸 Stickers enviados\n' +
+            '┃\n' +
+            '┃ 💡 Mantén presionado un\n' +
+            '┃    sticker → "Añadir a mis\n' +
+            '┃    stickers" para instalar\n' +
+            '┃    el pack completo\n' +
+            '┃\n' +
+            (pack.total > MAX_STICKERS 
+                ? '┃ ⚠️ Pack completo: ' + pack.total + '\n┃\n'
+                : '') +
+            '┃ 📥 Ver pack en Stickerly:\n' +
+            '┃ ' + (pack.compartir || pack.url) + '\n' +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+        );
+
+        await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
+        console.log(`[SPACK] ✅ Pack nativo enviado: ${pack.nombre}`);
 
     } catch (error) {
         console.error('[SPACK] Error:', error?.message || error);
