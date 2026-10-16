@@ -26,7 +26,7 @@ async function reqJSON(url, timeout = 15000) {
 }
 
 function esURL(s) {
-    return /sticker\.ly\/s\//i.test(s) || /^https?:\/\//i.test(s);
+    return /sticker\.ly\/s\//i.test(s);
 }
 
 function fmtNum(n) {
@@ -40,30 +40,31 @@ function limpiarPackName(s) {
     return String(s).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim().slice(0, 40) || 'BOT-API Pack';
 }
 
+function apiOk(data) {
+    return data.estado === true || data.estado === 'verdadero' || data.status === true;
+}
+
 async function buscarPacks(query) {
-    const data = await reqJSON(`${API_SEARCH}?q=${encodeURIComponent(query)}`, 15000);
-    if (data.estado !== true && data.status !== true) {
-        throw new Error('API sin resultados');
-    }
+    const data = await reqJSON(`${API_SEARCH}?query=${encodeURIComponent(query)}`, 15000);
+    if (!apiOk(data)) throw new Error('API sin resultados');
     const lista = data.datos || data.data || [];
     if (!Array.isArray(lista) || !lista.length) throw new Error('Sin resultados');
-    return lista.slice(0, 8).map(p => ({
+    return lista.slice(0, 10).map(p => ({
         nombre: p.nombre || p.name || 'Sin nombre',
         autor: p.autor || p.author || 'Desconocido',
         stickers: p.sticker_count || 0,
         vistas: p.view_count || 0,
         descargas: p.export_count || 0,
         animado: p.isAnimated || false,
-        preview: p.vista || p.preview || p.vista_previa || '',
+        pagado: p.isPaid || false,
+        preview: p.vista_previa || p.vista || p.preview || '',
         url: p.url || ''
     }));
 }
 
 async function obtenerPack(url) {
     const data = await reqJSON(`${API_DOWNLOAD}?url=${encodeURIComponent(url)}`, 20000);
-    if (data.estado !== true && data.status !== true) {
-        throw new Error('API sin datos del pack');
-    }
+    if (!apiOk(data)) throw new Error('API sin datos del pack');
     const pack = data.datos || data.data || {};
     return {
         nombre: pack.nombre || pack.name || 'Sin nombre',
@@ -76,7 +77,7 @@ async function obtenerPack(url) {
         vistas: pack.viewCount || pack.view_count || 0,
         descargas: pack.exportCount || pack.export_count || 0,
         animado: pack.isAnimated || false,
-        preview: pack.vista || pack.preview || pack.vista_previa || '',
+        preview: pack.vista_previa || pack.vista || pack.preview || '',
         url: pack.url || url,
         compartir: pack.compartir || pack.share || '',
         stickers: pack.pegatinas || pack.stickers || []
@@ -139,6 +140,7 @@ export default {
                 );
             }
 
+            await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
             return await enviarPack(sock, msg, responder, jid, item.url);
         }
 
@@ -165,10 +167,11 @@ export default {
                 '┃\n';
 
             resultados.forEach((p, i) => {
-                cap += '┃ *' + (i + 1) + '.* ' + p.nombre.slice(0, 35) + '\n';
+                cap += '┃ *' + (i + 1) + '.* ' + p.nombre.slice(0, 32) + '\n';
                 cap += '┃    👤 ' + p.autor + ' | 📸 ' + p.stickers + '\n';
                 cap += '┃    👁️ ' + fmtNum(p.vistas) + ' | ⬇️ ' + fmtNum(p.descargas);
                 if (p.animado) cap += ' | 🎬 ANIM';
+                if (p.pagado) cap += ' | 💰 PAID';
                 cap += '\n';
                 if (i < resultados.length - 1) cap += '┃\n';
             });
@@ -180,6 +183,8 @@ export default {
                 '┃ ➪ .spack 1\n' +
                 '┃ ➪ .spack 2\n' +
                 '┃\n' +
+                '┃ ⏳ Sesión válida 5 min\n' +
+                '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
             if (resultados[0]?.preview) {
@@ -188,11 +193,13 @@ export default {
                         image: { url: resultados[0].preview },
                         caption: cap
                     }, { quoted: msg });
+                    await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
                     return;
                 } catch {}
             }
 
             await responder.texto(cap);
+            await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
             console.error('[SPACK-SEARCH] Error:', error?.message || error);
@@ -214,21 +221,10 @@ export default {
 async function enviarPack(sock, msg, responder, jid, url) {
     try {
         const pack = await obtenerPack(url);
-
         const stickers = pack.stickers.slice(0, MAX_STICKERS);
 
         if (!stickers.length) {
-            return await responder.texto(
-                '╭━━〔 ⚠️ 𝐒𝐈𝐍 𝐒𝐓𝐈𝐂𝐊𝐄𝐑𝐒 〕━━⬣\n' +
-                '┃\n' +
-                '┃ La API no devolvió los\n' +
-                '┃ stickers del pack\n' +
-                '┃\n' +
-                '┃ 📥 Instala directo desde:\n' +
-                '┃ ' + (pack.compartir || pack.url) + '\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+            throw new Error('El pack no tiene stickers');
         }
 
         const packName = limpiarPackName(pack.nombre);
@@ -239,7 +235,7 @@ async function enviarPack(sock, msg, responder, jid, url) {
             '┃\n' +
             '┃ 📦 *' + pack.nombre + '*\n' +
             '┃ 👤 ' + pack.autor + '\n' +
-            '┃ 📸 ' + stickers.length + ' stickers\n' +
+            '┃ 📸 Enviando ' + stickers.length + ' stickers\n' +
             '┃ ' + (pack.animado ? '🎬 Animado' : '🖼️ Estático') + '\n' +
             '┃\n' +
             '┃ ⏳ Recibirás el pack ahora...\n' +
@@ -248,11 +244,9 @@ async function enviarPack(sock, msg, responder, jid, url) {
         );
 
         let enviados = 0;
-
         for (const stickerUrl of stickers) {
             try {
                 const buffer = await descargarBuffer(stickerUrl, 20000);
-                
                 if (!buffer.length) continue;
 
                 await sock.sendMessage(jid, {
@@ -291,12 +285,9 @@ async function enviarPack(sock, msg, responder, jid, url) {
             );
 
             await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-            console.log(`[SPACK] ✅ Pack nativo enviado: ${pack.nombre} (${enviados} stickers)`);
+            console.log(`[SPACK] ✅ Pack nativo: ${pack.nombre} (${enviados}/${stickers.length})`);
         } else {
-            await responder.texto(
-                '❌ No se pudo enviar ningún sticker.\n' +
-                '📥 Instala directo: ' + (pack.compartir || pack.url)
-            );
+            throw new Error('No se pudo enviar ningún sticker');
         }
 
     } catch (error) {
