@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import { downloadMediaMessage } from 'baileys';
 
 const require = createRequire(import.meta.url);
 
@@ -56,7 +55,6 @@ function dibujarAvatarCircular(ctx, x, y, radio, buffer, nombre) {
         img.src = buffer;
         ctx.drawImage(img, x - radio, y - radio, radio * 2, radio * 2);
     } else {
-        // Fallback: círculo de color con inicial
         ctx.fillStyle = '#334155';
         ctx.fillRect(x - radio, y - radio, radio * 2, radio * 2);
         ctx.fillStyle = '#ffffff';
@@ -67,7 +65,6 @@ function dibujarAvatarCircular(ctx, x, y, radio, buffer, nombre) {
     }
     ctx.restore();
 
-    // Borde
     ctx.beginPath();
     ctx.arc(x, y, radio, 0, Math.PI * 2, true);
     ctx.strokeStyle = '#4ade80';
@@ -76,11 +73,10 @@ function dibujarAvatarCircular(ctx, x, y, radio, buffer, nombre) {
 }
 
 async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
-    const { createCanvas, Image } = require('canvas');
+    const { createCanvas } = require('canvas');
     const canvas = createCanvas(700, 400);
     const ctx = canvas.getContext('2d');
 
-    // Fondo degradado
     const grad = ctx.createLinearGradient(0, 0, 700, 400);
     grad.addColorStop(0, '#05070d');
     grad.addColorStop(0.5, '#0a1f15');
@@ -88,7 +84,6 @@ async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 700, 400);
 
-    // Marco decorativo doble
     ctx.strokeStyle = '#22c55e';
     ctx.lineWidth = 3;
     ctx.strokeRect(15, 15, 670, 370);
@@ -96,7 +91,6 @@ async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
     ctx.lineWidth = 1;
     ctx.strokeRect(22, 22, 656, 356);
 
-    // Esquinas decorativas
     const esquinas = [[15, 15], [685, 15], [15, 385], [685, 385]];
     ctx.fillStyle = '#4ade80';
     esquinas.forEach(([x, y]) => {
@@ -105,13 +99,11 @@ async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
         ctx.fill();
     });
 
-    // Título
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 30px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🍼 CERTIFICADO DE ADOPCIÓN ', 350, 65);
+    ctx.fillText('🍼 CERTIFICADO DE ADOPCIÓN 🍼', 350, 65);
 
-    // Línea separadora
     ctx.strokeStyle = '#4ade80';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -119,27 +111,22 @@ async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
     ctx.lineTo(600, 80);
     ctx.stroke();
 
-    // Subtítulo
     ctx.fillStyle = '#94a3b8';
     ctx.font = '14px Arial, sans-serif';
     ctx.fillText('BOT-API • Registro oficial de familia', 350, 100);
 
-    // Obtener fotos
     const fotoA = await obtenerFoto(sock, adoptante);
     const fotoB = await obtenerFoto(sock, adoptado);
 
-    // Avatares
     dibujarAvatarCircular(ctx, 200, 220, 65, fotoA, nombreA);
     dibujarAvatarCircular(ctx, 500, 220, 65, fotoB, nombreB);
 
-    // Corazón en el medio
     ctx.fillStyle = '#ef4444';
     ctx.font = '50px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('❤️', 350, 220);
 
-    // Nombres debajo de los avatares
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
@@ -149,22 +136,16 @@ async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
     ctx.fillText(nA, 200, 300);
     ctx.fillText(nB, 500, 300);
 
-    // Etiquetas
     ctx.fillStyle = '#4ade80';
     ctx.font = '12px Arial, sans-serif';
-    ctx.fillText('👑 ADOPTANTE', 200, 320);
-    ctx.fillText('👶 ADOPTADO', 500, 320);
+    ctx.fillText(' ADOPTANTE', 200, 320);
+    ctx.fillText(' ADOPTADO', 500, 320);
 
-    // Texto inferior
     ctx.fillStyle = '#cbd5e1';
     ctx.font = 'italic 14px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(
-        `"${nombreA} adopta oficialmente a ${nombreB}"`,
-        350, 360
-    );
+    ctx.fillText(`"${nombreA} adopta oficialmente a ${nombreB}"`, 350, 360);
 
-    // Fecha
     ctx.fillStyle = '#64748b';
     ctx.font = '11px Arial, sans-serif';
     const fecha = new Date().toLocaleDateString('es-ES', {
@@ -219,6 +200,40 @@ async function generarConSharp(sock, adoptante, adoptado, nombreA, nombreB) {
     return await sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+async function obtenerNombreUsuario(sock, jid, msg) {
+    // Si es el mismo que mandó el mensaje, usar pushName
+    if (jid === msg.key.participant || jid === msg.key.remoteJid) {
+        return msg.pushName || jid.split('@')[0];
+    }
+
+    // Intentar obtener desde el store de contactos
+    try {
+        if (sock?.store?.contacts?.[jid]?.name) {
+            return sock.store.contacts[jid].name;
+        }
+        if (sock?.store?.contacts?.[jid]?.notify) {
+            return sock.store.contacts[jid].notify;
+        }
+    } catch {}
+
+    // Intentar obtener desde metadata del grupo (si es grupo)
+    try {
+        if (msg.key.remoteJid?.endsWith('@g.us')) {
+            const metadata = await sock.groupMetadata(msg.key.remoteJid);
+            const participante = metadata.participants?.find(p => {
+                const pJid = typeof p === 'string' ? p : p.id || p.jid;
+                return pJid === jid;
+            });
+            if (participante?.name || participante?.notify) {
+                return participante.name || participante.notify;
+            }
+        }
+    } catch {}
+
+    // Fallback: número limpio
+    return jid.split('@')[0].replace(/\D/g, '');
+}
+
 export default {
     nombre: 'adoptar',
     categoria: 'Diversión',
@@ -232,22 +247,19 @@ export default {
 
         if (!adoptado || adoptado === adoptante) {
             return await responder.texto(
-                '╭━━〔 👶 𝐀𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━⬣\n' +
+                '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━\n' +
                 '┃\n' +
-                '┃  Debes mencionar a alguien para adoptar.\n' +
-                '┃\n' +
+                '┃ ❌ Debes mencionar a alguien para adoptar.\n' +
+                '\n' +
                 '┃ 💡 Ejemplo: .adoptar @usuario\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '━━━━━━━━━━━━━━━━⬣'
             );
         }
 
-        const nombreAdoptante = msg.pushName || adoptante.split('@')[0];
-        let nombreAdoptado = adoptado.split('@')[0];
-        try {
-            const info = await sock.onWhatsApp(adoptado);
-            if (info && info[0]?.notify) nombreAdoptado = info[0].notify;
-        } catch {}
+        // Obtener nombres reales (pushName)
+        const nombreAdoptante = await obtenerNombreUsuario(sock, adoptante, msg);
+        const nombreAdoptado = await obtenerNombreUsuario(sock, adoptado, msg);
 
         try {
             await sock.sendMessage(jid, { react: { text: '🍼', key: msg.key } });
@@ -256,13 +268,11 @@ export default {
 
             let buffer = null;
 
-            // Intento 1: Canvas local
             try {
                 buffer = await generarConCanvas(sock, adoptante, adoptado, nombreAdoptante, nombreAdoptado);
                 console.log('[ADOPTAR] ✅ Imagen generada con Canvas');
             } catch (e1) {
                 console.log('[ADOPTAR] Canvas falló, usando Sharp:', e1?.message);
-                // Intento 2: Sharp + SVG (ya instalado para stickers)
                 try {
                     buffer = await generarConSharp(sock, adoptante, adoptado, nombreAdoptante, nombreAdoptado);
                     console.log('[ADOPTAR] ✅ Imagen generada con Sharp');
@@ -274,13 +284,13 @@ export default {
             const caption =
                 '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 𝐄𝐗𝐈𝐓𝐎𝐒𝐀 〕━━⬣\n' +
                 '┃\n' +
-                `┃ 🍼 *@${adoptante.split('@')[0]}* ha adoptado a\n` +
-                `┃ 👶 *@${adoptado.split('@')[0]}*\n` +
+                `┃ 🍼 *${nombreAdoptante}* ha adoptado a\n` +
+                `┃ 👶 *${nombreAdoptado}*\n` +
                 '┃\n' +
                 '┃ 📜 Certificado registrado en BOT-API\n' +
-                '┃ 📅 ' + new Date().toLocaleDateString('es-ES') + '\n' +
+                '┃  ' + new Date().toLocaleDateString('es-ES') + '\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣';
+                '╰━━━━━━━━━━━━━━━━';
 
             if (buffer) {
                 await sock.sendMessage(jid, {
@@ -289,7 +299,6 @@ export default {
                     mentions: [adoptante, adoptado]
                 }, { quoted: msg });
             } else {
-                // Fallback final: solo texto
                 await responder.texto(caption);
             }
 
@@ -298,8 +307,8 @@ export default {
         } catch (error) {
             console.error('[ADOPTAR] Error:', error?.message || error);
             await responder.texto(
-                ' Ocurrió un error al procesar la adopción.\n\n' +
-                '️ Detalle: ' + (error?.message || 'Error desconocido')
+                '❌ Ocurrió un error al procesar la adopción.\n\n' +
+                '⚠️ Detalle: ' + (error?.message || 'Error desconocido')
             );
         }
     }
