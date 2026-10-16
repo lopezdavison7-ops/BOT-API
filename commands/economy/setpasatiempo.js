@@ -35,7 +35,7 @@ export default {
         const pasatiemposDisponibles = [
             '📚 Leer', '✍️ Escribir', '🎤 Cantar', '💃 Bailar', '🎮 Jugar', 
             '🎨 Dibujar', '🍳 Cocinar', '✈️ Viajar',
-'programcion💙', '🏊 Nadar', '📸 Fotografía',
+'💻 programcion', '🏊 Nadar', '📸 Fotografía',
             '🎧 Escuchar música', '🏀 Deportes', '🎬 Ver películas', '🌿 Jardinería',
             '🧵 Manualidades', '🎲 Juegos de mesa', '🏋️‍♂️ Gimnasio', '🚴 Ciclismo',
             '🎯 Tiro con arco', '🍵 Ceremonia del té', '🧘‍♂️ Meditación', '🎪 Malabares',
