@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import crypto from 'crypto';
 import sharp from 'sharp';
 import { crc32 } from 'zlib';
 import { Readable } from 'stream';
@@ -14,7 +15,6 @@ import {
     proto
 } from 'baileys';
 
-// Registrar tipo de media para sticker packs
 MEDIA_PATH_MAP['sticker-pack'] = '/mms/document';
 MEDIA_HKDF_KEY_MAPPING['sticker-pack'] = 'Sticker Pack';
 
@@ -45,13 +45,6 @@ function esURL(s) {
     return /sticker\.ly\/s\//i.test(s);
 }
 
-function fmtNum(n) {
-    const num = Number(n) || 0;
-    if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
-    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
-    return String(num);
-}
-
 function limpiarPackName(s) {
     return String(s).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim().slice(0, 24) || 'BOT-API Pack';
 }
@@ -60,13 +53,11 @@ function apiOk(data) {
     return data.estado === true || data.estado === 'verdadero' || data.status === true;
 }
 
-// Verificar si es WebP
 const isWebp = (b) =>
     b && b.length >= 12 &&
     b.toString('ascii', 0, 4) === 'RIFF' &&
     b.toString('ascii', 8, 12) === 'WEBP';
 
-// Verificar si es WebP animado
 const isAnimatedWebp = (b) => {
     if (!isWebp(b)) return false;
     let o = 12;
@@ -80,14 +71,12 @@ const isAnimatedWebp = (b) => {
     return false;
 };
 
-// Convertir a WebP
 const toWebp = async (buffer, animated = false) =>
     sharp(buffer, animated ? { animated: true } : {})
         .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .webp({ quality: 80, ...(animated ? { loop: 0 } : {}) })
         .toBuffer();
 
-// Crear ZIP manual
 const makeZip = (files) => {
     const locals = [];
     const centrals = [];
@@ -127,7 +116,6 @@ const makeZip = (files) => {
     return Buffer.concat([...locals, cd, end]);
 };
 
-// Descargar buffer
 async function descargarBuffer(url, timeout = 20000) {
     const res = await fetch(url, {
         agent: AGENTE,
@@ -138,7 +126,6 @@ async function descargarBuffer(url, timeout = 20000) {
     return Buffer.from(await res.arrayBuffer());
 }
 
-// Convertir Buffer a Stream legible
 function bufferToStream(buffer) {
     return new Readable({
         read() {
@@ -148,7 +135,53 @@ function bufferToStream(buffer) {
     });
 }
 
-// Enviar sticker pack nativo
+function calcularSHA256(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest();
+}
+
+async function cifrarBuffer(buffer, mediaType) {
+    try {
+        const stream = bufferToStream(buffer);
+        const result = await encryptedStream(stream, mediaType, {
+            logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+        });
+        
+        if (result && result.fileEncSha256 && result.mediaKey && result.encFilePath) {
+            return {
+                fileSha256: result.fileSha256 || calcularSHA256(buffer),
+                fileEncSha256: result.fileEncSha256,
+                mediaKey: result.mediaKey,
+                encFilePath: result.encFilePath,
+                fileLength: result.fileLength || buffer.length
+            };
+        }
+        throw new Error('Campos faltantes');
+    } catch (e) {
+        const fileSha256 = calcularSHA256(buffer);
+        const mediaKey = crypto.randomBytes(32);
+        
+        const { hkdf } = crypto;
+        const derivedKey = await new Promise((resolve, reject) => {
+            hkdf('sha256', mediaKey, Buffer.alloc(0), Buffer.from('WhatsApp Sticker Pack Keys'), 112, (err, key) => {
+                if (err) reject(err);
+                else resolve(key);
+            });
+        });
+        
+        const iv = derivedKey.slice(0, 16);
+        const cipherKey = derivedKey.slice(16, 48);
+        const cipher = crypto.createCipheriv('aes-256-cbc', cipherKey, iv);
+        const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
+        const fileEncSha256 = calcularSHA256(encrypted);
+        
+        const encFilePath = `/tmp/sticker-pack-${Date.now()}.enc`;
+        const fs = await import('fs');
+        fs.writeFileSync(encFilePath, encrypted);
+        
+        return { fileSha256, fileEncSha256, mediaKey, encFilePath, fileLength: buffer.length };
+    }
+}
+
 async function sendStickerPack(sock, jid, { name, publisher, description, stickers, cover, quoted }) {
     if (!stickers.length) throw new Error('Pack vacío');
     if (stickers.length > 60) throw new Error('Máximo 60 stickers por pack');
@@ -173,44 +206,17 @@ async function sendStickerPack(sock, jid, { name, publisher, description, sticke
     files[trayIconFileName] = cover;
 
     const zipBuffer = makeZip(files);
+    const up = await cifrarBuffer(zipBuffer, 'sticker-pack');
 
-    console.log(`[SPACK] ZIP creado: ${(zipBuffer.length / 1024).toFixed(2)} KB`);
+    if (!up || !up.fileEncSha256) throw new Error('Cifrado falló');
 
-    // Convertir buffer a stream antes de cifrar
-    const zipStream = bufferToStream(zipBuffer);
+    const uploadResult = await sock.waUploadToServer(up.encFilePath, {
+        fileEncSha256B64: up.fileEncSha256.toString('base64'),
+        mediaType: 'sticker-pack'
+    });
 
-    // Cifrar el stream
-    let up;
-    try {
-        up = await encryptedStream(zipStream, 'sticker-pack', { 
-            logger: sock.logger || { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
-        });
-    } catch (e) {
-        console.error('[SPACK] Error en encryptedStream:', e.message);
-        throw new Error('No se pudo cifrar el pack: ' + e.message);
-    }
+    if (!uploadResult || !uploadResult.directPath) throw new Error('Upload falló');
 
-    console.log('[SPACK] Pack cifrado, subiendo a WhatsApp...');
-
-    // Subir a WhatsApp
-    let uploadResult;
-    try {
-        uploadResult = await sock.waUploadToServer(up.encFilePath, {
-            fileEncSha256B64: up.fileEncSha256.toString('base64'),
-            mediaType: 'sticker-pack'
-        });
-    } catch (e) {
-        console.error('[SPACK] Error en waUploadToServer:', e.message);
-        throw new Error('No se pudo subir el pack: ' + e.message);
-    }
-
-    if (!uploadResult || !uploadResult.directPath) {
-        throw new Error('Upload falló: sin directPath');
-    }
-
-    console.log('[SPACK] Pack subido, enviando mensaje...');
-
-    // Construir mensaje de sticker pack
     const content = {
         stickerPackMessage: {
             name,
@@ -230,15 +236,8 @@ async function sendStickerPack(sock, jid, { name, publisher, description, sticke
         }
     };
 
-    // Enviar usando relayMessage
-    const m = generateWAMessageFromContent(jid, content, { 
-        quoted, 
-        userJid: sock.user.id 
-    });
-    
+    const m = generateWAMessageFromContent(jid, content, { quoted, userJid: sock.user.id });
     await sock.relayMessage(jid, m.message, { messageId: m.key.id });
-    
-    console.log(`[SPACK] ✅ Pack nativo enviado: ${name} (${meta.length} stickers)`);
     return m;
 }
 
@@ -251,11 +250,8 @@ async function buscarPacks(query) {
         nombre: p.nombre || p.name || 'Sin nombre',
         autor: p.autor || p.author || 'Desconocido',
         stickers: p.sticker_count || 0,
-        vistas: p.view_count || 0,
-        descargas: p.export_count || 0,
         animado: p.isAnimated || false,
         pagado: p.isPaid || false,
-        preview: p.vista_previa || p.vista || p.preview || '',
         url: p.url || ''
     }));
 }
@@ -267,13 +263,7 @@ async function obtenerPack(url) {
     return {
         nombre: pack.nombre || pack.name || 'Sin nombre',
         autor: pack.autora || pack.autor || pack.author || 'Desconocido',
-        username: pack.username || '',
-        seguidores: pack.seguidores || 0,
-        privado: pack.isPrivate || false,
-        avatar: pack.avatar || '',
         total: pack.total || pack.sticker_count || 0,
-        vistas: pack.viewCount || pack.view_count || 0,
-        descargas: pack.exportCount || pack.export_count || 0,
         animado: pack.isAnimated || false,
         preview: pack.vista_previa || pack.vista || pack.preview || '',
         url: pack.url || url,
@@ -286,154 +276,70 @@ export default {
     nombre: 'spack',
     categoria: 'Stickers',
     alias: ['stickerpack', 'stickers', 'packsticker', 'pack', 'stickerly'],
-    descripcion: 'Busca y descarga packs de stickers de Stickerly como pack nativo',
-    uso: '.spack <nombre> | .spack <url> | .spack <número>',
+    descripcion: 'Busca y descarga packs de stickers de Stickerly',
+    uso: '.spack <nombre> | .spack <número> | .spack <url>',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const query = String(argumento || '').trim();
         const sender = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
 
         if (!query) {
-            return await responder.texto(
-                '╭━━〔 🎨 𝐒𝐓𝐈𝐂𝐊𝐄𝐑 𝐏𝐀𝐂𝐊 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ❌ Escribe el nombre del\n' +
-                '┃    pack o pega la URL\n' +
-                '┃\n' +
-                '┃ 💡 Ejemplos:\n' +
-                '┃ ➪ .spack my melody\n' +
-                '┃ ➪ .spack https://sticker.ly/s/XXX\n' +
-                '┃ ➪ .spack 1 (tras buscar)\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+            return await responder.texto('📦 *Uso:*\n.spack <nombre>\n.spack <número>\n.spack <url>');
         }
 
-        const esNumero = /^\d+$/.test(query);
-
-        if (esNumero) {
-            const num = parseInt(query);
+        // Elegir por número
+        if (/^\d+$/.test(query)) {
             const session = global.spackSessions.get(sender);
-
             if (!session || Date.now() - session.t > SESSION_TTL) {
-                return await responder.texto(
-                    '❌ Sesión expirada. Busca de nuevo:\n➪ *.spack my melody*'
-                );
+                return await responder.texto('❌ Sesión expirada. Busca de nuevo: *.spack nombre*');
             }
-
-            const item = session.resultados[num - 1];
-            if (!item) {
-                return await responder.texto(
-                    '❌ Número inválido. Elige del 1 al ' + session.resultados.length
-                );
-            }
-
-            await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
+            const item = session.resultados[parseInt(query) - 1];
+            if (!item) return await responder.texto('❌ Número inválido.');
             return await enviarPack(sock, msg, responder, jid, item.url);
         }
 
+        // URL directa
         if (esURL(query)) {
-            await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
             return await enviarPack(sock, msg, responder, jid, query);
         }
 
+        // Búsqueda: un solo mensaje con la lista
         await sock.sendMessage(jid, { react: { text: '🔍', key: msg.key } });
 
         try {
             const resultados = await buscarPacks(query);
+            global.spackSessions.set(sender, { resultados, t: Date.now() });
 
-            global.spackSessions.set(sender, { 
-                resultados, 
-                t: Date.now() 
-            });
-
-            let cap =
-                '╭━━〔 🎨 𝐑𝐄𝐒𝐔𝐋𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
-                '┃\n' +
-                '┃ 🔍 *' + query + '*\n' +
-                '┃ 📊 ' + resultados.length + ' packs encontrados\n' +
-                '┃\n';
-
+            let cap = `📦 *Resultados:* ${query}\n\n`;
             resultados.forEach((p, i) => {
-                cap += '┃ *' + (i + 1) + '.* ' + p.nombre.slice(0, 32) + '\n';
-                cap += '┃    👤 ' + p.autor + ' | 📸 ' + p.stickers + '\n';
-                cap += '┃    👁️ ' + fmtNum(p.vistas) + ' | ⬇️ ' + fmtNum(p.descargas);
-                if (p.animado) cap += ' | 🎬 ANIM';
-                if (p.pagado) cap += ' | 💰 PAID';
-                cap += '\n';
-                if (i < resultados.length - 1) cap += '┃\n';
+                cap += `*${i + 1}.* ${p.nombre.slice(0, 30)}\n`;
+                cap += `   👤 ${p.autor} • 📸 ${p.stickers}${p.animado ? ' • 🎬' : ''}\n`;
             });
-
-            cap +=
-                '┃\n' +
-                '┣━━〔 📥 𝐃𝐄𝐒𝐂𝐀𝐑𝐆𝐀𝐑 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ➪ .spack 1\n' +
-                '┃ ➪ .spack 2\n' +
-                '┃\n' +
-                '┃ ⏳ Sesión válida 5 min\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
-            if (resultados[0]?.preview) {
-                try {
-                    await sock.sendMessage(jid, {
-                        image: { url: resultados[0].preview },
-                        caption: cap
-                    }, { quoted: msg });
-                    await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-                    return;
-                } catch {}
-            }
+            cap += `\n💡 Elige: *.spack 1*`;
 
             await responder.texto(cap);
             await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
-            console.error('[SPACK-SEARCH] Error:', error?.message || error);
             await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } });
-            await responder.texto(
-                '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
-                '┃\n' +
-                '┃ ⚠️ ' + (error?.message || 'No se encontraron packs') + '\n' +
-                '┃\n' +
-                '┃ 💡 Intenta con otro nombre\n' +
-                '┃    o pega la URL directa\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
+            await responder.texto('❌ ' + (error?.message || 'Sin resultados'));
         }
     }
 };
 
 async function enviarPack(sock, msg, responder, jid, url) {
+    // Solo reacción mientras procesa, sin mensajes largos
+    await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
+
     try {
         const pack = await obtenerPack(url);
         const stickers = pack.stickers.slice(0, MAX_STICKERS);
 
-        if (!stickers.length) {
-            throw new Error('El pack no tiene stickers');
-        }
+        if (!stickers.length) throw new Error('El pack no tiene stickers');
 
         const packName = limpiarPackName(pack.nombre);
         const packAuthor = limpiarPackName(pack.autor);
 
-        await responder.texto(
-            '╭━━〔 📦 𝐂𝐑𝐄𝐀𝐍𝐃𝐎 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 〕━━⬣\n' +
-            '┃\n' +
-            '┃ 📦 *' + pack.nombre + '*\n' +
-            '┃ 👤 ' + pack.autor + '\n' +
-            '┃ 📸 Procesando ' + stickers.length + ' stickers\n' +
-            '┃ ' + (pack.animado ? '🎬 Animado' : '🖼️ Estático') + '\n' +
-            '┃\n' +
-            '┃ ⏳ Descargando y creando\n' +
-            '┃    pack nativo de WhatsApp...\n' +
-            '┃    (1-2 minutos)\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-        );
-
-        // Descargar y procesar stickers
         const stickersProcesados = (
             await Promise.allSettled(
                 stickers.map(async (stickerUrl) => {
@@ -447,24 +353,16 @@ async function enviarPack(sock, msg, responder, jid, url) {
             .filter((r) => r.status === 'fulfilled')
             .map((r) => r.value);
 
-        if (!stickersProcesados.length) {
-            throw new Error('No se pudo procesar ningún sticker');
-        }
+        if (!stickersProcesados.length) throw new Error('No se procesó ningún sticker');
 
-        // Crear portada (con fallback si falla)
         let cover;
         try {
             const coverBuf = await descargarBuffer(pack.preview, 15000);
-            cover = await sharp(coverBuf)
-                .resize(96, 96, { fit: 'cover' })
-                .webp({ quality: 80 })
-                .toBuffer();
+            cover = await sharp(coverBuf).resize(96, 96, { fit: 'cover' }).webp({ quality: 80 }).toBuffer();
         } catch (e) {
-            console.log('[SPACK] Cover falló, usando primer sticker como cover');
             cover = stickersProcesados[0].sticker;
         }
 
-        // Enviar pack nativo
         await sendStickerPack(sock, jid, {
             name: packName,
             publisher: packAuthor,
@@ -474,37 +372,12 @@ async function enviarPack(sock, msg, responder, jid, url) {
             quoted: msg
         });
 
-        await responder.texto(
-            '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 𝐈𝐍𝐒𝐓𝐀𝐋𝐀𝐃𝐎 〕━━⬣\n' +
-            '┃\n' +
-            '┃ 📦 Pack › *' + packName + '*\n' +
-            '┃ 👤 Autor › *' + packAuthor + '*\n' +
-            '┃ 📸 ' + stickersProcesados.length + ' stickers\n' +
-            '┃\n' +
-            '┃ ✅ El pack ya está instalado\n' +
-            '┃    en tu WhatsApp\n' +
-            '┃\n' +
-            '┃ 📥 Ver pack completo:\n' +
-            '┃ ' + (pack.compartir || pack.url) + '\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-        );
-
+        await responder.texto(`✅ Pack *${packName}* instalado (${stickersProcesados.length} stickers)`);
         await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-        console.log(`[SPACK] ✅ Pack nativo enviado: ${pack.nombre} (${stickersProcesados.length} stickers)`);
 
     } catch (error) {
         console.error('[SPACK] Error:', error?.message || error);
         await sock.sendMessage(jid, { react: { text: '❌', key: msg.key } });
-        await responder.texto(
-            '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
-            '┃\n' +
-            '┃ ⚠️ ' + (error?.message || 'No se pudo crear el pack') + '\n' +
-            '┃\n' +
-            '┃ 💡 Verifica que la URL sea\n' +
-            '┃    válida de sticker.ly\n' +
-            '┃\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-        );
+        await responder.texto('❌ ' + (error?.message || 'No se pudo crear el pack'));
     }
 }
