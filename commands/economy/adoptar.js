@@ -1,16 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_ADOPCIONES = path.join(__dirname, '..', '..', 'database', 'adopciones.json');
-const tmp = path.join(__dirname, '..', '..', 'tmp');
-
-if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true });
 
 function leerAdopciones() {
     try {
@@ -31,276 +25,102 @@ function guardarAdopcion(adoptante, adoptado) {
     fs.writeFileSync(RUTA_ADOPCIONES, JSON.stringify(db, null, 2), 'utf8');
 }
 
-async function obtenerFoto(sock, jid) {
-    try {
-        const url = await sock.profilePictureUrl(jid, 'image');
-        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-        if (!res.ok) return null;
-        const buf = Buffer.from(await res.arrayBuffer());
-        return buf.length > 0 ? buf : null;
-    } catch {
-        return null;
-    }
-}
-
-function dibujarAvatarCircular(ctx, x, y, radio, buffer, nombre) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, radio, 0, Math.PI * 2, true);
-    ctx.closePath();
-    ctx.clip();
-
-    if (buffer) {
-        const img = new (require('canvas').Image)();
-        img.src = buffer;
-        ctx.drawImage(img, x - radio, y - radio, radio * 2, radio * 2);
-    } else {
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(x - radio, y - radio, radio * 2, radio * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${radio}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText((nombre || '?').charAt(0).toUpperCase(), x, y + 4);
-    }
-    ctx.restore();
-
-    ctx.beginPath();
-    ctx.arc(x, y, radio, 0, Math.PI * 2, true);
-    ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-}
-
-async function generarConCanvas(sock, adoptante, adoptado, nombreA, nombreB) {
-    const { createCanvas } = require('canvas');
-    const canvas = createCanvas(700, 400);
-    const ctx = canvas.getContext('2d');
-
-    const grad = ctx.createLinearGradient(0, 0, 700, 400);
-    grad.addColorStop(0, '#05070d');
-    grad.addColorStop(0.5, '#0a1f15');
-    grad.addColorStop(1, '#05070d');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 700, 400);
-
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(15, 15, 670, 370);
-    ctx.strokeStyle = 'rgba(74, 222, 128, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(22, 22, 656, 356);
-
-    const esquinas = [[15, 15], [685, 15], [15, 385], [685, 385]];
-    ctx.fillStyle = '#4ade80';
-    esquinas.forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fill();
-    });
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 30px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🍼 CERTIFICADO DE ADOPCIÓN 🍼', 350, 65);
-
-    ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(100, 80);
-    ctx.lineTo(600, 80);
-    ctx.stroke();
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '14px Arial, sans-serif';
-    ctx.fillText('BOT-API • Registro oficial de familia', 350, 100);
-
-    const fotoA = await obtenerFoto(sock, adoptante);
-    const fotoB = await obtenerFoto(sock, adoptado);
-
-    dibujarAvatarCircular(ctx, 200, 220, 65, fotoA, nombreA);
-    dibujarAvatarCircular(ctx, 500, 220, 65, fotoB, nombreB);
-
-    ctx.fillStyle = '#ef4444';
-    ctx.font = '50px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('❤️', 350, 220);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const nA = nombreA.length > 18 ? nombreA.substring(0, 15) + '...' : nombreA;
-    const nB = nombreB.length > 18 ? nombreB.substring(0, 15) + '...' : nombreB;
-    ctx.fillText(nA, 200, 300);
-    ctx.fillText(nB, 500, 300);
-
-    ctx.fillStyle = '#4ade80';
-    ctx.font = '12px Arial, sans-serif';
-    ctx.fillText(' ADOPTANTE', 200, 320);
-    ctx.fillText(' ADOPTADO', 500, 320);
-
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = 'italic 14px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`"${nombreA} adopta oficialmente a ${nombreB}"`, 350, 360);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '11px Arial, sans-serif';
-    const fecha = new Date().toLocaleDateString('es-ES', {
-        year: 'numeric', month: 'long', day: 'numeric'
-    });
-    ctx.fillText(`📅 ${fecha}`, 350, 385);
-
-    return canvas.toBuffer('image/png');
-}
-
-async function generarConSharp(sock, adoptante, adoptado, nombreA, nombreB) {
-    const sharp = require('sharp');
-    const fotoA = await obtenerFoto(sock, adoptante);
-    const fotoB = await obtenerFoto(sock, adoptado);
-
-    const fecha = new Date().toLocaleDateString('es-ES', {
-        year: 'numeric', month: 'long', day: 'numeric'
-    });
-
-    const svg = `
-<svg width="700" height="400" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#05070d"/>
-      <stop offset="50%" style="stop-color:#0a1f15"/>
-      <stop offset="100%" style="stop-color:#05070d"/>
-    </linearGradient>
-  </defs>
-  <rect width="700" height="400" fill="url(#bg)"/>
-  <rect x="15" y="15" width="670" height="370" fill="none" stroke="#22c55e" stroke-width="3"/>
-  <rect x="22" y="22" width="656" height="356" fill="none" stroke="rgba(74,222,128,0.3)" stroke-width="1"/>
-  
-  <text x="350" y="65" font-family="Arial" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">🍼 CERTIFICADO DE ADOPCIÓN 🍼</text>
-  <line x1="100" y1="80" x2="600" y2="80" stroke="#4ade80" stroke-width="1"/>
-  <text x="350" y="100" font-family="Arial" font-size="14" fill="#94a3b8" text-anchor="middle">BOT-API • Registro oficial de familia</text>
-  
-  <circle cx="200" cy="220" r="65" fill="#334155" stroke="#4ade80" stroke-width="3"/>
-  <circle cx="500" cy="220" r="65" fill="#334155" stroke="#4ade80" stroke-width="3"/>
-  
-  <text x="350" y="240" font-family="Arial" font-size="50" text-anchor="middle">❤️</text>
-  
-  <text x="200" y="310" font-family="Arial" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">${nombreA.length > 18 ? nombreA.substring(0, 15) + '...' : nombreA}</text>
-  <text x="500" y="310" font-family="Arial" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">${nombreB.length > 18 ? nombreB.substring(0, 15) + '...' : nombreB}</text>
-  
-  <text x="200" y="330" font-family="Arial" font-size="12" fill="#4ade80" text-anchor="middle">👑 ADOPTANTE</text>
-  <text x="500" y="330" font-family="Arial" font-size="12" fill="#4ade80" text-anchor="middle">👶 ADOPTADO</text>
-  
-  <text x="350" y="365" font-family="Arial" font-size="14" font-style="italic" fill="#cbd5e1" text-anchor="middle">"${nombreA} adopta oficialmente a ${nombreB}"</text>
-  <text x="350" y="388" font-family="Arial" font-size="11" fill="#64748b" text-anchor="middle">📅 ${fecha}</text>
-</svg>`;
-
-    return await sharp(Buffer.from(svg)).png().toBuffer();
-}
-
-async function obtenerNombreUsuario(sock, jid, msg) {
-    // Si es el mismo que mandó el mensaje, usar pushName
-    if (jid === msg.key.participant || jid === msg.key.remoteJid) {
-        return msg.pushName || jid.split('@')[0];
-    }
-
-    // Intentar obtener desde el store de contactos
-    try {
-        if (sock?.store?.contacts?.[jid]?.name) {
-            return sock.store.contacts[jid].name;
-        }
-        if (sock?.store?.contacts?.[jid]?.notify) {
-            return sock.store.contacts[jid].notify;
-        }
-    } catch {}
-
-    // Intentar obtener desde metadata del grupo (si es grupo)
-    try {
-        if (msg.key.remoteJid?.endsWith('@g.us')) {
-            const metadata = await sock.groupMetadata(msg.key.remoteJid);
-            const participante = metadata.participants?.find(p => {
-                const pJid = typeof p === 'string' ? p : p.id || p.jid;
-                return pJid === jid;
-            });
-            if (participante?.name || participante?.notify) {
-                return participante.name || participante.notify;
-            }
-        }
-    } catch {}
-
-    // Fallback: número limpio
-    return jid.split('@')[0].replace(/\D/g, '');
-}
-
 export default {
     nombre: 'adoptar',
     categoria: 'Diversión',
-    alias: ['adopt', 'hijo', 'hija'],
-    descripcion: 'Adopta a otro usuario y genera un certificado oficial.',
+    alias: ['adopt', 'hijo', 'hija', 'adoptados', 'misadoptados', 'listaadoptados'],
+    descripcion: '.adoptar @usuario para adoptar | .adoptados para ver tu lista',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const mencion = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const adoptado = mencion[0];
         const adoptante = msg.key.participant || msg.key.remoteJid;
+        const nombreComando = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '')
+            .trim().toLowerCase().split(' ')[0].replace('.', '');
 
-        if (!adoptado || adoptado === adoptante) {
-            return await responder.texto(
-                '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━\n' +
+        // ───────────── .adoptados ─────────────
+        if (['adoptados', 'misadoptados', 'listaadoptados'].includes(nombreComando)) {
+            const objetivo = adoptado || adoptante;
+            const db = leerAdopciones();
+            const lista = db[objetivo] || [];
+
+            if (lista.length === 0) {
+                return await responder.texto(
+                    '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐓𝐀𝐃𝐎𝐒 〕━━⬣\n' +
+                    '┃\n' +
+                    `┃ 📭 *@${objetivo.split('@')[0]}* no ha adoptado a nadie aún.\n` +
+                    '┃\n' +
+                    '┃ 💡 Usa *.adoptar @usuario* para empezar tu familia.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣'
+                );
+            }
+
+            let texto =
+                '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐓𝐀𝐃𝐎𝐒 〕━━\n' +
                 '┃\n' +
-                '┃ ❌ Debes mencionar a alguien para adoptar.\n' +
-                '\n' +
-                '┃ 💡 Ejemplo: .adoptar @usuario\n' +
+                `┃ 👑 *@${objetivo.split('@')[0]}* tiene *${lista.length}* adoptado(s):\n` +
+                '┃\n';
+
+            lista.forEach((adoptadoJid, i) => {
+                texto += `┃ ${i + 1}. @${adoptadoJid.split('@')[0]}\n`;
+            });
+
+            texto +=
                 '┃\n' +
-                '━━━━━━━━━━━━━━━━⬣'
-            );
+                '┃ 📅 Registrados en BOT-API\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣';
+
+            return await sock.sendMessage(jid, {
+                text: texto,
+                mentions: [objetivo, ...lista]
+            }, { quoted: msg });
         }
 
-        // Obtener nombres reales (pushName)
-        const nombreAdoptante = await obtenerNombreUsuario(sock, adoptante, msg);
-        const nombreAdoptado = await obtenerNombreUsuario(sock, adoptado, msg);
+        // ───────────── .adoptar ─────────────
+        if (!adoptado || adoptado === adoptante) {
+            return await responder.texto(
+                '╭━━〔 👶 𝐀𝐎𝐏𝐂𝐎́𝐍 〕━━⬣\n' +
+                '┃\n' +
+                '┃  Debes mencionar a alguien para adoptar.\n' +
+                '┃\n' +
+                '┃ 💡 Ejemplo: .adoptar @usuario\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣'
+            );
+        }
 
         try {
             await sock.sendMessage(jid, { react: { text: '🍼', key: msg.key } });
 
             guardarAdopcion(adoptante, adoptado);
 
-            let buffer = null;
-
-            try {
-                buffer = await generarConCanvas(sock, adoptante, adoptado, nombreAdoptante, nombreAdoptado);
-                console.log('[ADOPTAR] ✅ Imagen generada con Canvas');
-            } catch (e1) {
-                console.log('[ADOPTAR] Canvas falló, usando Sharp:', e1?.message);
-                try {
-                    buffer = await generarConSharp(sock, adoptante, adoptado, nombreAdoptante, nombreAdoptado);
-                    console.log('[ADOPTAR] ✅ Imagen generada con Sharp');
-                } catch (e2) {
-                    console.log('[ADOPTAR] Sharp también falló:', e2?.message);
-                }
-            }
-
-            const caption =
-                '╭━━〔 👶 𝐀𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 𝐄𝐗𝐈𝐓𝐎𝐒𝐀 〕━━⬣\n' +
+            const certificado =
+                '╭━━━〔 📜 𝐂𝐄𝐓𝐈𝐅𝐈𝐂𝐀𝐎 𝐃𝐄 𝐃𝐎𝐏𝐂𝐈𝐎́𝐍 〕━━━╮\n' +
                 '┃\n' +
-                `┃ 🍼 *${nombreAdoptante}* ha adoptado a\n` +
-                `┃ 👶 *${nombreAdoptado}*\n` +
+                '┃  🍼 *¡NUEVA ADOPCIÓN REGISTRADA!*\n' +
                 '┃\n' +
-                '┃ 📜 Certificado registrado en BOT-API\n' +
-                '┃  ' + new Date().toLocaleDateString('es-ES') + '\n' +
+                `┃  👑 *Padre/Madre:* @${adoptante.split('@')[0]}\n` +
+                `┃  👶 *Hijo/a:* @${adoptado.split('@')[0]}\n` +
+                '\n' +
+                '┃  ━━━━━━━━━━━━━━━━━━━━━━\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━';
+                '┃  "Por la presente se certifica que\n' +
+                '┃   se ha realizado una adopción oficial\n' +
+                '┃   registrada en el sistema BOT-API."\n' +
+                '┃\n' +
+                '┃  ━━━━━━━━━━━━━━━━━━━━━━━\n' +
+                '┃\n' +
+                `┃  📅 Fecha: ${new Date().toLocaleDateString('es-ES')}\n` +
+                '┃  🏛️ Registrado por: ⚡ BOT-API\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯';
 
-            if (buffer) {
-                await sock.sendMessage(jid, {
-                    image: buffer,
-                    caption,
-                    mentions: [adoptante, adoptado]
-                }, { quoted: msg });
-            } else {
-                await responder.texto(caption);
-            }
+            await sock.sendMessage(jid, {
+                text: certificado,
+                mentions: [adoptante, adoptado]
+            }, { quoted: msg });
 
             await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
 
