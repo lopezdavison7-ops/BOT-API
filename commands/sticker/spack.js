@@ -1,6 +1,22 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
-import crypto from 'crypto';
+import axios from 'axios';
+import sharp from 'sharp';
+import { crc32 } from 'zlib';
+import {
+    MEDIA_PATH_MAP,
+    MEDIA_HKDF_KEY_MAPPING,
+    encryptedStream,
+    generateWAMessageFromContent,
+    generateMessageIDV2,
+    unixTimestampSeconds,
+    sha256,
+    proto
+} from 'baileys';
+
+// Registrar tipo de media para sticker packs
+MEDIA_PATH_MAP['sticker-pack'] = '/mms/document';
+MEDIA_HKDF_KEY_MAPPING['sticker-pack'] = 'Sticker Pack';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const HEADERS = { 
@@ -8,12 +24,14 @@ const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
-const MAX_STICKERS = 15;
+const MAX_STICKERS = 30;
 const API_SEARCH = 'https://api.delirius.online/search/stickerly';
 const API_DOWNLOAD = 'https://api.delirius.online/download/stickerly';
 
 if (!global.spackSessions) global.spackSessions = new Map();
 const SESSION_TTL = 5 * 60 * 1000;
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function reqJSON(url, timeout = 15000) {
     const res = await fetch(url, { 
@@ -42,6 +60,140 @@ function limpiarPackName(s) {
 
 function apiOk(data) {
     return data.estado === true || data.estado === 'verdadero' || data.status === true;
+}
+
+// Verificar si es WebP
+const isWebp = (b) =>
+    b.length >= 12 &&
+    b.toString('ascii', 0, 4) === 'RIFF' &&
+    b.toString('ascii', 8, 12) === 'WEBP';
+
+// Verificar si es WebP animado
+const isAnimatedWebp = (b) => {
+    if (!isWebp(b)) return false;
+    let o = 12;
+    while (o < b.length - 8) {
+        const tag = b.toString('ascii', o, o + 4);
+        const sz = b.readUInt32LE(o + 4);
+        if (tag === 'VP8X' && b[o + 8] & 0x02) return true;
+        if (tag === 'ANIM' || tag === 'ANMF') return true;
+        o += 8 + sz + (sz % 2);
+    }
+    return false;
+};
+
+// Convertir a WebP
+const toWebp = async (buffer, animated = false) =>
+    sharp(buffer, animated ? { animated: true } : {})
+        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .webp({ quality: 80, ...(animated ? { loop: 0 } : {}) })
+        .toBuffer();
+
+// Crear ZIP manual
+const makeZip = (files) => {
+    const locals = [];
+    const centrals = [];
+    let offset = 0;
+    for (const [name, data] of Object.entries(files)) {
+        const n = Buffer.from(name, 'utf8');
+        const crc = crc32(data);
+        const local = Buffer.alloc(30 + n.length);
+        local.writeUInt32LE(0x04034b50, 0);
+        local.writeUInt16LE(20, 4);
+        local.writeUInt32LE(crc, 14);
+        local.writeUInt32LE(data.length, 18);
+        local.writeUInt32LE(data.length, 22);
+        local.writeUInt16LE(n.length, 26);
+        n.copy(local, 30);
+        locals.push(local, data);
+        const central = Buffer.alloc(46 + n.length);
+        central.writeUInt32LE(0x02014b50, 0);
+        central.writeUInt16LE(20, 4);
+        central.writeUInt16LE(20, 6);
+        central.writeUInt32LE(crc, 16);
+        central.writeUInt32LE(data.length, 20);
+        central.writeUInt32LE(data.length, 24);
+        central.writeUInt16LE(n.length, 28);
+        central.writeUInt32LE(offset, 42);
+        n.copy(central, 46);
+        centrals.push(central);
+        offset += local.length + data.length;
+    }
+    const cd = Buffer.concat(centrals);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(centrals.length, 8);
+    end.writeUInt16LE(centrals.length, 10);
+    end.writeUInt32LE(cd.length, 12);
+    end.writeUInt32LE(offset, 16);
+    return Buffer.concat([...locals, cd, end]);
+};
+
+// Descargar buffer
+async function descargarBuffer(url, timeout = 20000) {
+    const res = await fetch(url, {
+        agent: AGENTE,
+        headers: { ...HEADERS, 'Accept': '*/*' },
+        signal: AbortSignal.timeout(timeout)
+    });
+    if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
+    return Buffer.from(await res.arrayBuffer());
+}
+
+// Enviar sticker pack nativo
+async function sendStickerPack(sock, jid, { name, publisher, description, stickers, cover, quoted }) {
+    if (!stickers.length) throw new Error('Pack vacío');
+    if (stickers.length > 60) throw new Error('Máximo 60 stickers por pack');
+
+    const packId = generateMessageIDV2();
+    const files = {};
+
+    const meta = stickers.map((s) => {
+        if (s.sticker.length > 1024 * 1024) throw new Error('Un sticker supera 1MB');
+        const fileName = sha256(s.sticker).toString('base64').replace(/\//g, '-') + '.webp';
+        files[fileName] = s.sticker;
+        return {
+            fileName,
+            mimetype: 'image/webp',
+            isAnimated: !!s.isAnimated,
+            emojis: s.emojis?.length ? s.emojis : ['🎭'],
+            accessibilityLabel: ''
+        };
+    });
+
+    const trayIconFileName = `${packId}.webp`;
+    files[trayIconFileName] = cover;
+
+    const zipBuffer = makeZip(files);
+
+    const up = await encryptedStream(zipBuffer, 'sticker-pack', { logger: sock.logger });
+    const { directPath } = await sock.waUploadToServer(up.encFilePath, {
+        fileEncSha256B64: up.fileEncSha256.toString('base64'),
+        mediaType: 'sticker-pack'
+    });
+
+    const content = {
+        stickerPackMessage: {
+            name,
+            publisher,
+            packDescription: description,
+            stickerPackId: packId,
+            stickerPackOrigin: proto.Message.StickerPackMessage.StickerPackOrigin.THIRD_PARTY,
+            stickerPackSize: zipBuffer.length,
+            stickers: meta,
+            fileSha256: up.fileSha256,
+            fileEncSha256: up.fileEncSha256,
+            mediaKey: up.mediaKey,
+            directPath,
+            fileLength: up.fileLength,
+            mediaKeyTimestamp: unixTimestampSeconds(),
+            trayIconFileName
+        }
+    };
+
+    const m = generateWAMessageFromContent(jid, content, { quoted, userJid: sock.user.id });
+    await sock.relayMessage(jid, m.message, { messageId: m.key.id });
+    return m;
 }
 
 async function buscarPacks(query) {
@@ -82,117 +234,6 @@ async function obtenerPack(url) {
         compartir: pack.compartir || pack.share || '',
         stickers: pack.pegatinas || pack.stickers || []
     };
-}
-
-async function descargarBuffer(url, timeout = 20000) {
-    const res = await fetch(url, {
-        agent: AGENTE,
-        headers: { ...HEADERS, 'Accept': '*/*' },
-        signal: AbortSignal.timeout(timeout)
-    });
-    if (!res.ok) throw new Error('Descarga HTTP ' + res.status);
-    return Buffer.from(await res.arrayBuffer());
-}
-
-async function sendStickerPack(sock, jid, stickers, packName, packAuthor, isAnimated, msg) {
-    try {
-        // Generar ID único para el pack
-        const packId = `com.botapi.stickerpack.${Date.now()}.${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Preparar array de stickers con metadata
-        const stickerList = [];
-        
-        for (let i = 0; i < stickers.length; i++) {
-            const stickerUrl = stickers[i];
-            
-            try {
-                // Descargar el sticker
-                const buffer = await descargarBuffer(stickerUrl, 20000);
-                if (!buffer.length) continue;
-                
-                // Calcular hashes
-                const fileSha256 = crypto.createHash('sha256').update(buffer).digest();
-                const fileEncSha256 = fileSha256; // Simplificado
-                
-                // Subir el sticker a WhatsApp
-                const uploadResult = await sock.waUploadToServer(buffer, { 
-                    mimetype: 'image/webp',
-                    fileSha256: fileSha256
-                });
-                
-                if (!uploadResult || !uploadResult.directPath) {
-                    console.log(`[SPACK] Falló upload sticker ${i + 1}`);
-                    continue;
-                }
-                
-                // Construir objeto Sticker
-                stickerList.push({
-                    emojis: [],
-                    fileName: `${String(i).padStart(2, '0')}_${uploadResult.fileEncSha256.toString('base64')}.webp`,
-                    isAnimated: isAnimated,
-                    accessibilityLabel: '',
-                    isLottie: false,
-                    mimetype: 'image/webp',
-                    // Campos adicionales para el pack
-                    fileSha256: fileSha256,
-                    fileEncSha256: uploadResult.fileEncSha256 || fileEncSha256,
-                    mediaKey: uploadResult.mediaKey || crypto.randomBytes(32),
-                    directPath: uploadResult.directPath,
-                    fileLength: buffer.length
-                });
-                
-                console.log(`[SPACK] Sticker ${i + 1}/${stickers.length} subido`);
-                
-            } catch (e) {
-                console.log(`[SPACK] Error en sticker ${i + 1}: ${e.message}`);
-            }
-        }
-        
-        if (stickerList.length === 0) {
-            throw new Error('No se pudo subir ningún sticker');
-        }
-        
-        // Crear el mensaje StickerPackMessage
-        const stickerPackMessage = {
-            stickerPackMessage: {
-                stickers: stickerList,
-                stickerPackId: packId,
-                name: packName,
-                publisher: packAuthor,
-                fileLength: stickerList.reduce((sum, s) => sum + (s.fileLength || 0), 0),
-                fileSha256: crypto.createHash('sha256').update(packName + packAuthor).digest(),
-                fileEncSha256: crypto.createHash('sha256').update(packId).digest(),
-                mediaKey: crypto.randomBytes(32),
-                directPath: '/sticker-pack',
-                contextInfo: {
-                    mentionedJid: [],
-                    groupMentions: []
-                },
-                packDescription: '',
-                mediaKeyTimestamp: Math.floor(Date.now() / 1000),
-                trayIconFileName: `${packId}.png`,
-                stickerPackSize: stickerList.length,
-                stickerPackOrigin: 1
-            }
-        };
-        
-        // Enviar usando relayMessage
-        const message = await sock.generateWAMessageFromContent(jid, stickerPackMessage, {
-            quoted: msg,
-            messageId: 'SPACK' + Date.now()
-        });
-        
-        await sock.relayMessage(jid, message.message, {
-            messageId: message.key.id
-        });
-        
-        console.log(`[SPACK] ✅ Pack nativo enviado: ${packName} (${stickerList.length} stickers)`);
-        return true;
-        
-    } catch (error) {
-        console.error('[SPACK] Error enviando pack:', error.message);
-        return false;
-    }
 }
 
 export default {
@@ -330,7 +371,6 @@ async function enviarPack(sock, msg, responder, jid, url) {
 
         const packName = limpiarPackName(pack.nombre);
         const packAuthor = limpiarPackName(pack.autor);
-        const isAnimated = Boolean(pack.animado);
 
         await responder.texto(
             '╭━━〔 📦 𝐂𝐑𝐄𝐀𝐍𝐃𝐎 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 〕━━⬣\n' +
@@ -338,91 +378,67 @@ async function enviarPack(sock, msg, responder, jid, url) {
             '┃ 📦 *' + pack.nombre + '*\n' +
             '┃ 👤 ' + pack.autor + '\n' +
             '┃ 📸 Procesando ' + stickers.length + ' stickers\n' +
-            '┃ ' + (isAnimated ? '🎬 Animado' : '🖼️ Estático') + '\n' +
+            '┃ ' + (pack.animado ? '🎬 Animado' : '🖼️ Estático') + '\n' +
             '┃\n' +
-            '┃ ⏳ Subiendo stickers a\n' +
-            '┃    WhatsApp y creando pack...\n' +
-            '┃    (Esto puede tardar 1-2 min)\n' +
+            '┃ ⏳ Descargando y creando\n' +
+            '┃    pack nativo de WhatsApp...\n' +
+            '┃    (1-2 minutos)\n' +
             '┃\n' +
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
 
-        // Intentar enviar como pack nativo
-        const success = await sendStickerPack(
-            sock, 
-            jid, 
-            stickers, 
-            packName, 
-            packAuthor, 
-            isAnimated, 
-            msg
+        // Descargar y procesar stickers
+        const stickersProcesados = (
+            await Promise.allSettled(
+                stickers.map(async (stickerUrl) => {
+                    const buf = await descargarBuffer(stickerUrl, 20000);
+                    const animated = pack.animado || isAnimatedWebp(buf);
+                    const webp = isWebp(buf) ? buf : await toWebp(buf, animated);
+                    return { sticker: webp, isAnimated: animated, emojis: ['🎭'] };
+                })
+            )
+        )
+            .filter((r) => r.status === 'fulfilled')
+            .map((r) => r.value);
+
+        if (!stickersProcesados.length) {
+            throw new Error('No se pudo procesar ningún sticker');
+        }
+
+        // Crear portada
+        const cover = await sharp(await descargarBuffer(pack.preview, 15000))
+            .resize(96, 96, { fit: 'cover' })
+            .webp({ quality: 80 })
+            .toBuffer();
+
+        // Enviar pack nativo
+        await sendStickerPack(sock, jid, {
+            name: packName,
+            publisher: packAuthor,
+            description: `${pack.nombre} • BOT-API`,
+            stickers: stickersProcesados,
+            cover,
+            quoted: msg
+        });
+
+        await responder.texto(
+            '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 𝐈𝐍𝐒𝐓𝐀𝐋𝐀𝐃𝐎 〕━━⬣\n' +
+            '┃\n' +
+            '┃ 📦 Pack › *' + packName + '*\n' +
+            '┃ 👤 Autor › *' + packAuthor + '*\n' +
+            '┃ 📸 ' + stickersProcesados.length + ' stickers\n' +
+            '┃\n' +
+            '┃ ✅ El pack ya está instalado\n' +
+            '┃    en tu WhatsApp\n' +
+            '┃\n' +
+            '┃ 📥 Ver pack completo:\n' +
+            '┃ ' + (pack.compartir || pack.url) + '\n' +
+            '┃\n' +
+            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
 
-        if (success) {
-            await responder.texto(
-                '╭━━〔 ✅ 𝐏𝐀𝐂𝐊 𝐍𝐀𝐓𝐈𝐕𝐎 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
-                '┃\n' +
-                '┃ 📦 Pack › *' + packName + '*\n' +
-                '┃ 👤 Autor › *' + packAuthor + '*\n' +
-                '┃ 📸 Stickers enviados como pack\n' +
-                '┃\n' +
-                '┃ 💡 El pack ya está instalado\n' +
-                '┃    en tu WhatsApp\n' +
-                '┃\n' +
-                '┃ 📥 Ver pack completo:\n' +
-                '┃ ' + (pack.compartir || pack.url) + '\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-            );
-
-            await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-            
-        } else {
-            // Fallback: enviar stickers individuales
-            console.log('[SPACK] Fallback a stickers individuales');
-            
-            let enviados = 0;
-            for (const stickerUrl of stickers) {
-                try {
-                    const buffer = await descargarBuffer(stickerUrl, 20000);
-                    if (!buffer.length) continue;
-
-                    await sock.sendMessage(jid, {
-                        sticker: buffer,
-                        mimetype: 'image/webp',
-                        isAnimated,
-                        packname: packName,
-                        author: packAuthor
-                    });
-
-                    enviados++;
-                    await new Promise(r => setTimeout(r, 250));
-                } catch (e) {
-                    console.log(`[SPACK] Sticker falló: ${e.message}`);
-                }
-            }
-
-            if (enviados > 0) {
-                await responder.texto(
-                    '╭━━〔 ⚠️ 𝐏𝐀𝐂𝐊 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
-                    '┃\n' +
-                    '┃ 📤 ' + enviados + '/' + stickers.length + ' stickers\n' +
-                    '┃ 📦 Pack › *' + packName + '*\n' +
-                    '┃\n' +
-                    '┃ ⚠️ No se pudo crear pack\n' +
-                    '┃    nativo, pero los stickers\n' +
-                    '┃    están en el chat\n' +
-                    '┃\n' +
-                    '┃ 💡 Mantén presionado →\n' +
-                    '┃    "Añadir a mis stickers"\n' +
-                    '┃\n' +
-                    '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-                );
-                await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
-            } else {
-                throw new Error('No se pudo enviar ningún sticker');
-            }
-        }
+        await sock.sendMessage(jid, { react: { text: '✅', key: msg.key } });
+        console.log(`[SPACK] ✅ Pack nativo enviado: ${pack.nombre} (${stickersProcesados.length} stickers)`);
 
     } catch (error) {
         console.error('[SPACK] Error:', error?.message || error);
@@ -430,7 +446,7 @@ async function enviarPack(sock, msg, responder, jid, url) {
         await responder.texto(
             '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
             '┃\n' +
-            '┃ ⚠️ ' + (error?.message || 'No se pudo obtener el pack') + '\n' +
+            '┃ ⚠️ ' + (error?.message || 'No se pudo crear el pack') + '\n' +
             '┃\n' +
             '┃ 💡 Verifica que la URL sea\n' +
             '┃    válida de sticker.ly\n' +
