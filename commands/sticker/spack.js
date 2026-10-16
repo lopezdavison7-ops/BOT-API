@@ -19,8 +19,8 @@ MEDIA_PATH_MAP['sticker-pack'] = '/mms/document';
 MEDIA_HKDF_KEY_MAPPING['sticker-pack'] = 'Sticker Pack';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 10 });
-const HEADERS = { 
-    'Accept': 'application/json', 
+const HEADERS = {
+    'Accept': 'application/json',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
@@ -32,10 +32,10 @@ if (!global.spackSessions) global.spackSessions = new Map();
 const SESSION_TTL = 5 * 60 * 1000;
 
 async function reqJSON(url, timeout = 15000) {
-    const res = await fetch(url, { 
-        agent: AGENTE, 
-        headers: HEADERS, 
-        signal: AbortSignal.timeout(timeout) 
+    const res = await fetch(url, {
+        agent: AGENTE,
+        headers: HEADERS,
+        signal: AbortSignal.timeout(timeout)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
@@ -141,12 +141,10 @@ function calcularSHA256(buffer) {
 
 async function cifrarBuffer(buffer, mediaType) {
     try {
-        const stream = bufferToStream(buffer);
-        const result = await encryptedStream(stream, mediaType, {
+        const result = await encryptedStream(buffer, mediaType, {
             logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
         });
-        
-        if (result && result.fileEncSha256 && result.mediaKey && result.encFilePath) {
+        if (result?.fileEncSha256 && result?.mediaKey && result?.encFilePath) {
             return {
                 fileSha256: result.fileSha256 || calcularSHA256(buffer),
                 fileEncSha256: result.fileEncSha256,
@@ -155,31 +153,59 @@ async function cifrarBuffer(buffer, mediaType) {
                 fileLength: result.fileLength || buffer.length
             };
         }
-        throw new Error('Campos faltantes');
     } catch (e) {
-        const fileSha256 = calcularSHA256(buffer);
-        const mediaKey = crypto.randomBytes(32);
-        
-        const { hkdf } = crypto;
-        const derivedKey = await new Promise((resolve, reject) => {
-            hkdf('sha256', mediaKey, Buffer.alloc(0), Buffer.from('WhatsApp Sticker Pack Keys'), 112, (err, key) => {
-                if (err) reject(err);
-                else resolve(key);
-            });
-        });
-        
-        const iv = derivedKey.slice(0, 16);
-        const cipherKey = derivedKey.slice(16, 48);
-        const cipher = crypto.createCipheriv('aes-256-cbc', cipherKey, iv);
-        const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
-        const fileEncSha256 = calcularSHA256(encrypted);
-        
-        const encFilePath = `/tmp/sticker-pack-${Date.now()}.enc`;
-        const fs = await import('fs');
-        fs.writeFileSync(encFilePath, encrypted);
-        
-        return { fileSha256, fileEncSha256, mediaKey, encFilePath, fileLength: buffer.length };
+        console.log('[SPACK] encryptedStream(buffer) falló:', e.message);
     }
+
+    try {
+        const result = await encryptedStream(bufferToStream(buffer), mediaType, {
+            logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+        });
+        if (result?.fileEncSha256 && result?.mediaKey && result?.encFilePath) {
+            return {
+                fileSha256: result.fileSha256 || calcularSHA256(buffer),
+                fileEncSha256: result.fileEncSha256,
+                mediaKey: result.mediaKey,
+                encFilePath: result.encFilePath,
+                fileLength: result.fileLength || buffer.length
+            };
+        }
+    } catch (e) {
+        console.log('[SPACK] encryptedStream(stream) falló:', e.message);
+    }
+
+    console.log('[SPACK] Usando cifrado manual con MAC...');
+
+    const fileSha256 = calcularSHA256(buffer);
+    const mediaKey = crypto.randomBytes(32);
+
+    const expanded = await new Promise((resolve, reject) => {
+        crypto.hkdf('sha256', mediaKey, Buffer.alloc(0), Buffer.from('WhatsApp Sticker Pack Keys'), 112, (err, key) => {
+            if (err) reject(err);
+            else resolve(Buffer.from(key));
+        });
+    });
+
+    const iv = expanded.slice(0, 16);
+    const cipherKey = expanded.slice(16, 48);
+    const macKey = expanded.slice(48, 80);
+
+    const cipher = crypto.createCipheriv('aes-256-cbc', cipherKey, iv);
+    const ciphertext = Buffer.concat([cipher.update(buffer), cipher.final()]);
+
+    const hmac = crypto.createHmac('sha256', macKey);
+    hmac.update(iv);
+    hmac.update(ciphertext);
+    const mac = hmac.digest().slice(0, 10);
+
+    const encrypted = Buffer.concat([ciphertext, mac]);
+    const fileEncSha256 = calcularSHA256(encrypted);
+
+    const encFilePath = `/tmp/sticker-pack-${Date.now()}.enc`;
+    const fs = await import('fs');
+    fs.writeFileSync(encFilePath, encrypted);
+
+    return { fileSha256, fileEncSha256, mediaKey, encFilePath, fileLength: encrypted.length };
 }
 
 async function sendStickerPack(sock, jid, { name, publisher, description, stickers, cover, quoted }) {
@@ -287,7 +313,6 @@ export default {
             return await responder.texto('📦 *Uso:*\n.spack <nombre>\n.spack <número>\n.spack <url>');
         }
 
-        // Elegir por número
         if (/^\d+$/.test(query)) {
             const session = global.spackSessions.get(sender);
             if (!session || Date.now() - session.t > SESSION_TTL) {
@@ -298,12 +323,10 @@ export default {
             return await enviarPack(sock, msg, responder, jid, item.url);
         }
 
-        // URL directa
         if (esURL(query)) {
             return await enviarPack(sock, msg, responder, jid, query);
         }
 
-        // Búsqueda: un solo mensaje con la lista
         await sock.sendMessage(jid, { react: { text: '🔍', key: msg.key } });
 
         try {
@@ -328,7 +351,6 @@ export default {
 };
 
 async function enviarPack(sock, msg, responder, jid, url) {
-    // Solo reacción mientras procesa, sin mensajes largos
     await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } });
 
     try {
