@@ -24,7 +24,10 @@ export default {
         }
 
         try {
-            await responder.reaccion('🤖');
+            // Reacción directa (funciona siempre, sin depender del handler)
+            await sock.sendMessage(jid, { 
+                react: { text: '🤖', key: msg.key } 
+            });
 
             const { data } = await axios.get('https://api.alyacore.xyz/ai/chatgpt', {
                 params: {
@@ -34,7 +37,9 @@ export default {
             });
 
             if (!data.status || !data.result) {
-                await responder.reaccion('❌');
+                await sock.sendMessage(jid, { 
+                    react: { text: '❌', key: msg.key } 
+                });
                 return await responder.texto(
                     '❌ No pude obtener respuesta de ChatGPT.\n' +
                     'Intentá de nuevo más tarde.'
@@ -49,11 +54,15 @@ export default {
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
             
-            await responder.reaccion('✅');
+            await sock.sendMessage(jid, { 
+                react: { text: '✅', key: msg.key } 
+            });
 
         } catch (err) {
             console.error('[CHATGPT] Error:', err?.message || err);
-            await responder.reaccion('❌');
+            await sock.sendMessage(jid, { 
+                react: { text: '❌', key: msg.key } 
+            });
             await responder.texto(
                 '❌ Ocurrió un error al conectar con la API de ChatGPT.\n' +
                 'Verifica tu conexión o intentá más tarde.'
