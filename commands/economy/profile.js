@@ -183,11 +183,8 @@ async function obtenerFotoBuffer(sock, msg, id, jidReal) {
 
 export default {
     nombre: 'profile',
-
     categoria: 'economia',
-
     alias: ['perfil', 'me', 'yo'],
-
     descripcion: 'Muestra tu perfil económico, nivel y colección con foto y mención.',
 
     ejecutar: async ({ sock, msg }) => {
@@ -239,6 +236,7 @@ export default {
         let lineaEdad = '';
         let lineaGenero = '';
         let lineaPareja = '';
+        let lineaPasatiempo = ''; // <-- NUEVO
 
         if (perfil.nombre) lineaNombre = `┃ 📛 Nombre › *${perfil.nombre}*\n`;
         if (perfil.desc) lineaBio = `┃ 📝 Bio › ${perfil.desc}\n`;
@@ -263,11 +261,18 @@ export default {
             lineaPareja = '┃ 💍 Pareja › *No definida*\n';
         }
 
+        // <-- NUEVO: Lógica para mostrar el pasatiempo
+        if (perfil.pasatiempo) {
+            lineaPasatiempo = `┃ 🎯 Pasatiempo › *${perfil.pasatiempo}*\n`;
+        } else {
+            lineaPasatiempo = '┃ 🎯 Pasatiempo › *No definido*\n';
+        }
+
         const texto =
 `
 ╭〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕⬣
 ┃
-┃ 👤 𝐄𝐑𝐅𝐈𝐋
+┃ 👤 𝐏𝐄𝐑𝐅𝐈𝐋
 ┃
 ┃ 🆔 Usuario › @${numero}
 ${lineaNombre}${lineaBio}┃
@@ -280,9 +285,10 @@ ${lineaNombre}${lineaBio}┃
 ┃ ${barra}
 ┃ 💬 Mensajes › *${mensajes}*
 ┃
-${lineaEdad}${lineaGenero}${lineaPareja}┃
+${lineaEdad}${lineaGenero}${lineaPareja}${lineaPasatiempo}┃
 ┃ 💡 Edita con:
 ┃ ➪ .setmyname / .setdesc
+┃ ➪ .setpasatiempo
 ┃
 ╰━━━━━━━━━━━━━━━━
 `;
