@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_CONFIG = path.join(__dirname, '..', '..', 'database', 'antiprivado.json');
 
-const OWNERS = ['50578391933', '77455383'];
+const OWNERS = ['50578391933', '77455383','50368309162'];
 
 function leerConfig() {
     try {
