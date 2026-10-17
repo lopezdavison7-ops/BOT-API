@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
-const API_URL = 'https://api.yuki-wabot.my.id';
-const API_KEY = 'YukiBot-MD';
+const YUKI_URL = 'https://api.yuki-wabot.my.id';
+const YUKI_KEY = 'YukiBot-MD';
 
 export default {
     nombre: 'tiktok',
@@ -34,94 +34,115 @@ export default {
         await reaccion('🕒');
 
         try {
-            // Detectar si es URL o búsqueda
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
             
-            const endpoint = isUrl 
-                ? `${API_URL}/dl/tiktok?url=${encodeURIComponent(texto)}&key=${API_KEY}`
-                : `${API_URL}/search/tiktok?query=${encodeURIComponent(texto)}&key=${API_KEY}`;
-
-            const res = await fetch(endpoint);
-            if (!res.ok) throw new Error(`La API respondió con estado ${res.status}`);
-            
-            const json = await res.json();
-            if (!json.status || !json.data) {
-                throw new Error('No se encontró contenido válido o la API está caída.');
-            }
+            let data = null;
+            let apiUsada = 'Yuki';
 
             if (isUrl) {
-                // ─── DESCARGA POR ENLACE ───
-                const { title, duration, dl, author, stats, created_at, type } = json.data;
-
-                if (!dl || (Array.isArray(dl) && dl.length === 0)) {
-                    throw new Error('Enlace inválido o sin contenido descargable.');
+                // ─── INTENTO 1: API YUKI ───
+                try {
+                    const resYuki = await fetch(`${YUKI_URL}/dl/tiktok?url=${encodeURIComponent(texto)}&key=${YUKI_KEY}`);
+                    if (resYuki.ok) {
+                        const jsonYuki = await resYuki.json();
+                        if (jsonYuki.status && jsonYuki.data) {
+                            data = jsonYuki.data;
+                        }
+                    } else if (resYuki.status === 402) {
+                        console.log('[TIKTOK] Yuki API sin créditos (402), usando respaldo...');
+                    }
+                } catch (e) {
+                    console.log('[TIKTOK] Yuki API falló, usando respaldo:', e.message);
                 }
 
-                const autorNombre = author?.nickname || author?.unique_id || 'Desconocido';
-                const likes = (stats?.likes || 0).toLocaleString();
-                const comments = (stats?.comments || 0).toLocaleString();
-                const views = (stats?.views || stats?.plays || 0).toLocaleString();
+                // ─── INTENTO 2: API TIKWM (Respaldo gratuito y estable) ───
+                if (!data) {
+                    apiUsada = 'TikWM (Respaldo)';
+                    const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
+                    const jsonTikwm = await resTikwm.json();
+                    
+                    if (jsonTikwm.code === 0 && jsonTikwm.data) {
+                        // Adaptar formato de TikWM al formato que espera el resto del código
+                        const d = jsonTikwm.data;
+                        data = {
+                            title: d.title || 'Sin título',
+                            duration: d.duration || 'N/A',
+                            author: { nickname: d.author?.nickname || 'Desconocido', unique_id: d.author?.unique_id || '' },
+                            stats: { likes: d.digg_count, comments: d.comment_count, views: d.play_count, shares: d.share_count },
+                            created_at: new Date(d.create_time * 1000).toLocaleDateString('es-ES'),
+                            type: d.images && d.images.length > 0 ? 'image' : 'video',
+                            dl: d.images && d.images.length > 0 ? d.images : d.play
+                        };
+                    }
+                }
+            } else {
+                // ─── BÚSQUEDA (Solo Yuki soporta búsqueda bien, si falla, avisa) ───
+                const resYuki = await fetch(`${YUKI_URL}/search/tiktok?query=${encodeURIComponent(texto)}&key=${YUKI_KEY}`);
+                if (!resYuki.ok) throw new Error(`La API de búsqueda respondió con estado ${resYuki.status} (Probablemente sin créditos).`);
+                
+                const jsonYuki = await resYuki.json();
+                if (!jsonYuki.status || !jsonYuki.data) {
+                    throw new Error('No se encontraron resultados de búsqueda.');
+                }
+                data = jsonYuki.data; // En búsqueda, data es un array
+            }
 
+            if (!data) {
+                throw new Error('No se pudo obtener el contenido. El enlace puede ser privado o estar roto.');
+            }
+
+            // ─── PROCESAR RESPUESTA ───
+            if (isUrl) {
+                const { title, duration, dl, author, stats, created_at, type } = data;
+                const autorNombre = author?.nickname || author?.unique_id || 'Desconocido';
+                
                 const caption = 
                     '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐋 〕━━⬣\n' +
                     `┃ 📌 *Título:* ${title || 'Sin título'}\n` +
                     `┃ 👤 *Autor:* ${autorNombre}\n` +
                     `┃ ⏱️ *Duración:* ${duration || 'N/A'}\n` +
-                    `┃ ❤️ *Likes:* ${likes}\n` +
-                    `┃ 💬 *Comentarios:* ${comments}\n` +
-                    `┃ 👁️ *Vistas:* ${views}\n` +
+                    `┃ ❤️ *Likes:* ${(stats?.likes || 0).toLocaleString()}\n` +
+                    `┃ 💬 *Comentarios:* ${(stats?.comments || 0).toLocaleString()}\n` +
+                    `┃ 👁️ *Vistas:* ${(stats?.views || 0).toLocaleString()}\n` +
                     `┃ 📅 *Fecha:* ${created_at || 'N/A'}\n` +
+                    `┃ ⚡ *Fuente:* ${apiUsada}\n` +
                     '╰━━━━━━━━━━━━━━━━⬣';
 
                 if (type === 'image' || (Array.isArray(dl) && dl.length > 1)) {
-                    // Es un carrusel de imágenes
                     await responder.texto('📸 Descargando carrusel de imágenes...');
-                    
                     const images = Array.isArray(dl) ? dl : [dl];
+                    
                     for (let i = 0; i < images.length; i++) {
                         await sock.sendMessage(jid, {
-                            image: { url: images[i] },
+                            image: typeof images[i] === 'string' ? { url: images[i] } : images[i],
                             caption: i === 0 ? caption : `┃ 📸 Imagen ${i + 1}/${images.length}`
                         }, { quoted: msg });
-                        await new Promise(r => setTimeout(r, 1000)); // Pausa de 1s entre imágenes
+                        await new Promise(r => setTimeout(r, 1000));
                     }
 
-                    // Intentar obtener el audio de fondo del carrusel
-                    try {
-                        const audioRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}&hd=1`);
-                        const audioJson = await audioRes.json();
-                        if (audioJson?.data?.play) {
-                            await sock.sendMessage(jid, {
-                                audio: { url: audioJson.data.play },
-                                mimetype: 'audio/mpeg',
-                                ptt: false
-                            }, { quoted: msg });
-                        }
-                    } catch (e) {
-                        console.log('[TIKTOK] No se pudo obtener el audio del carrusel:', e.message);
+                    // Audio de fondo para carruseles (solo si usamos TikWM que lo provee fácil)
+                    if (apiUsada.includes('TikWM') && data.dl_audio) {
+                        await sock.sendMessage(jid, {
+                            audio: { url: data.dl_audio },
+                            mimetype: 'audio/mpeg',
+                            ptt: false
+                        }, { quoted: msg });
                     }
-
                 } else {
-                    // Es un video normal
                     const videoUrl = Array.isArray(dl) ? dl[0] : dl;
                     await sock.sendMessage(jid, {
-                        video: { url: videoUrl },
+                        video: typeof videoUrl === 'string' ? { url: videoUrl } : videoUrl,
                         caption: caption,
                         mimetype: 'video/mp4'
                     }, { quoted: msg });
                 }
-
             } else {
-                // ─── BÚSQUEDA ───
-                const validResults = json.data.filter(v => v.dl && typeof v.dl === 'string' && v.dl.startsWith('http'));
-                
-                if (validResults.length === 0) {
-                    throw new Error('No se encontraron resultados descargables para esa búsqueda.');
-                }
+                // ─── PROCESAR BÚSQUEDA ───
+                const validResults = data.filter(v => v.dl && typeof v.dl === 'string' && v.dl.startsWith('http'));
+                if (validResults.length === 0) throw new Error('No se encontraron resultados descargables.');
 
                 await responder.texto(`🔍 Se encontraron ${validResults.length} resultados. Enviando los más relevantes...`);
-
-                // Enviar hasta 5 resultados para no saturar el chat
+                
                 const limit = Math.min(validResults.length, 5);
                 for (let i = 0; i < limit; i++) {
                     const v = validResults[i];
@@ -131,7 +152,6 @@ export default {
                         `┃ 👤 *Autor:* ${v.author?.nickname || 'Desconocido'}\n` +
                         `┃ ⏱️ *Duración:* ${v.duration || 'N/A'}\n` +
                         `┃ ❤️ *Likes:* ${(v.stats?.likes || 0).toLocaleString()}\n` +
-                        `┃ 🎵 *Audio:* ${v.music?.title || 'Original sound'}\n` +
                         '╰━━━━━━━━━━━━━━━━⬣';
 
                     await sock.sendMessage(jid, {
@@ -140,9 +160,7 @@ export default {
                         mimetype: 'video/mp4'
                     }, { quoted: msg });
                     
-                    if (i < limit - 1) {
-                        await new Promise(r => setTimeout(r, 1500)); // Pausa de 1.5s entre videos
-                    }
+                    if (i < limit - 1) await new Promise(r => setTimeout(r, 1500));
                 }
             }
 
@@ -153,7 +171,8 @@ export default {
             await reaccion('❌');
             await responder.texto(
                 '❌ Ocurrió un error al procesar el contenido de TikTok.\n\n' +
-                '⚠️ Detalle: ' + (error?.message || 'Error desconocido')
+                '⚠️ Detalle: ' + (error?.message || 'Error desconocido') + '\n\n' +
+                '💡 Nota: Si el enlace es correcto, la API principal puede estar saturada.'
             );
         }
     }
