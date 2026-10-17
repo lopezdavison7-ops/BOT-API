@@ -1,21 +1,21 @@
 import fetch from 'node-fetch';
-import config from '../../config.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 export default {
     nombre: 'emojimix',
     categoria: 'Stickers',
-    alias: ['mixemoji', 'emojicombinar', 'em', 'mix'],
-    descripcion: 'Mezcla dos emojis y crea un sticker único.',
+    alias: ['mixemoji', 'em', 'mix'],
+    descripcion: 'Mezcla dos emojis y crea un sticker.',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
-        // Función de reacción blindada
         const reaccion = async (emoji) => {
             await sock.sendMessage(jid, { react: { text: emoji, key: msg.key } });
         };
 
         const texto = String(argumento || '').trim();
 
-        // Validar que haya texto y contenga un "+"
         if (!texto || !texto.includes('+')) {
             await reaccion('❌');
             return await responder.texto(
@@ -23,9 +23,7 @@ export default {
                 '┃\n' +
                 '┃ ❌ Ingresa 2 emojis separados por un +\n' +
                 '┃\n' +
-                '┃ 💡 Ejemplos:\n' +
-                '┃ › .emojimix 👻+👀\n' +
-                '┃ › .mix 🔥+💧\n' +
+                '┃ 💡 Ejemplo: .emojimix 👻+👀\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
@@ -38,15 +36,13 @@ export default {
 
             if (!emoji1 || !emoji2) {
                 await reaccion('❌');
-                return await responder.texto('❌ Formato inválido. Asegúrate de poner dos emojis válidos separados por +.');
+                return await responder.texto('❌ Formato inválido. Usa dos emojis válidos separados por +.');
             }
 
-            // Obtener metadatos del config o del usuario
             const pushName = msg.pushName || msg.key.participant.split('@')[0];
-            const packname = config.packname || '⚡ BOT-API ⚡';
-            const author = config.author || `@${pushName}`;
+            const packname = '⚡ BOT-API ⚡';
+            const author = `© DevLuis | @${pushName}`;
 
-            // URL de la API de Tenor (Emoji Kitchen)
             const apiUrl = `https://tenor.googleapis.com/v2/featured?key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ&contentfilter=high&media_filter=png_transparent&component=proactive&collection=emoji_kitchen_v5&q=${encodeURIComponent(emoji1)}_${encodeURIComponent(emoji2)}`;
             
             const res = await fetch(apiUrl);
@@ -54,36 +50,38 @@ export default {
 
             if (!data.results || data.results.length === 0) {
                 await reaccion('❌');
-                return await responder.texto(
-                    '❌ No se encontraron stickers para esa combinación de emojis.\n' +
-                    '💡 Prueba con otra combinación (ej: 😂+😍).'
-                );
+                return await responder.texto('❌ No se encontraron stickers para esa combinación.\n💡 Prueba con otra (ej: 😂+😍).');
             }
 
-            // Tomar el primer resultado (Emoji Kitchen suele devolver 1)
             const result = data.results[0];
-            
-            // Descargar la imagen
             const imgRes = await fetch(result.url);
             const buffer = Buffer.from(await imgRes.arrayBuffer());
 
-            // Enviar como sticker
-            // Nota: Baileys convierte automáticamente el PNG a WebP al enviarlo como tipo 'sticker'
-            await sock.sendMessage(jid, {
-                sticker: buffer,
-                packname: packname,
-                author: author
-            }, { quoted: msg });
+            // Función mini para agregar EXIF (marca de agua) sin depender de archivos externos
+            const webp = require('node-webpmux');
+            const img = new webp.Image();
+            const json = {
+                'sticker-pack-id': 'emojimix-botapi',
+                'sticker-pack-name': packname,
+                'sticker-pack-publisher': author,
+                emojis: ['']
+            };
+            const exifAttr = Buffer.from([0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00]);
+            const jsonBuffer = Buffer.from(JSON.stringify(json), 'utf8');
+            const exif = Buffer.concat([exifAttr, jsonBuffer]);
+            exif.writeUIntLE(jsonBuffer.length, 14, 4);
+            
+            await img.load(buffer);
+            img.exif = exif;
+            const stickerFinal = await img.save(null);
 
+            await sock.sendMessage(jid, { sticker: stickerFinal }, { quoted: msg });
             await reaccion('✅');
 
         } catch (error) {
             console.error('[EMOJIMIX] Error:', error?.message || error);
             await reaccion('❌');
-            await responder.texto(
-                '❌ Ocurrió un error al mezclar los emojis.\n\n' +
-                '⚠️ Detalle: ' + (error?.message || 'Error de conexión con la API')
-            );
+            await responder.texto('❌ Ocurrió un error al mezclar los emojis.\n\n⚠️ Detalle: ' + (error?.message || 'Error de conexión'));
         }
     }
 };
