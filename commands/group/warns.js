@@ -1,93 +1,124 @@
-
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const WARN_FILE = path.join(process.cwd(), '../../database', 'warns.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const RUTA_WARN = path.join(__dirname, '..', '..', 'database', 'warns.json');
+
+function leerWarns() {
+    try {
+        const datos = JSON.parse(fs.readFileSync(RUTA_WARN, 'utf8'));
+        return datos && typeof datos === 'object' ? datos : {};
+    } catch {
+        return {};
+    }
+}
+
+function obtenerObjetivo(msg) {
+    const ctx =
+        msg?.message?.extendedTextMessage?.contextInfo ||
+        msg?.message?.ephemeralMessage?.message?.extendedTextMessage?.contextInfo ||
+        null;
+
+    const mencion = ctx?.mentionedJid?.[0] || null;
+    const citado = ctx?.quotedMessage
+        ? (ctx.participant || ctx.participantAlt || null)
+        : null;
+
+    return mencion || citado || null;
+}
 
 export default {
     nombre: 'warns',
-    categoria: 'Moderación',
-    alias: ['advertencias', 'warnings'],
-    descripcion: 'Muestra las advertencias de un usuario',
-    ejecutar: async ({ msg, responder, argumento, sock }) => {
+    categoria: 'Grupos',
+    alias: ['advertencias', 'listwarns', 'verwarns'],
+    descripcion: 'Ver las advertencias de un usuario o de todo el grupo.',
+
+    ejecutar: async ({ sock, msg, responder, isGroup, jid }) => {
+
+        if (!isGroup) {
+            await responder.texto('❌ *WARNS*\n\nEste comando es solo para grupos.');
+            return;
+        }
+
         try {
-            let target = null;
+            const db = leerWarns();
+            const grupo = db[jid] || {};
+            const objetivo = obtenerObjetivo(msg);
 
-            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
-            if (quoted) {
-                target = quoted;
-            }
+            if (objetivo) {
+                const reg = grupo[objetivo];
+                const mencionTexto = '@' + String(objetivo).split('@')[0].replace(/\D/g, '');
 
-            const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentioned.length > 0) {
-                target = mentioned[0];
-                if (quoted && mentioned.length > 0) {
-                    target = mentioned[0];
+                if (!reg || reg.count <= 0) {
+                    await sock.sendMessage(jid, {
+                        text: `✅ ${mencionTexto} no tiene advertencias en este grupo.`,
+                        mentions: [objetivo]
+                    }, { quoted: msg });
+                    return;
                 }
-            }
 
-            if (!target) {
-                await responder.texto(
-                    `❌ *WARNS*\n\n` +
-                    `Menciona a un usuario o responde a su mensaje.\n\n` +
-                    `📌 Ejemplos:\n` +
-                    `*.warns @usuario*`
-                );
-                return;
-            }
+                const razones = (reg.razones || [])
+                    .map((r, i) => `┃    ${i + 1}. ${r}`)
+                    .join('\n');
 
-            let warns = {};
-            try {
-                const data = await fs.readFile(WARN_FILE, 'utf8');
-                warns = JSON.parse(data);
-            } catch {}
-
-            if (!warns[target] || warns[target].length === 0) {
-                const textoLimpio = `
-╭〔 ✅ 𝐒𝐈𝐍 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 〕⬣
-┃
-┃ 👤 Usuario: @${target.split('@')[0]}
-┃
-┃ 🔢 Total: 0
-┃
-┃ 🍀 Usuario limpio.
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
-`;
-                await sock.sendMessage(msg.key.remoteJid, {
-                    text: textoLimpio,
-                    mentions: [target]
+                await sock.sendMessage(jid, {
+                    text:
+                        '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍𝐒 〕━━⬣\n' +
+                        '┃\n' +
+                        `┃ 👤 ${mencionTexto}\n` +
+                        `┃ 🔢 Warns: ${reg.count}/3\n` +
+                        '┃\n' +
+                        '┃ 📝 Razones:\n' +
+                        (razones || '┃    (sin razones guardadas)') + '\n' +
+                        '┃\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣',
+                    mentions: [objetivo]
                 }, { quoted: msg });
                 return;
             }
 
-            const lista = warns[target].map((w, i) =>
-                `${i + 1}. #${w.id} | ${w.fecha} | ${w.razon}`
-            ).join('\n');
+            const entradas = Object.entries(grupo).filter(([, v]) => v?.count > 0);
 
-            const textoWarns = `
-╭〔 📋 𝐀𝐃𝐕𝐄𝐑𝐓𝐄𝐍𝐂𝐈𝐀𝐒 〕⬣
-┃
-┃ 👤 Usuario: @${target.split('@')[0]}
-┃
-┃ 🔢 Total: ${warns[target].length}
-┃
-┃ ${lista}
-┃
-╰━━━━━━━━━━━━━━━━⬣
+            if (entradas.length === 0) {
+                await responder.texto(
+                    '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍𝐒 〕━━⬣\n' +
+                    '┃\n' +
+                    '┃ ✅ No hay usuarios con\n' +
+                    '┃    advertencias en este grupo.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━'
+                );
+                return;
+            }
 
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
-`;
-            await sock.sendMessage(msg.key.remoteJid, {
-                text: textoWarns,
-                mentions: [target]
+            const menciones = [];
+            const lineas = entradas.map(([userJid, v]) => {
+                menciones.push(userJid);
+                const num = '@' + String(userJid).split('@')[0].replace(/\D/g, '');
+                return `┃ • ${num} → ${v.count}/3`;
+            }).join('\n');
+
+            await sock.sendMessage(jid, {
+                text:
+                    '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍𝐒 𝐃𝐄𝐋 𝐆𝐑𝐔𝐏𝐎 〕━━⬣\n' +
+                    '┃\n' +
+                    lineas + '\n' +
+                    '┃\n' +
+                    '┃ 📌 Ver detalle de alguien:\n' +
+                    '┃ › .warns @usuario\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣',
+                mentions: menciones
             }, { quoted: msg });
 
         } catch (error) {
-            console.error('[WARNS] Error:', error);
-            await responder.texto('❌ Error al obtener advertencias.');
+            console.error('[WARNS] Error:', error?.stack || error?.message || error);
+            await responder.texto(
+                '❌ Error al leer advertencias.\n\n⚠️ Detalle: ' + (error?.message || String(error))
+            );
         }
     }
 };
