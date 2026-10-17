@@ -1,132 +1,159 @@
-
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const WARN_FILE = path.join(process.cwd(), '../../database', 'warns.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const RUTA_WARN = path.join(__dirname, '..', '..', 'database', 'warns.json');
+const MAX_WARNS = 3;
+
+function leerWarns() {
+    try {
+        const datos = JSON.parse(fs.readFileSync(RUTA_WARN, 'utf8'));
+        return datos && typeof datos === 'object' ? datos : {};
+    } catch {
+        return {};
+    }
+}
+
+function guardarWarns(db) {
+    fs.mkdirSync(path.dirname(RUTA_WARN), { recursive: true });
+    fs.writeFileSync(RUTA_WARN, JSON.stringify(db, null, 2), 'utf8');
+}
+
+function obtenerObjetivo(msg) {
+    const ctx =
+        msg?.message?.extendedTextMessage?.contextInfo ||
+        msg?.message?.ephemeralMessage?.message?.extendedTextMessage?.contextInfo ||
+        null;
+
+    const mencion = ctx?.mentionedJid?.[0] || null;
+    const citado = ctx?.quotedMessage
+        ? (ctx.participant || ctx.participantAlt || null)
+        : null;
+
+    return mencion || citado || null;
+}
+
+async function esAdminDeGrupo(sock, jid, userJid) {
+    try {
+        const meta = await sock.groupMetadata(jid);
+        const limpio = String(userJid).split('@')[0].split(':')[0];
+        const p = (meta?.participants || []).find(
+            x => String(x?.id || '').split('@')[0].split(':')[0] === limpio
+        );
+        return Boolean(p?.admin);
+    } catch {
+        return false;
+    }
+}
 
 export default {
     nombre: 'warn',
-    categoria: 'Moderación',
-    alias: ['advertir'],
-    descripcion: 'Agrega una advertencia (responde o menciona)',
-    ejecutar: async ({ msg, responder, argumento, sock }) => {
+    categoria: 'Grupos',
+    alias: ['advertencia', 'advertir'],
+    descripcion: 'Advierte a un usuario. Al llegar a 3 warns es expulsado.',
+
+    ejecutar: async ({ sock, msg, argumento, responder, isGroup, jid, fromMe }) => {
+
+        if (!isGroup) {
+            await responder.texto('❌ *WARN*\n\nEste comando es solo para grupos.');
+            return;
+        }
+
+        const remitente =
+            msg.key.participant ||
+            msg.key.senderPn ||
+            msg.key.participantAlt ||
+            msg.key.remoteJid;
+
+        const esOwner = Boolean(fromMe || msg.esOwnerAutomatico);
+
+        if (!esOwner && !(await esAdminDeGrupo(sock, jid, remitente))) {
+            await responder.texto('❌ *WARN*\n\nSolo los admins del grupo pueden advertir.');
+            return;
+        }
+
+        const objetivo = obtenerObjetivo(msg);
+
+        if (!objetivo) {
+            await responder.texto(
+                '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ❌ Menciona o responde al\n' +
+                '┃    usuario que quieres advertir.\n' +
+                '┃\n' +
+                '┃ Ejemplo:\n' +
+                '┃ › .warn @usuario spam\n' +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━'
+            );
+            return;
+        }
+
         try {
-            if (!msg.key.remoteJid.endsWith('@g.us')) {
-                await responder.texto('❌ Este comando solo funciona en grupos.');
-                return;
-            }
+            const db = leerWarns();
+            if (!db[jid]) db[jid] = {};
+            if (!db[jid][objetivo]) db[jid][objetivo] = { count: 0, razones: [] };
 
-            let target = null;
-            let razon = 'Sin razón especificada';
+            const razon = String(argumento || '').trim() || 'Sin razón';
 
-            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
-            if (quoted) {
-                target = quoted;
-                if (argumento && argumento.trim()) {
-                    razon = argumento.trim();
-                }
-            }
+            db[jid][objetivo].count += 1;
+            db[jid][objetivo].razones.push(razon);
+            db[jid][objetivo].ultimo = Date.now();
+            guardarWarns(db);
 
-            const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentioned.length > 0) {
-                target = mentioned[0];
-                if (argumento && argumento.trim()) {
-                    razon = argumento.trim();
-                }
-                if (quoted && mentioned.length > 0) {
-                    target = mentioned[0];
-                }
-            }
+            const count = db[jid][objetivo].count;
+            const mencionTexto = '@' + String(objetivo).split('@')[0].replace(/\D/g, '');
 
-            if (!target) {
-                await responder.texto(
-                    `❌ *WARN*\n\n` +
-                    `Usa una de estas formas:\n` +
-                    `1️⃣ Responde a un mensaje del usuario: *.warn razón*\n` +
-                    `2️⃣ Menciona al usuario: *.warn @usuario razón*\n\n` +
-                    `📌 Ejemplos:\n` +
-                    `*.warn Spam* (respondiendo)\n` +
-                    `*.warn @pedro Spam*`
-                );
-                return;
-            }
+            if (count >= MAX_WARNS) {
+                db[jid][objetivo] = { count: 0, razones: [] };
+                guardarWarns(db);
 
-            let warns = {};
-            try {
-                const data = await fs.readFile(WARN_FILE, 'utf8');
-                warns = JSON.parse(data);
-            } catch {}
-
-            if (!warns[target]) warns[target] = [];
-
-            const warnData = {
-                id: Date.now().toString(36),
-                fecha: new Date().toLocaleString(),
-                razon: razon,
-                mod: msg.key.participant || msg.key.remoteJid
-            };
-
-            warns[target].push(warnData);
-            await fs.writeFile(WARN_FILE, JSON.stringify(warns, null, 2));
-
-            const total = warns[target].length;
-            const moderadorJid = msg.key.participant || msg.key.remoteJid;
-
-            if (total >= 3) {
+                let lineaExtra = '┃ ⚠️ Llegó a 3 warns pero\n┃    no pude expulsarlo.\n';
                 try {
-                    await sock.groupParticipantsUpdate(msg.key.remoteJid, [target], 'remove');
+                    await sock.groupParticipantsUpdate(jid, [objetivo], 'remove');
+                    lineaExtra = '┃ 🚪 Expulsado por acumular\n┃    3 advertencias.\n';
+                } catch {}
 
-                    const textoKick = `
-╭〔 🚫 𝐀𝐔𝐓𝐎-𝐊𝐈𝐂𝐊 〕⬣
-┃
-┃ 👤 Usuario: @${target.split('@')[0]}
-┃
-┃ ⚠️ Motivo: Llegó a 3 advertencias
-┃
-┃ 📝 Última razón: ${razon}
-┃
-┃ 🔢 Total: 3/3
-┃
-┃ 🛡️ Moderador: @${moderadorJid.split('@')[0]}
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
-`;
-                    await sock.sendMessage(msg.key.remoteJid, {
-                        text: textoKick,
-                        mentions: [target, moderadorJid]
-                    }, { quoted: msg });
-                    return;
-                } catch (error) {
-                    console.error('[WARN] Error al kickear:', error);
-                    await responder.texto('❌ No se pudo expulsar al usuario (revisa permisos).');
-                }
+                await sock.sendMessage(jid, {
+                    text:
+                        '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍 〕━━⬣\n' +
+                        '┃\n' +
+                        `┃ 👤 ${mencionTexto}\n` +
+                        `┃ 📝 Razón: ${razon}\n` +
+                        `┃ 🔢 Warns: 3/${MAX_WARNS}\n` +
+                        '┃\n' +
+                        lineaExtra +
+                        '┃\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣',
+                    mentions: [objetivo]
+                }, { quoted: msg });
+                return;
             }
 
-            const textoWarn = `
-╭〔 ⚠️ 𝐖𝐀𝐑𝐍 〕⬣
-┃
-┃ 👤 Usuario: @${target.split('@')[0]}
-┃
-┃ 📝 Razón: ${razon}
-┃
-┃ 🔢 Total: ${total}/3
-┃
-┃ 🛡️ Moderador: @${moderadorJid.split('@')[0]}
-┃
-╰━━━━━━━━━━━━━━━━⬣
-
-╰〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 〕⬣
-`;
-            await sock.sendMessage(msg.key.remoteJid, {
-                text: textoWarn,
-                mentions: [target, moderadorJid]
+            await sock.sendMessage(jid, {
+                text:
+                    '╭━━〔 ⚠️ 𝐖𝐀𝐑𝐍 〕━━⬣\n' +
+                    '┃\n' +
+                    `┃ 👤 ${mencionTexto}\n` +
+                    `┃ 📝 Razón: ${razon}\n` +
+                    `┃ 🔢 Warns: ${count}/${MAX_WARNS}\n` +
+                    '┃\n' +
+                    '┃  Al llegar a 3 será\n' +
+                    '┃    expulsado del grupo.\n' +
+                    '┃\n' +
+                    '╰━━━━━━━━━━━━━━━━',
+                mentions: [objetivo]
             }, { quoted: msg });
 
         } catch (error) {
-            console.error('[WARN] Error:', error);
-            await responder.texto('❌ Error al agregar advertencia.');
+            console.error('[WARN] Error:', error?.stack || error?.message || error);
+            await responder.texto(
+                '❌ Error al agregar advertencia.\n\n' +
+                '⚠️ Detalle: ' + (error?.message || String(error))
+            );
         }
     }
 };
