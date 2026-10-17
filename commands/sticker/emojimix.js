@@ -7,7 +7,7 @@ export default {
     nombre: 'emojimix',
     categoria: 'Stickers',
     alias: ['mixemoji', 'em', 'mix'],
-    descripcion: 'Mezcla dos emojis y crea un sticker.',
+    descripcion: 'Mezcla dos emojis y crea un sticker único.',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const reaccion = async (emoji) => {
@@ -23,7 +23,7 @@ export default {
                 '┃\n' +
                 '┃ ❌ Ingresa 2 emojis separados por un +\n' +
                 '┃\n' +
-                '┃ 💡 Ejemplo: .emojimix 👻+👀\n' +
+                '┃ 💡 Ejemplo: .emojimix 😂+😍\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
@@ -43,21 +43,48 @@ export default {
             const packname = '⚡ BOT-API ⚡';
             const author = `© DevLuis | @${pushName}`;
 
-            const apiUrl = `https://tenor.googleapis.com/v2/featured?key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ&contentfilter=high&media_filter=png_transparent&component=proactive&collection=emoji_kitchen_v5&q=${encodeURIComponent(emoji1)}_${encodeURIComponent(emoji2)}`;
-            
-            const res = await fetch(apiUrl);
-            const data = await res.json();
+            let imageUrl = null;
 
-            if (!data.results || data.results.length === 0) {
-                await reaccion('❌');
-                return await responder.texto('❌ No se encontraron stickers para esa combinación.\n💡 Prueba con otra (ej: 😂+😍).');
+            // ── INTENTO 1: Tenor API (formato corregido sin encodeURIComponent en el underscore) ──
+            try {
+                const url1 = `https://tenor.googleapis.com/v2/featured?key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ&contentfilter=high&media_filter=png_transparent&component=proactive&collection=emoji_kitchen_v5&q=${emoji1}_${emoji2}`;
+                const res1 = await fetch(url1);
+                const data1 = await res1.json();
+                if (data1.results && data1.results.length > 0) {
+                    imageUrl = data1.results[0].url;
+                }
+            } catch (e) {
+                console.log('[EMOJIMIX] Tenor falló, probando respaldo...');
             }
 
-            const result = data.results[0];
-            const imgRes = await fetch(result.url);
+            // ── INTENTO 2: API de Respaldo (Akuari) ──
+            if (!imageUrl) {
+                try {
+                    const url2 = `https://api.akuari.my.id/tools/emojimix?emoji1=${encodeURIComponent(emoji1)}&emoji2=${encodeURIComponent(emoji2)}`;
+                    const res2 = await fetch(url2);
+                    const data2 = await res2.json();
+                    if (data2.status && data2.result) {
+                        imageUrl = data2.result;
+                    }
+                } catch (e) {
+                    console.log('[EMOJIMIX] API de respaldo también falló:', e.message);
+                }
+            }
+
+            // ── VERIFICACIÓN FINAL ──
+            if (!imageUrl) {
+                await reaccion('❌');
+                return await responder.texto(
+                    '❌ No se encontraron stickers para esa combinación.\n' +
+                    '💡 Prueba con otra (ej: 😂+😍, 🔥+💧, 🥺+👉👈).'
+                );
+            }
+
+            // ── DESCARGA Y CONVERSIÓN A STICKER ──
+            const imgRes = await fetch(imageUrl);
             const buffer = Buffer.from(await imgRes.arrayBuffer());
 
-            // Función mini para agregar EXIF (marca de agua) sin depender de archivos externos
+            // Agregar EXIF (marca de agua)
             const webp = require('node-webpmux');
             const img = new webp.Image();
             const json = {
