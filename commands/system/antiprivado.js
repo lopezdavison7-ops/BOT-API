@@ -6,7 +6,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_CONFIG = path.join(__dirname, '..', '..', 'database', 'antiprivado.json');
 
-const OWNERS = ['50578391933', '77455383','50368309162'];
+// LISTA DE OWNERS (Agregué el número con el que estás probando)
+const OWNERS = ['50578391933', '77455383', '50368309162'];
 
 function leerConfig() {
     try {
@@ -33,9 +34,7 @@ export default {
         const esOwner = fromMe || OWNERS.includes(senderNum);
         
         if (!esOwner) {
-            return await responder.texto(
-                '🔐 *ACCESO DENEGADO*\n\nSolo el Owner puede configurar el Anti-Privado.'
-            );
+            return await responder.texto('🔐 *ACCESO DENEGADO*\n\nSolo el Owner puede configurar el Anti-Privado.');
         }
 
         const estado = String(argumento || '').trim().toLowerCase();
@@ -45,14 +44,14 @@ export default {
             config.activo = true;
             guardarConfig(config);
             return await responder.texto(
-                '╭━━〔 ️ 𝐀𝐍𝐓𝐏𝐑𝐈𝐕𝐀𝐃 〕━━⬣\n' +
+                '╭━━〔 🛡️ 𝐀𝐍𝐓𝐈𝐏𝐑𝐈𝐕𝐀𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
-                ' ✅ *Modo Anti-Privado ACTIVADO*\n' +
+                '┃ ✅ *Modo Anti-Privado ACTIVADO*\n' +
                 '┃\n' +
                 '┃ El bot ignorará los mensajes\n' +
                 '┃ privados de usuarios normales.\n' +
                 '┃ (Los Owners siempre tendrán acceso).\n' +
-                '\n' +
+                '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
@@ -61,7 +60,7 @@ export default {
             config.activo = false;
             guardarConfig(config);
             return await responder.texto(
-                '━━〔 🛡️ 𝐀𝐓𝐈𝐏𝐈𝐕𝐀𝐎 〕━━⬣\n' +
+                '╭━━〔 🛡️ 𝐀𝐍𝐓𝐈𝐏𝐑𝐈𝐕𝐀𝐃𝐎 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ *Modo Anti-Privado DESACTIVADO*\n' +
                 '┃\n' +
@@ -75,7 +74,7 @@ export default {
         return await responder.texto(
             '╭━━〔 🛡️ 𝐀𝐍𝐓𝐈𝐏𝐑𝐈𝐕𝐀𝐃𝐎 〕━━⬣\n' +
             '┃\n' +
-            `┃ 📊 Estado actual: *${config.activo ? '✅ ACTIVADO' : ' DESACTIVADO'}*\n` +
+            `┃ 📊 Estado actual: *${config.activo ? '✅ ACTIVADO' : '❌ DESACTIVADO'}*\n` +
             '┃\n' +
             '┃ 💡 Uso:\n' +
             '┃ › .antiprivado on\n' +
