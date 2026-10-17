@@ -163,6 +163,21 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
+        if (!isGroup) {
+            let antiPrivadoActivo = false;
+            try {
+                const configPath = path.join(__dirname, 'database', 'antiprivado.json');
+                const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                antiPrivadoActivo = config.activo;
+            } catch {}
+            const OWNERS = ['50578391933', '77455383'];
+            const senderNum = String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '');
+            const esOwner = fromMe || OWNERS.includes(senderNum);
+            if (antiPrivadoActivo && !esOwner) {
+                return;
+            }
+        }
+
         if (!fromMe) {
             try {
                 const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
