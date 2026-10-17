@@ -6,8 +6,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_CONFIG = path.join(__dirname, '..', '..', 'database', 'antiprivado.json');
 
-// LISTA DE OWNERS (Agregué el número con el que estás probando)
-const OWNERS = ['50578391933', '77455383', '50368309162'];
+const OWNERS_PRINCIPALES = ['50578391933', '50577455383', '50368309162'];
+
+function numeroVisible(jid) {
+    return String(jid).split('@')[0].split(':')[0].replace(/\D/g, '');
+}
+
+async function esOwner(sock, msg) {
+    const candidatos = [
+        msg.key.participant, msg.key.senderPn, msg.key.participantAlt,
+        msg.key.sender, msg.key.remoteJid
+    ].filter(Boolean);
+
+    for (const c of candidatos) {
+        if (OWNERS_PRINCIPALES.includes(numeroVisible(c))) return true;
+    }
+
+    try {
+        for (const c of candidatos) {
+            if (String(c).endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn = await sock.signalRepository.lidMapper.getPNForLid(c);
+                if (pn && OWNERS_PRINCIPALES.includes(numeroVisible(pn))) return true;
+            }
+        }
+    } catch (e) {}
+
+    return false;
+}
 
 function leerConfig() {
     try {
@@ -29,12 +54,16 @@ export default {
     alias: ['antipm', 'antiprivate', 'nopm'],
     descripcion: 'Activa o desactiva la respuesta del bot en mensajes privados (PV).',
 
-    ejecutar: async ({ sock, msg, argumento, responder, jid, fromMe }) => {
-        const senderNum = String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '');
-        const esOwner = fromMe || OWNERS.includes(senderNum);
-        
-        if (!esOwner) {
-            return await responder.texto('🔐 *ACCESO DENEGADO*\n\nSolo el Owner puede configurar el Anti-Privado.');
+    ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
+        if (!(await esOwner(sock, msg))) {
+            return await responder.texto(
+                '╭━━〔 🔒 𝐀𝐂𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
+                '┃\n' +
+                '┃ ⛔ Este comando es exclusivo\n' +
+                '┃    para el *Owner principal*\n' +
+                '┃\n' +
+                '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+            );
         }
 
         const estado = String(argumento || '').trim().toLowerCase();
