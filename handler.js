@@ -20,6 +20,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const RUTA_CONFIG = path.join(__dirname, 'database', 'config.json');
 
+const OWNERS_PRINCIPALES = ['50578391933', '50577455383', '50368309162'];
+
+function numeroVisible(jid) {
+    return String(jid).split('@')[0].split(':')[0].replace(/\D/g, '');
+}
+
+async function esOwner(sock, msg) {
+    const candidatos = [
+        msg.key.participant, msg.key.senderPn, msg.key.participantAlt,
+        msg.key.sender, msg.key.remoteJid
+    ].filter(Boolean);
+
+    for (const c of candidatos) {
+        if (OWNERS_PRINCIPALES.includes(numeroVisible(c))) return true;
+    }
+
+    try {
+        for (const c of candidatos) {
+            if (String(c).endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn = await sock.signalRepository.lidMapper.getPNForLid(c);
+                if (pn && OWNERS_PRINCIPALES.includes(numeroVisible(pn))) return true;
+            }
+        }
+    } catch (e) {}
+
+    return false;
+}
+
 let _prefijoCache = '.';
 let _prefijoLeidoEn = 0;
 const PREFIJO_TTL_MS = 5000;
@@ -170,10 +198,8 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
                 antiPrivadoActivo = config.activo;
             } catch {}
-            const OWNERS = ['50578391933', '77455383', '50368309162'];
-            const senderNum = String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '');
-            const esOwner = fromMe || OWNERS.includes(senderNum);
-            if (antiPrivadoActivo && !esOwner) {
+            
+            if (antiPrivadoActivo && !(await esOwner(sock, msg))) {
                 return;
             }
         }
