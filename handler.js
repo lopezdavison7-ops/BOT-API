@@ -170,7 +170,7 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
                 antiPrivadoActivo = config.activo;
             } catch {}
-            const OWNERS = ['50578391933', '77455383'];
+            const OWNERS = ['50578391933', '77455383', '50368309162'];
             const senderNum = String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '');
             const esOwner = fromMe || OWNERS.includes(senderNum);
             if (antiPrivadoActivo && !esOwner) {
