@@ -1,6 +1,9 @@
 // commands/grupos/tumbar.js
 import { esGrupo } from '../../lib/grupos.js';
 
+const DEFECTO = 100;
+const MAXIMO = 1000;
+const LOTE = 50;
 const EMOJIS = ['🔥', '⚡', '💥', '🚀'];
 
 export default {
@@ -21,26 +24,32 @@ export default {
         const partes = String(argumento || '').trim().split(/\s+/);
 
         const cantidad = Math.min(
-            Math.max(parseInt(partes[0]) || 30, 1),
-            500
+            Math.max(parseInt(partes[0]) || DEFECTO, 1),
+            MAXIMO
         );
 
         const texto = partes.slice(1).join(' ') || null;
 
         try {
-            // SPAM: todos los mensajes disparados de golpe, sin esperar
-            await Promise.all(
-                Array.from({ length: cantidad }, (_, i) =>
-                    sock.sendMessage(chatId, {
-                        text: texto
-                            ? texto
-                            : `${EMOJIS[i % EMOJIS.length]} ${i + 1}`
+            // ráfagas paralelas, sin pausa entre tandas
+            for (let i = 0; i < cantidad; i += LOTE) {
+                const fin = Math.min(i + LOTE, cantidad);
+
+                await Promise.all(
+                    Array.from({ length: fin - i }, (_, k) => {
+                        const n = i + k + 1;
+
+                        return sock.sendMessage(chatId, {
+                            text: texto
+                                ? texto
+                                : `${EMOJIS[n % EMOJIS.length]} ${n}`
+                        });
                     })
-                )
-            );
+                );
+            }
 
             await responder.texto(
-                `✅ Grupo tumbado con *${cantidad}* mensaje(s).`
+                `✅ Tumbado con *${cantidad}* mensaje(s).`
             );
 
         } catch (error) {
