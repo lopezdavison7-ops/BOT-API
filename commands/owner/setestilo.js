@@ -1,4 +1,10 @@
-import { listarTemas, guardarEstilo, obtenerEstilo } from '../../lib/estilos.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { guardarEstilo, listarTemas, obtenerEstilo } from '../../lib/estilos.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const OWNER_PRINCIPAL = '50578391933';
 
@@ -31,19 +37,11 @@ export default {
     categoria: 'Owner',
     alias: ['tema', 'diseño', 'design', 'settheme', 'estilo'],
     owner: true,
-    descripcion: 'Cambia el diseño visual de TODO el bot. Solo Owner principal.',
+    descripcion: 'Cambia el diseño visual de TODO el bot.',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
-
         if (!(await esOwnerPrincipal(sock, msg))) {
-            return await responder.texto(
-                '━━〔 🔒 𝐀𝐂𝐄𝐒𝐎 𝐄𝐍𝐄𝐀𝐃𝐎 〕━━⬣\n' +
-                '┃\n' +
-                '┃  Este comando es exclusivo\n' +
-                '┃    para el *Owner principal*\n' +
-                '┃\n' +
-                '╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏𝐈 〕━━⬣'
-            );
+            return await responder.texto('🔐 *ACCESO DENEGADO*\n\nSolo el Owner principal puede usar este comando.');
         }
 
         const tema = String(argumento || '').trim().toLowerCase();
@@ -52,22 +50,14 @@ export default {
             const temas = listarTemas();
             const estiloActual = obtenerEstilo();
             
-            let texto = '╭━━〔 🎨 𝐓𝐄𝐀𝐒 𝐃𝐈𝐒𝐏𝐎𝐍𝐈𝐋𝐄 〕━━⬣\n';
-            texto += '┃\n';
-            texto += `┃ 📌 Tema actual: *${estiloActual.nombre}*\n`;
-            texto += '┃\n';
+            let texto = '╭━━〔 🎨 TEMAS DISPONIBLES 〕━━⬣\n';
+            texto += `┃ 📌 Tema actual: *${estiloActual.nombre}*\n┃\n`;
             temas.forEach(t => {
-                const activo = t.key === Object.keys(temas).find(k => obtenerEstilo().nombre === t.nombre) ? ' ✅' : '';
-                texto += `┃ ${t.nombre}${activo}\n`;
+                texto += `┃ • ${t.nombre}\n`;
             });
-            texto += '┃\n';
-            texto += '┃ 💡 Uso: .setestilo <tema>\n';
-            texto += '┃ Ejemplos:\n';
-            texto += ' › .setestilo halloween\n';
-            texto += '┃ › .setestilo navidad\n';
-            texto += '┃ › .setestilo neon\n';
-            texto += '┃\n';
-            texto += '╰━━━━━━━━━━━━━━━━⬣';
+            texto += '┃\n┃ 💡 Uso: .setestilo <tema>\n';
+            texto += '┃ Ej: .setestilo halloween\n';
+            texto += '╰━━━━━━━━━━━━━━━━━━━━━━━━⬣';
             
             return await responder.texto(texto);
         }
@@ -79,16 +69,12 @@ export default {
             if (exito) {
                 const estiloNuevo = obtenerEstilo();
                 return await responder.texto(
-                    '╭━━〔 🎨 𝐄𝐒𝐓𝐈𝐋𝐎 𝐀𝐌𝐈𝐀𝐃𝐎 〕━━⬣\n' +
-                    '┃\n' +
-                    `┃ ✅ Tema activado: *${estiloNuevo.nombre}*\n` +
-                    '┃\n' +
-                    '┃ 🎃 Todos los comandos usarán\n' +
+                    '╭━━〔 🎨 ESTILO CAMBIADO 〕━━⬣\n' +
+                    `┃\n┃ ✅ Tema activado: *${estiloNuevo.nombre}*\n` +
+                    '┃\n┃ 🎃 Todos los comandos usarán\n' +
                     '┃    este diseño automáticamente.\n' +
-                    '┃\n' +
-                    '┃ 💡 Prueba con: .menu, .rob, .play\n' +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣'
+                    '┃\n┃ 💡 Prueba con: .menu\n' +
+                    '┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣'
                 );
             }
         }
