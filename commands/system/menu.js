@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
-import { aplicarEstilo } from '../../lib/estilos.js'; // <-- IMPORTANTE: Aplica el estilo
+import { aplicarEstilo } from '../../lib/estilos.js';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -19,8 +19,8 @@ const ORDEN_CATEGORIAS = [
 
 const ICONOS = {
     Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '📥', Utilidades: '️', IA: '🧠',
-    Multimedia: '🎨', Grupos: '👥', Interacción: '', Moderación: '🛡️'
+    Otros: '📦', Descargas: '', Utilidades: '🛠️', IA: '🧠',
+    Multimedia: '🎨', Grupos: '', Interacción: '🎭', Moderación: '🛡️'
 };
 
 function obtenerAutor(msg) {
@@ -48,8 +48,7 @@ function normalizarCategoria(c) {
     const mapa = {
         'economia': 'Economía', 'economy': 'Economía', 'economía': 'Economía',
         'utilidades': 'Utilidades', 'utils': 'Utilidades', 'utility': 'Utilidades',
-        'sistema': 'Sistema', 'system': 'Sistema',
-        'owner': 'Owner', 'propietario': 'Owner',
+        'sistema': 'Sistema', 'system': 'Sistema', 'owner': 'Owner',
         'grupos': 'Grupos', 'groups': 'Grupos',
         'moderación': 'Moderación', 'moderacion': 'Moderación', 'mod': 'Moderación',
         'diversión': 'Diversión', 'diversion': 'Diversión', 'fun': 'Diversión',
@@ -96,23 +95,21 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
     let texto = '';
 
-    // ══ ENCABEZADO PRINCIPAL ══
-    texto += `╭━━━〔 ⚡ ${BOT_NAME} ⚡ 〕━━━⬣\n`;
+    // ══ ENCABEZADO ══
+    texto += `╭━━━〔  ${BOT_NAME} ⚡ 〕━━━⬣\n`;
     texto += `\n`;
     texto += `┃  👋 ¡Hola ${mencionTexto}!\n`;
-    texto += `┃   *${botName}*\n`;
     texto += `┃\n`;
-    texto += `┃  📊 *INFORMACIÓN DEL BOT*\n`;
+    texto += `┃  📊 *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
-    texto += `┃  ▸ Categorías: ${totalCats}\n`;
     texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
-    texto += `  ▸ Fecha: ${now.format('DD/MM/YYYY HH:mm:ss')}\n`;
+    texto += `  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n`;
     texto += `┃\n`;
     texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
 
-    // ══ COMANDOS POR CATEGORÍA ══
+    // ══ COMANDOS ══
     const catsOrdenadas = ordenarCategorias(categorias);
     
     for (const cat of catsOrdenadas) {
@@ -123,30 +120,24 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
         for (const cmd of cmds) {
             const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
-            texto += `┃\n`;
+            texto += `\n`;
             texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
             
             if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
-                const desc = cmd.descripcion.length > 50 ? cmd.descripcion.slice(0, 50) + '...' : cmd.descripcion;
+                const desc = cmd.descripcion.length > 45 ? cmd.descripcion.slice(0, 45) + '...' : cmd.descripcion;
                 texto += `┃  > ${desc}\n`;
             }
         }
 
-        texto += `┃\n`;
+        texto += `\n`;
         texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
     }
 
-    // ══ SECCIÓN DEL CANAL (IMPORTANTE: Enlace limpio para que WhatsApp muestre "Ver canal") ══
-    texto += `\n╭━━〔 📢 *CANAL OFICIAL* 〕━━\n`;
-    texto += `┃\n`;
-    texto += `┃   Únete para novedades y soporte:\n`;
-    texto += `┃\n`;
-    texto += `┃  ${CANAL_URL}\n`;
-    texto += `┃\n`;
-    texto += `┃  💡 Usa *${prefijo}menu <comando>*\n`;
-    texto += `┃     para ver información detallada.\n`;
-    texto += `┃\n`;
-    texto += `━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
+    // ══ PIE CON ENLACE (SIN TEXTO DEBAJO PARA QUE WHATSAPP GENERE PREVIEW) ══
+    texto += `\n━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `📢 CANAL OFICIAL\n`;
+    texto += `━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    texto += `${CANAL_URL}`;
 
     return texto;
 }
@@ -167,37 +158,21 @@ export default {
             const menciones = autor ? [autor.jid] : [];
             const botName = global.botname || BOT_NAME;
 
-            // 1. Generar el menú base
+            // Generar menú y aplicar estilo
             const menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
-
-            // 2. APLICAR EL ESTILO ACTIVO (Halloween, Neón, etc.) ← ESTO FALTABA
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
 
-            // 3. Enviar con imagen o texto + contexto del canal
-            const mensajeOpciones = {
-                mentions: menciones,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `⚡ ${BOT_NAME}`,
-                        body: 'Canal Oficial - Únete aquí',
-                        thumbnailUrl: 'https://i.imgur.com/default.jpg',
-                        sourceUrl: CANAL_URL, // ← ESTO HACE QUE APAREZCA "VER CANAL"
-                        mediaType: 1,
-                        renderLargerThumbnail: false
-                    }
-                }
-            };
-
+            // Enviar con imagen o texto
             if (fs.existsSync(FOTO_MENU)) {
                 await sock.sendMessage(jid, {
                     image: { url: FOTO_MENU },
-                    caption: menuTextoFinal, // ← Texto con estilo aplicado
-                    ...mensajeOpciones
+                    caption: menuTextoFinal,
+                    mentions: menciones
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(jid, {
-                    text: menuTextoFinal, // ← Texto con estilo aplicado
-                    ...mensajeOpciones
+                    text: menuTextoFinal,
+                    mentions: menciones
                 }, { quoted: msg });
             }
 
