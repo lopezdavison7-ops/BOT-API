@@ -177,7 +177,41 @@ function buscarArchivoPlay() {
     return encontrado;
 }
 
+// ══ TRUCO MÁGICO: Interceptar TODOS los sendMessage de texto para aplicar estilos ══
+let aplicarEstiloGlobal = (texto) => texto;
+let estilosCargados = false;
+
+async function cargarEstilos() {
+    if (estilosCargados) return;
+    try {
+        const mod = await import('./lib/estilos.js');
+        aplicarEstiloGlobal = mod.aplicarEstilo || aplicarEstiloGlobal;
+        estilosCargados = true;
+        console.log('[HANDLER] ✅ Sistema de estilos cargado globalmente');
+    } catch (e) {
+        console.log('[HANDLER] ⚠️ No se pudo cargar estilos.js');
+    }
+}
+
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
+    // Cargar estilos una vez
+    await cargarEstilos();
+
+    // Interceptar sock.sendMessage para aplicar estilos a TODOS los textos
+    if (!sock._sendMessagePatched) {
+        const originalSend = sock.sendMessage.bind(sock);
+        sock.sendMessage = async function(jid, message, options = {}) {
+            if (message && message.text) {
+                message.text = aplicarEstiloGlobal(message.text);
+            }
+            if (message && message.caption) {
+                message.caption = aplicarEstiloGlobal(message.caption);
+            }
+            return originalSend(jid, message, options);
+        };
+        sock._sendMessagePatched = true;
+    }
+
     const prefijo = obtenerPrefijoActual();
     try {
         if (!comandos) {
@@ -191,7 +225,6 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
-        // ─── BLOQUEO ANTI-PRIVADO ───
         if (!isGroup) {
             let antiPrivadoActivo = false;
             try {
@@ -204,7 +237,6 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                 return;
             }
         }
-        // ──────────────────────────
 
         if (!fromMe) {
             try {
@@ -224,7 +256,7 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                                     const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
                                     textoUser = '@' + pj.split('@')[0];
                                     mentions = [pj];
-                }
+                                }
                             }
                         } catch (e) {}
                         if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
@@ -403,31 +435,15 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
             String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '')
         );
 
-        // ─── SISTEMA DE ESTILOS (Aplica el diseño a todas las respuestas) ───
-        let aplicarEstiloTexto = (t) => t;
-        try {
-            const modEstilos = await import('./lib/estilos.js');
-            aplicarEstiloTexto = modEstilos.aplicarEstilo || aplicarEstiloTexto;
-        } catch (e) {}
-
         await cmd.ejecutar({
             sock, msg, args, argumento, listaComandos, prefijo, fromMe, isGroup, jid, botJid,
             responder: {
-                texto: async (text) => { 
-                    await sock.sendMessage(jid, { text: aplicarEstiloTexto(text) }, { quoted: msg }); 
-                },
-                imagen: async (img, caption = '') => { 
-                    await sock.sendMessage(jid, { image: img, caption: aplicarEstiloTexto(caption) }, { quoted: msg }); 
-                },
-                video: async (vid, caption = '') => { 
-                    await sock.sendMessage(jid, { video: vid, caption: aplicarEstiloTexto(caption) }, { quoted: msg }); 
-                },
-                audio: async (aud, ptt = true) => { 
-                    await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); 
-                }
+                texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
             }
         });
-        // ─────────────────────────────────────────────────────────────────────
 
     } catch (error) {
         console.error('[HANDLER] Error al manejar mensaje:', error);
