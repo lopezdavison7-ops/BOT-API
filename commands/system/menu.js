@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import { aplicarEstilo, obtenerCanal } from '../../lib/estilos.js';
-import { generateWAMessageFromContent } from 'baileys';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -27,7 +26,7 @@ const ALIAS_CATEGORIAS = {
 };
 
 const ICONOS = {
-    Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '️',
+    Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
     Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
     Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
@@ -38,9 +37,7 @@ function obtenerAutor(msg) {
     for (const c of candidatos) {
         if (!c || typeof c !== 'string') continue;
         const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
-        if (n && n.length >= 7) {
-            return { jid: c.includes('@') ? c : `${c}@s.whatsapp.net`, num: n };
-        }
+        if (n && n.length >= 7) return { jid: c.includes('@') ? c : `${c}@s.whatsapp.net`, num: n };
     }
     return null;
 }
@@ -74,25 +71,20 @@ function organizarComandos(lista) {
 
 function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
-    let texto = '';
-    texto += `╭━━━〔 ⚡ ${botName}  〕━━━⬣\n\n`;
+    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
-    texto += `┃   *COMANDOS:* ${cmds.length}\n`;
-    texto += `┃\n`;
-    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
+    texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
     for (const cmd of cmds.sort((a, b) => a.nombre.localeCompare(b.nombre))) {
         const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
         texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
         if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
             const desc = cmd.descripcion.length > 45 ? cmd.descripcion.slice(0, 45) + '...' : cmd.descripcion;
-            texto += `┃     └ ${desc}\n`; // <-- CAMBIO: Más limpio, sin el > pegado
+            texto += `┃     └ ${desc}\n`;
         }
         texto += `\n`;
     }
-    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
-    texto += `💡 Usa *${prefijo}menu* para ver todo.\n\n`;
-    texto += obtenerCanal(); // Enlace al final
+    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n💡 Usa *${prefijo}menu* para ver todo.`;
     return texto;
 }
 
@@ -101,37 +93,30 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
-    let texto = '';
-    texto += `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
-    texto += `┃  👋 ¡Hola ${mencionTexto}!\n`;
-    texto += `\n`;
+    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
+    texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
     texto += `┃  📊 *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
-    texto += `  ▸ Versión: ${VERSION}\n`;
+    texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
     texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
-    texto += `┃  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n`;
-    texto += `┃\n`;
-    texto += `━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
+    texto += `┃  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n┃\n`;
+    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
 
-    const catsOrdenadas = Object.keys(categorias).sort();
-    for (const cat of catsOrdenadas) {
+    for (const cat of Object.keys(categorias).sort()) {
         const icono = obtenerIcono(cat);
         const cmds = categorias[cat];
         texto += `\n╭━━〔 ${icono} *${cat.toUpperCase()}* 〕━━⬣\n`;
         for (const cmd of cmds) {
             const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
-            texto += `\n`;
-            texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
+            texto += `\n┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
             if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
                 const desc = cmd.descripcion.length > 45 ? cmd.descripcion.slice(0, 45) + '...' : cmd.descripcion;
-                texto += `┃     └ ${desc}\n`; // <-- CAMBIO: Más limpio
+                texto += `┃     └ ${desc}\n`;
             }
         }
-        texto += `\n`;
-        texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
+        texto += `\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
     }
-    texto += `\n\n${obtenerCanal()}`; // <-- Enlace aislado al final
     return texto;
 }
 
@@ -155,12 +140,12 @@ export default {
             let menuTextoBase = '';
 
             if (busqueda && ALIAS_CATEGORIAS[busqueda]) {
-                const categoriaReal = ALIAS_CATEGORIAS[busqueda];
-                const cmdsDeCategoria = categorias[categoriaReal] || [];
-                menuTextoBase = cmdsDeCategoria.length > 0 ? generarMenuFiltrado(categoriaReal, cmdsDeCategoria, prefijo, botName) : `❌ No hay comandos en *${categoriaReal}*.`;
+                const catReal = ALIAS_CATEGORIAS[busqueda];
+                const cmds = categorias[catReal] || [];
+                menuTextoBase = cmds.length > 0 ? generarMenuFiltrado(catReal, cmds, prefijo, botName) : `❌ No hay comandos en *${catReal}*.`;
             } else if (busqueda && !ALIAS_CATEGORIAS[busqueda]) {
                 const catsDisp = [...new Set(Object.values(ALIAS_CATEGORIAS))].map(c => `• ${c}`).join('\n');
-                menuTextoBase = ` Categoría "*${args[0]}*" no existe.\n\n*Categorías disponibles:*\n${catsDisp}\n\n💡 Ejemplo: *${prefijo}menu descargas*\n\n${obtenerCanal()}`;
+                menuTextoBase = `❌ Categoría "*${args[0]}*" no existe.\n\n*Categorías disponibles:*\n${catsDisp}\n\n💡 Ejemplo: *${prefijo}menu descargas*`;
             } else {
                 menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
             }
@@ -168,50 +153,18 @@ export default {
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // 1. Intentar enviar con vista previa nativa (Ver Canal)
-            try {
-                const content = {
-                    extendedTextMessage: {
-                        text: menuTextoFinal,
-                        matchedText: urlCanal,
-                        canonicalUrl: urlCanal,
-                        description: 'Canal Oficial de Novedades',
-                        title: botName.toUpperCase(),
-                        previewType: 0, // 0 es mejor para enlaces de canales
-                        contextInfo: {
-                            mentionedJid: menciones,
-                            isForwarded: true,
-                            forwardingScore: 1
-                        }
-                    }
-                };
-                const waMsg = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id || jid, quoted: msg });
-                await sock.relayMessage(jid, waMsg.message, { messageId: waMsg.key.id });
-                return; // Si funcionó, salimos
-            } catch (e) {
-                console.log('[MENU] Vista previa falló, enviando normal con botón interactivo');
-            }
-
-            // 2. FALLBACK: Si WhatsApp no genera la vista previa, enviamos un botón interactivo real
-            await sock.relayMessage(jid, {
-                viewOnceMessage: {
-                    message: {
-                        interactiveMessage: {
-                            header: { title: `⚡ ${botName}`, hasMediaAttachment: false },
-                            body: { text: menuTextoFinal },
-                            footer: { text: 'Canal Oficial' },
-                            nativeFlowMessage: {
-                                buttons: [{
-                                    name: 'cta_url',
-                                    buttonParamsJson: JSON.stringify({
-                                        display_text: '📢 VER CANAL',
-                                        url: urlCanal,
-                                        merchant_url: urlCanal
-                                    })
-                                }],
-                                messageParamsJson: ''
-                            }
-                        }
+            // MÉTODO INFALIBLE PARA "VER CANAL" (External Ad Reply)
+            await sock.sendMessage(jid, {
+                text: menuTextoFinal,
+                mentions: menciones,
+                contextInfo: {
+                    externalAdReply: {
+                        title: `⚡ ${botName} OFICIAL`,
+                        body: 'Toca aquí para unirte a las novedades y soporte',
+                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg', // Puedes poner la URL de tu logo aquí
+                        sourceUrl: urlCanal,
+                        mediaType: 1,
+                        renderLargerThumbnail: true
                     }
                 }
             }, { quoted: msg });
