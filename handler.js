@@ -177,41 +177,7 @@ function buscarArchivoPlay() {
     return encontrado;
 }
 
-// ══ TRUCO MÁGICO: Interceptar TODOS los sendMessage de texto para aplicar estilos ══
-let aplicarEstiloGlobal = (texto) => texto;
-let estilosCargados = false;
-
-async function cargarEstilos() {
-    if (estilosCargados) return;
-    try {
-        const mod = await import('./lib/estilos.js');
-        aplicarEstiloGlobal = mod.aplicarEstilo || aplicarEstiloGlobal;
-        estilosCargados = true;
-        console.log('[HANDLER] ✅ Sistema de estilos cargado globalmente');
-    } catch (e) {
-        console.log('[HANDLER] ⚠️ No se pudo cargar estilos.js');
-    }
-}
-
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
-    // Cargar estilos una vez
-    await cargarEstilos();
-
-    // Interceptar sock.sendMessage para aplicar estilos a TODOS los textos
-    if (!sock._sendMessagePatched) {
-        const originalSend = sock.sendMessage.bind(sock);
-        sock.sendMessage = async function(jid, message, options = {}) {
-            if (message && message.text) {
-                message.text = aplicarEstiloGlobal(message.text);
-            }
-            if (message && message.caption) {
-                message.caption = aplicarEstiloGlobal(message.caption);
-            }
-            return originalSend(jid, message, options);
-        };
-        sock._sendMessagePatched = true;
-    }
-
     const prefijo = obtenerPrefijoActual();
     try {
         if (!comandos) {
@@ -224,6 +190,29 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
         const jid = msg.key.remoteJid;
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
+
+        // ══ PARCHES GLOBALES DE ESTILOS ═
+        let aplicarEstiloGlobal = (t) => t;
+        try {
+            const modEstilos = await import('./lib/estilos.js');
+            aplicarEstiloGlobal = modEstilos.aplicarEstilo || aplicarEstiloGlobal;
+        } catch (e) {}
+
+        // Intercepta CUALQUIER sock.sendMessage para aplicar estilos automáticamente
+        if (!sock._estiloParcheado) {
+            const originalSend = sock.sendMessage.bind(sock);
+            sock.sendMessage = async (jid, message, options = {}) => {
+                if (message && typeof message.text === 'string') {
+                    message.text = aplicarEstiloGlobal(message.text);
+                }
+                if (message && typeof message.caption === 'string') {
+                    message.caption = aplicarEstiloGlobal(message.caption);
+                }
+                return originalSend(jid, message, options);
+            };
+            sock._estiloParcheado = true;
+        }
+        // ══════════════════════════════
 
         if (!isGroup) {
             let antiPrivadoActivo = false;
@@ -265,16 +254,16 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                         }
                         await sock.sendMessage(jid, {
                             text:
-                                `╭━━〔 ✅ 𝐎𝐋𝐕𝐈𝐒𝐓 〕━━⬣\n` +
+                                `╭━━〔 ✅ 𝐋𝐕𝐈𝐒𝐓 〕━━\n` +
                                 `┃\n` +
                                 `┃ 🎉 ${textoUser} ya regresaste!\n` +
                                 `┃\n` +
                                 `┃ 💤 Estuviste AFK: *${fmtTiempo(Date.now() - data.tiempo)}*\n` +
-                                (data.razon ? `┃ 📝 Razón: ${data.razon}\n` : '') +
+                                (data.razon ? ` 📝 Razón: ${data.razon}\n` : '') +
                                 `┃\n` +
                                 `┃ 🎈 Bienvenido de vuelta\n` +
                                 `┃\n` +
-                                `╰━━━━━━━━━━━━━━━━⬣`,
+                                `╰━━━━━━━━━━━━━━━━`,
                             mentions
                         }, { quoted: msg });
                     }
@@ -413,15 +402,15 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
                 if (!categoriaActiva(jid, catCmd)) {
                     await sock.sendMessage(jid, {
                         text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
+                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
                             '┃\n' +
-                            '┃ 📂 Categoría: *' + catCmd.toUpperCase() + '*\n' +
-                            '┃ 🚫 Comando: ' + prefijo + nombreComando + '\n' +
+                            '┃  Categoría: *' + catCmd.toUpperCase() + '*\n' +
+                            '┃  Comando: ' + prefijo + nombreComando + '\n' +
                             '┃\n' +
                             '┃ 🟢 Reactiva con:\n' +
                             '┃ ➪ ' + prefijo + 'activar ' + catCmd + '\n' +
                             '┃\n' +
-                            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+                            '╰━━〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
                     }, { quoted: msg });
                     return;
                 }
