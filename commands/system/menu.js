@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
+import { aplicarEstilo } from '../../lib/estilos.js'; // <-- IMPORTANTE: Aplica el estilo
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -10,22 +11,6 @@ const CANAL_URL = 'https://whatsapp.com/channel/0029Vb8eeKGG3R3kwBcZdp2Q';
 
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 
-// 1. MAPA DE CATEGORÍAS (Soluciona los duplicados por errores de escritura)
-const MAPA_CATEGORIAS = {
-    'economia': 'Economía', 'economy': 'Economía', 'economía': 'Economía',
-    'utilidades': 'Utilidades', 'utils': 'Utilidades', 'utility': 'Utilidades', 'utilities': 'Utilidades',
-    'sistema': 'Sistema', 'system': 'Sistema', 'sys': 'Sistema',
-    'owner': 'Owner', 'propietario': 'Owner', 'dueño': 'Owner',
-    'grupos': 'Grupos', 'groups': 'Grupos', 'group': 'Grupos', 'grupo': 'Grupos',
-    'moderación': 'Moderación', 'moderacion': 'Moderación', 'mod': 'Moderación', 'mods': 'Moderación',
-    'diversión': 'Diversión', 'diversion': 'Diversión', 'fun': 'Diversión', 'juegos': 'Diversión', 'funny': 'Diversión',
-    'interacción': 'Interacción', 'interaccion': 'Interacción', 'interact': 'Interacción', 'interactions': 'Interacción',
-    'descargas': 'Descargas', 'downloads': 'Descargas', 'download': 'Descargas', 'dl': 'Descargas',
-    'multimedia': 'Multimedia', 'media': 'Multimedia', 'audio': 'Multimedia', 'video': 'Multimedia',
-    'ia': 'IA', 'ai': 'IA', 'inteligencia artificial': 'IA', 'intelligence': 'IA',
-    'otros': 'Otros', 'others': 'Otros', 'otro': 'Otros', 'random': 'Otros'
-};
-
 const ORDEN_CATEGORIAS = [
     'Sistema', 'Owner', 'Grupos', 'Moderación', 'Economía',
     'Diversión', 'Interacción', 'Descargas', 'Multimedia',
@@ -34,8 +19,8 @@ const ORDEN_CATEGORIAS = [
 
 const ICONOS = {
     Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
-    Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
+    Otros: '📦', Descargas: '📥', Utilidades: '️', IA: '🧠',
+    Multimedia: '🎨', Grupos: '👥', Interacción: '', Moderación: '🛡️'
 };
 
 function obtenerAutor(msg) {
@@ -59,11 +44,23 @@ function formatUptime(s) {
     return `${h}h ${m}m`;
 }
 
-// 2. FUNCIÓN MEJORADA PARA NORMALIZAR (Agrupa sin duplicar)
 function normalizarCategoria(c) {
+    const mapa = {
+        'economia': 'Economía', 'economy': 'Economía', 'economía': 'Economía',
+        'utilidades': 'Utilidades', 'utils': 'Utilidades', 'utility': 'Utilidades',
+        'sistema': 'Sistema', 'system': 'Sistema',
+        'owner': 'Owner', 'propietario': 'Owner',
+        'grupos': 'Grupos', 'groups': 'Grupos',
+        'moderación': 'Moderación', 'moderacion': 'Moderación', 'mod': 'Moderación',
+        'diversión': 'Diversión', 'diversion': 'Diversión', 'fun': 'Diversión',
+        'interacción': 'Interacción', 'interaccion': 'Interacción',
+        'descargas': 'Descargas', 'downloads': 'Descargas',
+        'multimedia': 'Multimedia', 'media': 'Multimedia',
+        'ia': 'IA', 'ai': 'IA'
+    };
     if (!c) return 'Otros';
     const raw = String(c).trim().toLowerCase();
-    return MAPA_CATEGORIAS[raw] || raw.replace(/^\w/, ch => ch.toUpperCase());
+    return mapa[raw] || raw.replace(/^\w/, ch => ch.toUpperCase());
 }
 
 function obtenerIcono(c) {
@@ -92,12 +89,6 @@ function ordenarCategorias(categorias) {
     });
 }
 
-function acortarDesc(texto) {
-    if (!texto) return 'Sin descripción';
-    const limpio = String(texto).trim();
-    return limpio.length <= 45 ? limpio : `${limpio.slice(0, 45).trim()}...`;
-}
-
 function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
@@ -105,23 +96,23 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
     let texto = '';
 
-    // 3. ENCABEZADO CHIDO Y LIMPIO
+    // ══ ENCABEZADO PRINCIPAL ══
     texto += `╭━━━〔 ⚡ ${BOT_NAME} ⚡ 〕━━━⬣\n`;
-    texto += `┃\n`;
+    texto += `\n`;
     texto += `┃  👋 ¡Hola ${mencionTexto}!\n`;
-    texto += `┃  🤖 Bienvenido al panel de control\n`;
+    texto += `┃   *${botName}*\n`;
     texto += `┃\n`;
-    texto += `┃  📊 *ESTADÍSTICAS DEL SISTEMA*\n`;
-    texto += `┃  👨‍💻 Creador   : ${CREADOR}\n`;
-    texto += `┃  📦 Versión    : ${VERSION}\n`;
-    texto += `┃  📚 Comandos   : ${totalCmds}\n`;
-    texto += `┃  🗂️ Categorías : ${totalCats}\n`;
-    texto += `┃  ⏱️ Uptime     : ${formatUptime(process.uptime())}\n`;
-    texto += `┃  📅 ${now.format('DD/MM/YYYY')} - ${now.format('HH:mm:ss')}\n`;
+    texto += `┃  📊 *INFORMACIÓN DEL BOT*\n`;
+    texto += `┃  ▸ Creador: ${CREADOR}\n`;
+    texto += `┃  ▸ Versión: ${VERSION}\n`;
+    texto += `┃  ▸ Comandos: ${totalCmds}\n`;
+    texto += `┃  ▸ Categorías: ${totalCats}\n`;
+    texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
+    texto += `  ▸ Fecha: ${now.format('DD/MM/YYYY HH:mm:ss')}\n`;
     texto += `┃\n`;
     texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
 
-    // 4. CUERPO DEL MENÚ (Categorías y comandos)
+    // ══ COMANDOS POR CATEGORÍA ══
     const catsOrdenadas = ordenarCategorias(categorias);
     
     for (const cat of catsOrdenadas) {
@@ -129,15 +120,15 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
         const cmds = categorias[cat];
 
         texto += `\n╭━━〔 ${icono} *${cat.toUpperCase()}* 〕━━⬣\n`;
-        texto += `┃\n`;
 
         for (const cmd of cmds) {
             const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
-            texto += `┃  ➤ *${prefijo}${cmd.nombre}*${alias}\n`;
+            texto += `┃\n`;
+            texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
             
-            const desc = acortarDesc(cmd.descripcion);
-            if (desc && desc !== 'Sin descripción') {
-                texto += `┃     └─ ${desc}\n`;
+            if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
+                const desc = cmd.descripcion.length > 50 ? cmd.descripcion.slice(0, 50) + '...' : cmd.descripcion;
+                texto += `┃  > ${desc}\n`;
             }
         }
 
@@ -145,17 +136,17 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
         texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
     }
 
-    // 5. PIE DE PÁGINA CON EL CANAL
-    texto += `\n╭━━〔 📢 *CANAL OFICIAL* 〕━━⬣\n`;
+    // ══ SECCIÓN DEL CANAL (IMPORTANTE: Enlace limpio para que WhatsApp muestre "Ver canal") ══
+    texto += `\n╭━━〔 📢 *CANAL OFICIAL* 〕━━\n`;
     texto += `┃\n`;
-    texto += `┃  🔗 Únete para novedades y soporte:\n`;
+    texto += `┃   Únete para novedades y soporte:\n`;
+    texto += `┃\n`;
     texto += `┃  ${CANAL_URL}\n`;
     texto += `┃\n`;
     texto += `┃  💡 Usa *${prefijo}menu <comando>*\n`;
     texto += `┃     para ver información detallada.\n`;
     texto += `┃\n`;
-    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
-    texto += `\n _${BOT_NAME} • ${now.format('HH:mm')}_`;
+    texto += `━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
 
     return texto;
 }
@@ -176,19 +167,23 @@ export default {
             const menciones = autor ? [autor.jid] : [];
             const botName = global.botname || BOT_NAME;
 
-            const menuTexto = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
+            // 1. Generar el menú base
+            const menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
 
-            // Envío con preview del canal (externalAdReply)
+            // 2. APLICAR EL ESTILO ACTIVO (Halloween, Neón, etc.) ← ESTO FALTABA
+            const menuTextoFinal = aplicarEstilo(menuTextoBase);
+
+            // 3. Enviar con imagen o texto + contexto del canal
             const mensajeOpciones = {
                 mentions: menciones,
                 contextInfo: {
                     externalAdReply: {
-                        title: `⚡ ${BOT_NAME} - Canal Oficial`,
-                        body: '¡Toca aquí para unirte a la comunidad!',
-                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg', // Puedes cambiar esta URL por la foto de tu bot
-                        sourceUrl: CANAL_URL,
+                        title: `⚡ ${BOT_NAME}`,
+                        body: 'Canal Oficial - Únete aquí',
+                        thumbnailUrl: 'https://i.imgur.com/default.jpg',
+                        sourceUrl: CANAL_URL, // ← ESTO HACE QUE APAREZCA "VER CANAL"
                         mediaType: 1,
-                        renderLargerThumbnail: true
+                        renderLargerThumbnail: false
                     }
                 }
             };
@@ -196,12 +191,12 @@ export default {
             if (fs.existsSync(FOTO_MENU)) {
                 await sock.sendMessage(jid, {
                     image: { url: FOTO_MENU },
-                    caption: menuTexto,
+                    caption: menuTextoFinal, // ← Texto con estilo aplicado
                     ...mensajeOpciones
                 }, { quoted: msg });
             } else {
                 await sock.sendMessage(jid, {
-                    text: menuTexto,
+                    text: menuTextoFinal, // ← Texto con estilo aplicado
                     ...mensajeOpciones
                 }, { quoted: msg });
             }
@@ -209,7 +204,7 @@ export default {
         } catch (error) {
             console.error('[MENU] Error:', error);
             try {
-                await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error al mostrar el menú: ${error.message}` }, { quoted: msg });
+                await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg });
             } catch {}
         }
     }
