@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 const ANABOT_API = 'https://anabot.my.id/api';
-const ANABOT_KEY =Alex30 ''; 
+const ANABOT_KEY = 'Alex30';
 
 export default {
     nombre: 'tiktok',
@@ -35,12 +35,11 @@ export default {
 
         try {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
-            
+
             let data = null;
             let apiUsada = '';
 
             if (isUrl) {
-                // Intento 1: AnaBot (si hay apikey)
                 if (ANABOT_KEY) {
                     try {
                         const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
@@ -56,12 +55,11 @@ export default {
                     }
                 }
 
-                // Intento 2: TikWM (gratuito)
                 if (!data) {
                     try {
                         const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
                         const jsonTikwm = await resTikwm.json();
-                        
+
                         if (jsonTikwm.code === 0 && jsonTikwm.data) {
                             const d = jsonTikwm.data;
                             data = {
@@ -135,7 +133,6 @@ export default {
                     throw new Error('No se encontraron videos ni imágenes en el enlace');
                 }
             } else {
-                // Búsqueda
                 if (ANABOT_KEY) {
                     try {
                         const resSearch = await fetch(`${ANABOT_API}/search/tiktokSearch?username=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
@@ -143,7 +140,7 @@ export default {
                             const dataSearch = await resSearch.json();
                             if (dataSearch.success && dataSearch.data?.result) {
                                 const suggestions = dataSearch.data.result.slice(0, 10);
-                                
+
                                 let mensaje = 
                                     '╭━━〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
                                     '┃\n' +
