@@ -1,204 +1,220 @@
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const ANABOT_API = 'https://anabot.my.id/api';
-const ANABOT_KEY = 'Alex30';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const ALYA_API = 'https://api.alya.lol';
+const ALYA_KEY = 'OBOE-AERETHIX';
+const TIKWM_API = 'https://www.tikwm.com/api';
 
 const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+    'Accept-Language': 'es-ES,es;q=0.9'
 };
 
-function buscarUrlVideo(obj, profundidad = 0) {
-    if (!obj || profundidad > 6) return null;
-    if (typeof obj === 'string') {
-        if (/^https?:\/\/\S+$/i.test(obj) && (/\.mp4/i.test(obj) || /tiktokcdn/.test(obj) || /video/i.test(obj)) && !/\.jpe?g|\.png|\.webp/i.test(obj)) {
-            return obj;
-        }
-        return null;
-    }
-    if (Array.isArray(obj)) {
-        for (const item of obj) {
-            const r = buscarUrlVideo(item, profundidad + 1);
-            if (r) return r;
-        }
-        return null;
-    }
-    if (typeof obj === 'object') {
-        const claves = ['play', 'noWatermark', 'nowatermark', 'download', 'watermark', 'playAddr', 'play_addr', 'video', 'url'];
-        for (const k of claves) {
-            if (obj[k]) {
-                const r = buscarUrlVideo(obj[k], profundidad + 1);
-                if (r) return r;
-            }
-        }
-        for (const k of Object.keys(obj)) {
-            const r = buscarUrlVideo(obj[k], profundidad + 1);
-            if (r) return r;
-        }
-    }
-    return null;
-}
-
-function buscarCampo(obj, claves, profundidad = 0) {
-    if (!obj || profundidad > 5 || typeof obj !== 'object') return null;
-    for (const k of claves) {
-        if (obj[k] && typeof obj[k] === 'string') return obj[k];
-    }
-    for (const k of Object.keys(obj)) {
-        const r = buscarCampo(obj[k], claves, profundidad + 1);
-        if (r) return r;
-    }
-    return null;
-}
+const searchCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
 
 export default {
     nombre: 'tiktok',
     categoria: 'Descargas',
-    alias: ['tt', 'tiktokdl', 'tiktoksearch'],
-    descripcion: 'Descarga videos o imágenes de TikTok por enlace o búsqueda.',
+    alias: ['tt', 'tk', 'ttv', 'tiktokdl', 'tiktoksearch'],
+    descripcion: 'Busca y descarga videos de TikTok por texto o enlace.',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
         const reaccion = async (emoji) => {
-            await sock.sendMessage(jid, { react: { text: emoji, key: msg.key } });
+            try {
+                await sock.sendMessage(jid, { react: { text: emoji, key: msg.key } });
+            } catch {}
         };
 
-        const texto = String(argumento || '').trim();
+        const query = String(argumento || '').trim();
 
-        if (!texto) {
+        if (!query) {
             await reaccion('❌');
             return await responder.texto(
                 '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
                 '┃\n' +
-                '┃ ❌ Ingresa un enlace o término de búsqueda.\n' +
+                '┃ ❌ Proporciona una búsqueda o enlace.\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplos:\n' +
-                '┃ › .tiktok https://vm.tiktok.com/...\n' +
-                '┃ › .tiktok baile trend\n' +
+                '┃ › .tt https://vm.tiktok.com/...\n' +
+                '┃ › .tt baile trend\n' +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣'
             );
         }
 
-        await reaccion('🕒');
+        await reaccion('⏳');
 
         try {
-            const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
+            const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(query);
 
-            let data = null;
+            let url = null;
+            const now = Date.now();
 
             if (isUrl) {
-                try {
-                    const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`, { headers: HEADERS });
-                    if (resAna.ok) {
-                        const jsonAna = await resAna.json();
-                        if (jsonAna.success && jsonAna.data?.result) {
-                            data = jsonAna.data.result;
-                        }
-                    }
-                } catch (e) {
-                    console.log('[TIKTOK] AnaBot falló:', e.message);
-                }
+                url = query;
+            } else {
+                const cacheKey = query.toLowerCase();
+                const cached = searchCache.get(cacheKey);
 
-                if (!data || (!data.video && !(data.image && data.image.length))) {
+                if (cached && cached.exp > now) {
+                    url = cached.url;
+                } else {
+                    // Intento 1: Alya API
                     try {
-                        const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`, { headers: HEADERS });
-                        const txt = await resTikwm.text();
-                        if (txt.trim().startsWith('{')) {
-                            const jsonTikwm = JSON.parse(txt);
-                            if (jsonTikwm.code === 0 && jsonTikwm.data) {
-                                const d = jsonTikwm.data;
-                                data = {
-                                    username: d.author?.nickname || 'Desconocido',
-                                    description: d.title || 'Sin descripción',
-                                    video: d.play,
-                                    audio: d.music,
-                                    image: d.images || []
-                                };
+                        const res = await fetch(
+                            `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
+                            { headers: HEADERS }
+                        );
+                        if (res.ok) {
+                            const text = await res.text();
+                            if (!text.trim().startsWith('<')) {
+                                const json = JSON.parse(text);
+                                if (json?.data?.length > 0) {
+                                    url = json.data[0].url || json.data[0].link || json.data[0].video_url;
+                                }
                             }
                         }
                     } catch (e) {
-                        console.log('[TIKTOK] TikWM URL falló:', e.message);
+                        console.log('[TT] Alya falló:', e.message);
                     }
-                }
-            } else {
-                const endpoints = [
-                    `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`,
-                    `https://tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`,
-                    `https://api.tiklydown.eu.org/api/search/video?query=${encodeURIComponent(texto)}`,
-                    `https://api.tiklydown.me/api/search/video?query=${encodeURIComponent(texto)}`
-                ];
 
-                for (const endpoint of endpoints) {
-                    if (data) break;
-                    try {
-                        const res = await fetch(endpoint, { headers: HEADERS });
-                        const txt = await res.text();
-                        if (!txt.trim().startsWith('{') && !txt.trim().startsWith('[')) continue;
-                        const json = JSON.parse(txt);
-
-                        const urlVideo = buscarUrlVideo(json);
-                        if (urlVideo) {
-                            data = {
-                                username: buscarCampo(json, ['nickname', 'unique_id', 'uniqueId']) || 'Desconocido',
-                                description: buscarCampo(json, ['title', 'description']) || `Resultados de: ${texto}`,
-                                video: urlVideo,
-                                audio: null,
-                                image: []
-                            };
+                    // Intento 2: TikWM search
+                    if (!url) {
+                        try {
+                            const res = await fetch(
+                                `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=5`,
+                                { headers: HEADERS }
+                            );
+                            const text = await res.text();
+                            if (!text.trim().startsWith('<')) {
+                                const json = JSON.parse(text);
+                                if (json?.code === 0 && json?.data?.videos?.length > 0) {
+                                    const vid = json.data.videos[0];
+                                    url = `https://www.tiktok.com/@${vid.author?.unique_id || 'user'}/video/${vid.video_id || vid.id}`;
+                                }
+                            }
+                        } catch (e) {
+                            console.log('[TT] TikWM search falló:', e.message);
                         }
-                    } catch (e) {
-                        console.log('[TIKTOK] Búsqueda falló:', e.message);
+                    }
+
+                    if (!url) {
+                        throw new Error('No se encontró ningún video para esa búsqueda.');
+                    }
+
+                    if (searchCache.size > 150) searchCache.clear();
+                    searchCache.set(cacheKey, { url, exp: now + CACHE_TTL });
+                }
+            }
+
+            // Descargar usando TikWM
+            let data = null;
+            try {
+                const res = await fetch(
+                    `${TIKWM_API}/?url=${encodeURIComponent(url)}&hd=1`,
+                    { headers: HEADERS, timeout: 45000 }
+                );
+                const text = await res.text();
+                if (!text.trim().startsWith('<')) {
+                    const json = JSON.parse(text);
+                    if (json?.code === 0 && json?.data) {
+                        data = json.data;
                     }
                 }
+            } catch (e) {
+                console.log('[TT] TikWM download falló:', e.message);
             }
 
             if (!data) {
-                throw new Error('No se encontraron resultados. Intenta con otro término o verifica el enlace.');
+                throw new Error('La API no devolvió datos válidos.');
             }
 
-            if (data.video) {
+            const author = data.author?.nickname || data.author?.fullname || data.author?.unique_id || 'Desconocido';
+            const title = data.title || 'TikTok';
+            const views = data.play_count;
+            const likes = data.digg_count;
+            const comments = data.comment_count;
+            const shares = data.share_count;
+
+            const formatCount = (n) => {
+                if (!n && n !== 0) return '0';
+                const num = Number(n) || 0;
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return String(num);
+            };
+
+            // Imágenes (slideshows)
+            const imageUrls = Array.isArray(data.images) 
+                ? data.images.filter(img => typeof img === 'string' && /^https?:\/\//.test(img))
+                : [];
+
+            if (imageUrls.length > 0) {
                 const caption = 
-                    '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 〕━━⬣\n' +
-                    `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
-                    `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
+                    '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
+                    `┃ 👤 *Autor:* ${author}\n` +
+                    `┃ 📝 *Título:* ${title}\n` +
+                    `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
+                    `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
+                    `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
+                    `┃ 📤 *Compartidos:* ${formatCount(shares)}\n` +
+                    `┃ 📸 *Imágenes:* ${imageUrls.length}\n` +
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣';
 
-                await sock.sendMessage(jid, {
-                    video: { url: data.video },
-                    caption: caption,
-                    mimetype: 'video/mp4'
-                }, { quoted: msg });
-
-                if (data.audio) {
+                // Enviar álbum
+                for (let i = 0; i < imageUrls.length; i++) {
                     await sock.sendMessage(jid, {
-                        audio: { url: data.audio },
-                        mimetype: 'audio/mpeg',
-                        ptt: false
-                    }, { quoted: msg });
-                }
-            } else if (data.image && data.image.length > 0) {
-                const caption = 
-                    '╭━━〔 🖼️ 𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
-                    `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n' +
-                    `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
-                    `┃ 📸 *Imágenes:* ${data.image.length}\n` +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣';
-
-                await responder.texto(caption);
-
-                for (const imageUrl of data.image) {
-                    await sock.sendMessage(jid, {
-                        image: { url: imageUrl },
+                        image: { url: imageUrls[i] },
+                        caption: i === 0 ? caption : '',
                         mimetype: 'image/jpeg'
                     }, { quoted: msg });
                     await new Promise(r => setTimeout(r, 1000));
                 }
-            } else {
-                throw new Error('No se encontraron videos ni imágenes.');
+
+                // Audio
+                if (data.music_info?.play) {
+                    await sock.sendMessage(jid, {
+                        audio: { url: data.music_info.play },
+                        mimetype: 'audio/mpeg',
+                        fileName: `${title.slice(0, 30)}.mp3`
+                    }, { quoted: msg });
+                }
+
+                await reaccion('✅');
+                return;
             }
+
+            // Video
+            const videoUrl = data.hdplay || data.play || data.wmplay;
+            if (!videoUrl) {
+                throw new Error('La API no devolvió un video descargable.');
+            }
+
+            const caption = 
+                '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
+                `┃ 👤 *Autor:* ${author}\n` +
+                `┃ 📝 *Título:* ${title}\n` +
+                `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
+                `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
+                `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
+                `┃ 📤 *Compartidos:* ${formatCount(shares)}\n` +
+                '┃\n' +
+                '╰━━━━━━━━━━━━━━━━⬣';
+
+            await sock.sendMessage(jid, {
+                video: { url: videoUrl },
+                caption: caption,
+                mimetype: 'video/mp4',
+                fileName: `${title.slice(0, 30)}.mp4`
+            }, { quoted: msg });
 
             await reaccion('✅');
 
@@ -206,7 +222,7 @@ export default {
             console.error('[TIKTOK] Error:', error?.message || error);
             await reaccion('❌');
             await responder.texto(
-                '❌ Ocurrió un error al procesar el contenido de TikTok.\n\n' +
+                '❌ Ocurrió un error al procesar el contenido.\n\n' +
                 '⚠️ Detalle: ' + (error?.message || 'Error desconocido')
             );
         }
