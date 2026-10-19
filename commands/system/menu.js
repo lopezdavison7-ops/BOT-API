@@ -11,7 +11,7 @@ const BOT_NAME = 'BOT-API';
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 
 // ⚠️ REEMPLAZA ESTE VALOR con el que te dé el comando .obtenerjid
-const NEWSLETTER_JID = '120363424808187278@newsletter'; // <-- PEGA AQUÍ TU JID
+const NEWSLETTER_JID = '120363429914158508@newsletter@newsletter'; // <-- PEGA AQUÍ TU JID
 const NEWSLETTER_NAME = 'BOT-API Canal Oficial'; // <-- Nombre de tu canal
 
 const ALIAS_CATEGORIAS = {
