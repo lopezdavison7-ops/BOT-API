@@ -27,15 +27,10 @@ function numeroVisible(jid) {
 }
 
 async function esOwner(sock, msg) {
-    const candidatos = [
-        msg.key.participant, msg.key.senderPn, msg.key.participantAlt,
-        msg.key.sender, msg.key.remoteJid
-    ].filter(Boolean);
-
+    const candidatos = [msg.key.participant, msg.key.senderPn, msg.key.participantAlt, msg.key.sender, msg.key.remoteJid].filter(Boolean);
     for (const c of candidatos) {
         if (OWNERS_PRINCIPALES.includes(numeroVisible(c))) return true;
     }
-
     try {
         for (const c of candidatos) {
             if (String(c).endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
@@ -44,7 +39,6 @@ async function esOwner(sock, msg) {
             }
         }
     } catch (e) {}
-
     return false;
 }
 
@@ -54,9 +48,7 @@ const PREFIJO_TTL_MS = 5000;
 
 function obtenerPrefijoActual() {
     const ahora = Date.now();
-    if (ahora - _prefijoLeidoEn < PREFIJO_TTL_MS) {
-        return _prefijoCache;
-    }
+    if (ahora - _prefijoLeidoEn < PREFIJO_TTL_MS) return _prefijoCache;
     _prefijoLeidoEn = ahora;
     try {
         const config = JSON.parse(fs.readFileSync(RUTA_CONFIG, 'utf8'));
@@ -67,7 +59,6 @@ function obtenerPrefijoActual() {
 
 let comandos = null;
 let botJid = null;
-
 const RUTA_TOP = path.join(__dirname, 'database', 'topComandos.json');
 let topStats = null;
 let topSaveTimer = null;
@@ -75,12 +66,8 @@ let topSaveTimer = null;
 function cargarTopStats() {
     if (topStats) return topStats;
     try {
-        topStats = fs.existsSync(RUTA_TOP)
-            ? JSON.parse(fs.readFileSync(RUTA_TOP, 'utf8'))
-            : { comandos: {}, usuarios: {}, total: 0 };
-    } catch {
-        topStats = { comandos: {}, usuarios: {}, total: 0 };
-    }
+        topStats = fs.existsSync(RUTA_TOP) ? JSON.parse(fs.readFileSync(RUTA_TOP, 'utf8')) : { comandos: {}, usuarios: {}, total: 0 };
+    } catch { topStats = { comandos: {}, usuarios: {}, total: 0 }; }
     return topStats;
 }
 
@@ -98,10 +85,7 @@ function registrarUsoComando(nombreCmd, senderNum) {
         db.total = (db.total || 0) + 1;
         if (senderNum) db.usuarios[senderNum] = (db.usuarios[senderNum] || 0) + 1;
         if (!topSaveTimer) {
-            topSaveTimer = setTimeout(() => {
-                topSaveTimer = null;
-                guardarTopStats();
-            }, 3000);
+            topSaveTimer = setTimeout(() => { topSaveTimer = null; guardarTopStats(); }, 3000);
         }
     } catch (e) {}
 }
@@ -117,43 +101,25 @@ export async function cargarComandosHandler() {
 function buscarSesionPlay(msg) {
     const sessions = global.playSessions;
     if (!sessions) return null;
-    const candidatos = [
-        msg.key?.participant,
-        msg.key?.senderPn,
-        msg.key?.participantAlt,
-        msg.key?.remoteJidAlt,
-        msg.key?.sender,
-        msg.key?.remoteJid
-    ];
-    for (const c of candidatos) {
-        if (c && sessions[c]) {
-            return { clave: c, session: sessions[c] };
-        }
-    }
+    const candidatos = [msg.key?.participant, msg.key?.senderPn, msg.key?.participantAlt, msg.key?.remoteJidAlt, msg.key?.sender, msg.key?.remoteJid];
+    for (const c of candidatos) { if (c && sessions[c]) return { clave: c, session: sessions[c] }; }
     return null;
 }
 
 function extraerButtonId(msg) {
     try {
-        if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
-            return msg.message.buttonsResponseMessage.selectedButtonId;
-        }
-        if (msg.message?.templateButtonReplyMessage?.selectedId) {
-            return msg.message.templateButtonReplyMessage.selectedId;
-        }
+        if (msg.message?.buttonsResponseMessage?.selectedButtonId) return msg.message.buttonsResponseMessage.selectedButtonId;
+        if (msg.message?.templateButtonReplyMessage?.selectedId) return msg.message.templateButtonReplyMessage.selectedId;
         if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
             const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
             return json.id || json.selected_row_id || null;
         }
-        if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
-            return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
-        }
+        if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) return msg.message.listResponseMessage.singleSelectReply.selectedRowId;
     } catch (e) {}
     return null;
 }
 
 let _rutaPlayCache = null;
-
 function buscarArchivoPlay() {
     if (_rutaPlayCache) return _rutaPlayCache;
     const base = path.join(__dirname, 'commands');
@@ -162,12 +128,8 @@ function buscarArchivoPlay() {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const fullPath = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                    const r = buscarEn(fullPath);
-                    if (r) return r;
-                } else if (entry.isFile() && entry.name.toLowerCase() === 'play.js') {
-                    return fullPath;
-                }
+                if (entry.isDirectory()) { const r = buscarEn(fullPath); if (r) return r; } 
+                else if (entry.isFile() && entry.name.toLowerCase() === 'play.js') return fullPath;
             }
         } catch (e) {}
         return null;
@@ -177,12 +139,43 @@ function buscarArchivoPlay() {
     return encontrado;
 }
 
+// ══ SISTEMA DE ESTILOS GLOBAL ══
+let aplicarEstiloGlobal = (texto) => texto;
+let estilosCargados = false;
+
+async function cargarEstilos() {
+    if (estilosCargados) return;
+    try {
+        const mod = await import('./lib/estilos.js');
+        aplicarEstiloGlobal = mod.aplicarEstilo || aplicarEstiloGlobal;
+        estilosCargados = true;
+        console.log('[HANDLER] ✅ Sistema de estilos cargado globalmente');
+    } catch (e) {
+        console.log('[HANDLER] ⚠️ No se pudo cargar estilos.js');
+    }
+}
+
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
+    await cargarEstilos();
+
+    // ══ RED DE SEGURIDAD: Parche global para cualquier sock.sendMessage directo ══
+    if (!sock._sendMessagePatched) {
+        const originalSend = sock.sendMessage.bind(sock);
+        sock.sendMessage = async function(jid, message, options = {}) {
+            if (message && message.text) {
+                message.text = aplicarEstiloGlobal(message.text);
+            }
+            if (message && message.caption) {
+                message.caption = aplicarEstiloGlobal(message.caption);
+            }
+            return originalSend(jid, message, options);
+        };
+        sock._sendMessagePatched = true;
+    }
+
     const prefijo = obtenerPrefijoActual();
     try {
-        if (!comandos) {
-            comandos = await loadCommands();
-        }
+        if (!comandos) comandos = await loadCommands();
         if (!botJid) botJid = sock.user.id;
         if (!msg.message) return;
         if (msg.key.remoteJid === 'status@broadcast') return;
@@ -191,191 +184,64 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
         const fromMe = msg.key.fromMe;
         const isGroup = jid?.endsWith('@g.us');
 
-        // ══ PARCHES GLOBALES DE ESTILOS ═
-        let aplicarEstiloGlobal = (t) => t;
-        try {
-            const modEstilos = await import('./lib/estilos.js');
-            aplicarEstiloGlobal = modEstilos.aplicarEstilo || aplicarEstiloGlobal;
-        } catch (e) {}
-
-        // Intercepta CUALQUIER sock.sendMessage para aplicar estilos automáticamente
-        if (!sock._estiloParcheado) {
-            const originalSend = sock.sendMessage.bind(sock);
-            sock.sendMessage = async (jid, message, options = {}) => {
-                if (message && typeof message.text === 'string') {
-                    message.text = aplicarEstiloGlobal(message.text);
-                }
-                if (message && typeof message.caption === 'string') {
-                    message.caption = aplicarEstiloGlobal(message.caption);
-                }
-                return originalSend(jid, message, options);
-            };
-            sock._estiloParcheado = true;
-        }
-        // ══════════════════════════════
-
         if (!isGroup) {
             let antiPrivadoActivo = false;
             try {
-                const configPath = path.join(__dirname, 'database', 'antiprivado.json');
-                const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'database', 'antiprivado.json'), 'utf8'));
                 antiPrivadoActivo = config.activo;
             } catch {}
-
-            if (antiPrivadoActivo && !(await esOwner(sock, msg))) {
-                return;
-            }
+            if (antiPrivadoActivo && !(await esOwner(sock, msg))) return;
         }
 
-        if (!fromMe) {
-            try {
-                const textoMsg = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                const esComandoAfk = new RegExp(`^\\${prefijo}afk`, 'i').test(textoMsg.trim());
-                if (!esComandoAfk) {
-                    const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
-                    const data = obtenerAfk(sender);
-                    if (data) {
-                        quitarAfk(sender);
-                        let textoUser = '@' + String(sender).split('@')[0].replace(/\D/g, '');
-                        let mentions = [sender];
-                        try {
-                            if (sender.endsWith('@lid') && sock?.signalRepository?.lidMapper?.getPNForLid) {
-                                const pn = await sock.signalRepository.lidMapper.getPNForLid(sender);
-                                if (pn) {
-                                    const pj = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-                                    textoUser = '@' + pj.split('@')[0];
-                                    mentions = [pj];
-                                }
-                            }
-                        } catch (e) {}
-                        if (textoUser.startsWith('@2599') || textoUser.includes('2599')) {
-                            const nombreLimpio = String(data.nombre || '').replace(/[*_~`┃╭╰⬣@\n\r]/g, '').trim().slice(0, 25);
-                            if (nombreLimpio) textoUser = '*' + nombreLimpio + '*';
-                        }
-                        await sock.sendMessage(jid, {
-                            text:
-                                `╭━━〔 ✅ 𝐋𝐕𝐈𝐒𝐓 〕━━\n` +
-                                `┃\n` +
-                                `┃ 🎉 ${textoUser} ya regresaste!\n` +
-                                `┃\n` +
-                                `┃ 💤 Estuviste AFK: *${fmtTiempo(Date.now() - data.tiempo)}*\n` +
-                                (data.razon ? ` 📝 Razón: ${data.razon}\n` : '') +
-                                `┃\n` +
-                                `┃ 🎈 Bienvenido de vuelta\n` +
-                                `┃\n` +
-                                `╰━━━━━━━━━━━━━━━━`,
-                            mentions
-                        }, { quoted: msg });
-                    }
-                }
-            } catch (e) {
-                console.error('[AFK] Error en detector:', e?.message || e);
-            }
+        let texto = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || '';
+        if (!texto && msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+            try { const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson); texto = json.id || json.display_text || ''; } catch {}
         }
-
-        if (isGroup && !fromMe && antilinkActivo(jid)) {
-            let esAdmin = false;
-            try {
-                const permiso = await verificarPermisosAdmin(sock, msg, jid);
-                esAdmin = Boolean(permiso?.ok);
-            } catch (error) {
-                console.error('[ANTILINK] Error comprobando admin:', error?.message || error);
-            }
-            const bloqueado = await revisarAntilink(sock, msg, esAdmin);
-            if (bloqueado) return;
-        }
-
-        let texto = '';
-        if (msg.message?.conversation) {
-            texto = msg.message.conversation;
-        } else if (msg.message?.extendedTextMessage?.text) {
-            texto = msg.message.extendedTextMessage.text;
-        } else if (msg.message?.imageMessage?.caption) {
-            texto = msg.message.imageMessage.caption;
-        } else if (msg.message?.videoMessage?.caption) {
-            texto = msg.message.videoMessage.caption;
-        } else if (msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
-            try {
-                const json = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-                texto = json.id || json.display_text || '';
-            } catch {}
-        } else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
+        if (!texto && msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
             texto = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
         }
 
         const buttonId = extraerButtonId(msg);
-
-        if (!fromMe && isGroup) {
-            const sender = msg.key.participant || msg.key.senderPn || msg.key.participantAlt;
-            if (sender && (estaMuteado(jid, sender) || (msg.key.senderPn && estaMuteado(jid, msg.key.senderPn)) || (msg.key.participantAlt && estaMuteado(jid, msg.key.participantAlt)))) {
-                return;
-            }
-        }
 
         if (!fromMe && (texto || buttonId)) {
             const textoLimpio = String(texto || '').trim().toLowerCase();
             const btnIdLimpio = String(buttonId || '').trim().toLowerCase();
             const esAudio = btnIdLimpio === 'playaudio' || btnIdLimpio === 'play_audio' || textoLimpio === 'playaudio' || textoLimpio === 'play_audio' || textoLimpio === '1' || textoLimpio === '🎵 audio' || textoLimpio === 'audio';
             const esVideo = btnIdLimpio === 'playvideo' || btnIdLimpio === 'play_video' || textoLimpio === 'playvideo' || textoLimpio === 'play_video' || textoLimpio === '2' || textoLimpio === '🎬 video' || textoLimpio === 'video';
+            
             if (esAudio || esVideo) {
                 const encontrada = buscarSesionPlay(msg);
-                if (encontrada) {
-                    const { clave, session } = encontrada;
-                    if (Date.now() - session.timestamp < 600000) {
-                        try {
-                            const rutaPlay = buscarArchivoPlay();
-                            if (rutaPlay) {
-                                const playMod = await import(rutaPlay);
-                                const { procesarAudio, procesarVideo } = playMod;
-                                const responder = { texto: async (t) => { await sock.sendMessage(jid, { text: t }, { quoted: msg }); } };
-                                if (esAudio) {
-                                    await procesarAudio(sock, msg, session.video, responder);
-                                } else {
-                                    await procesarVideo(sock, msg, session.video, responder);
-                                }
-                            }
-                            delete global.playSessions[clave];
-                            return;
-                        } catch (e) {
-                            console.error('[PLAY-SESSION] Error:', e?.message || e);
+                if (encontrada && Date.now() - encontrada.session.timestamp < 600000) {
+                    try {
+                        const rutaPlay = buscarArchivoPlay();
+                        if (rutaPlay) {
+                            const playMod = await import(rutaPlay);
+                            const responder = { texto: async (t) => { await sock.sendMessage(jid, { text: t }, { quoted: msg }); } };
+                            if (esAudio) await playMod.procesarAudio(sock, msg, encontrada.session.video, responder);
+                            else await playMod.procesarVideo(sock, msg, encontrada.session.video, responder);
                         }
-                    } else {
-                        delete global.playSessions[clave];
-                    }
-                }
+                        delete global.playSessions[encontrada.clave];
+                        return;
+                    } catch (e) { console.error('[PLAY-SESSION] Error:', e?.message); }
+                } else if (encontrada) { delete global.playSessions[encontrada.clave]; }
             }
         }
 
         if (!fromMe) {
-            const fueAhorcado = await manejarRespuestaAhorcado(sock, msg);
-            if (fueAhorcado) return;
-            const fueTrivia = await manejarMensajeTrivia(sock, msg);
-            if (fueTrivia) return;
-            const fueTetris = await manejarMensajeTetris(sock, msg);
-            if (fueTetris) return;
-            const fueAdivinanza = await manejarMensajeAdivinanza(sock, msg);
-            if (fueAdivinanza) return;
-            const fueTTT = await manejarMensajeTTT(sock, msg);
-            if (fueTTT) return;
+            if (await manejarRespuestaAhorcado(sock, msg)) return;
+            if (await manejarMensajeTrivia(sock, msg)) return;
+            if (await manejarMensajeTetris(sock, msg)) return;
+            if (await manejarMensajeAdivinanza(sock, msg)) return;
+            if (await manejarMensajeTTT(sock, msg)) return;
         }
 
         if (!texto) return;
-
-        if (/^\d+$/.test(texto.trim())) {
-            const num = parseInt(texto.trim());
-            const mapa = global.menuMap?.[jid];
-            if (mapa && mapa[num]) {
-                const catSeleccionada = mapa[num];
-                texto = `${prefijo}menu ${catSeleccionada}`;
-            }
+        if (/^\d+$/.test(texto.trim()) && global.menuMap?.[jid]?.[parseInt(texto.trim())]) {
+            texto = `${prefijo}menu ${global.menuMap[jid][parseInt(texto.trim())]}`;
         }
-
         if (!texto.startsWith(prefijo)) return;
 
-        if (isGroup && modoadminActivo(jid)) {
-            const esAdmin = await esAdminGrupo(sock, msg, jid);
-            if (!esAdmin) return;
-        }
+        if (isGroup && modoadminActivo(jid) && !(await esAdminGrupo(sock, msg, jid))) return;
 
         const sinPrefijo = texto.slice(prefijo.length).trim();
         const indiceEspacio = sinPrefijo.search(/\s/);
@@ -383,14 +249,8 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
         const argumento = indiceEspacio === -1 ? '' : sinPrefijo.slice(indiceEspacio + 1);
         const args = argumento ? argumento.split(' ') : [];
 
-        if (nombreComando === 'menu' && args[0]) {
-            if (!isNaN(args[0])) {
-                const num = parseInt(args[0]);
-                const mapa = global.menuMap?.[jid];
-                if (mapa && mapa[num]) {
-                    args[0] = mapa[num];
-                }
-            }
+        if (nombreComando === 'menu' && args[0] && !isNaN(args[0]) && global.menuMap?.[jid]?.[parseInt(args[0])]) {
+            args[0] = global.menuMap[jid][parseInt(args[0])];
         }
 
         const cmd = comandos.get(nombreComando);
@@ -398,44 +258,35 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
 
         try {
             const catCmd = String(cmd.categoria || '').toLowerCase().trim();
-            if (catCmd && catCmd !== 'system' && catCmd !== 'owner') {
-                if (!categoriaActiva(jid, catCmd)) {
-                    await sock.sendMessage(jid, {
-                        text:
-                            '╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n' +
-                            '┃\n' +
-                            '┃  Categoría: *' + catCmd.toUpperCase() + '*\n' +
-                            '┃  Comando: ' + prefijo + nombreComando + '\n' +
-                            '┃\n' +
-                            '┃ 🟢 Reactiva con:\n' +
-                            '┃ ➪ ' + prefijo + 'activar ' + catCmd + '\n' +
-                            '┃\n' +
-                            '╰━━〔 ⚡ 𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
-                    }, { quoted: msg });
-                    return;
-                }
+            if (catCmd && catCmd !== 'system' && catCmd !== 'owner' && !categoriaActiva(jid, catCmd)) {
+                await sock.sendMessage(jid, { text: `╭━━〔 🔴 𝐂𝐀𝐓𝐄𝐆𝐎𝐑Í𝐀 𝐃𝐄𝐀𝐂𝐓𝐈𝐕𝐀𝐃𝐀 〕━━⬣\n┃\n┃ 📂 Categoría: *${catCmd.toUpperCase()}*\n┃ 🚫 Comando: ${prefijo}${nombreComando}\n┃\n┃ 🟢 Reactiva con:\n┃ ➪ ${prefijo}activar ${catCmd}\n┃\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣` }, { quoted: msg });
+                return;
             }
-        } catch (e) {
-            console.error('[CATEGORIAS] Error en bloqueo:', e?.message || e);
-        }
+        } catch (e) { console.error('[CATEGORIAS] Error:', e?.message); }
 
-        registrarUsoComando(
-            cmd.nombre || nombreComando,
-            String(msg.key.participant || msg.key.senderPn || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, '')
-        );
+        registrarUsoComando(cmd.nombre || nombreComando, String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, ''));
 
+        // ══ CAPA 1: Aplicar estilo directamente en el objeto responder ══
         await cmd.ejecutar({
             sock, msg, args, argumento, listaComandos, prefijo, fromMe, isGroup, jid, botJid,
             responder: {
-                texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
-                imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
-                video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
-                audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
+                texto: async (text) => { 
+                    await sock.sendMessage(jid, { text: aplicarEstiloGlobal(text) }, { quoted: msg }); 
+                },
+                imagen: async (img, caption = '') => { 
+                    await sock.sendMessage(jid, { image: img, caption: aplicarEstiloGlobal(caption) }, { quoted: msg }); 
+                },
+                video: async (vid, caption = '') => { 
+                    await sock.sendMessage(jid, { video: vid, caption: aplicarEstiloGlobal(caption) }, { quoted: msg }); 
+                },
+                audio: async (aud, ptt = true) => { 
+                    await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); 
+                }
             }
         });
 
     } catch (error) {
-        console.error('[HANDLER] Error al manejar mensaje:', error);
+        console.error('[HANDLER] Error:', error);
         if (!msg.key.fromMe) {
             await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg });
         }
