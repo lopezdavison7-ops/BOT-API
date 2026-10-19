@@ -1,12 +1,6 @@
 import fetch from 'node-fetch';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const ALYA_API = 'https://api.alya.lol';
+const ALYA_API = 'https://alyacore.xyz/api';
 const ALYA_KEY = 'OBOE-AERETHIX';
 const TIKWM_API = 'https://www.tikwm.com/api';
 
@@ -66,18 +60,20 @@ export default {
                 if (cached && cached.exp > now) {
                     url = cached.url;
                 } else {
-                    // Intento 1: Alya API
+                    // Intento 1: Alya API (alyacore.xyz)
                     try {
                         const res = await fetch(
                             `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
-                            { headers: HEADERS }
+                            { headers: HEADERS, timeout: 15000 }
                         );
                         if (res.ok) {
                             const text = await res.text();
                             if (!text.trim().startsWith('<')) {
                                 const json = JSON.parse(text);
-                                if (json?.data?.length > 0) {
+                                if (json?.data && Array.isArray(json.data) && json.data.length > 0) {
                                     url = json.data[0].url || json.data[0].link || json.data[0].video_url;
+                                } else if (json?.result && Array.isArray(json.result) && json.result.length > 0) {
+                                    url = json.result[0].url || json.result[0].link;
                                 }
                             }
                         }
@@ -85,12 +81,12 @@ export default {
                         console.log('[TT] Alya falló:', e.message);
                     }
 
-                    // Intento 2: TikWM search
+                    // Intento 2: TikWM search como respaldo
                     if (!url) {
                         try {
                             const res = await fetch(
-                                `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=5`,
-                                { headers: HEADERS }
+                                `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=10`,
+                                { headers: HEADERS, timeout: 15000 }
                             );
                             const text = await res.text();
                             if (!text.trim().startsWith('<')) {
@@ -106,7 +102,7 @@ export default {
                     }
 
                     if (!url) {
-                        throw new Error('No se encontró ningún video para esa búsqueda.');
+                        throw new Error('No se encontró ningún video para esa búsqueda. Intenta con otro término.');
                     }
 
                     if (searchCache.size > 150) searchCache.clear();
@@ -160,7 +156,7 @@ export default {
                 const caption = 
                     '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
                     `┃ 👤 *Autor:* ${author}\n` +
-                    `┃ 📝 *Título:* ${title}\n` +
+                    `┃ 📝 *Título:* ${title.slice(0, 100)}\n` +
                     `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
                     `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
                     `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
@@ -169,8 +165,7 @@ export default {
                     '┃\n' +
                     '╰━━━━━━━━━━━━━━━━⬣';
 
-                // Enviar álbum
-                for (let i = 0; i < imageUrls.length; i++) {
+                for (let i = 0; i < Math.min(imageUrls.length, 10); i++) {
                     await sock.sendMessage(jid, {
                         image: { url: imageUrls[i] },
                         caption: i === 0 ? caption : '',
@@ -179,7 +174,6 @@ export default {
                     await new Promise(r => setTimeout(r, 1000));
                 }
 
-                // Audio
                 if (data.music_info?.play) {
                     await sock.sendMessage(jid, {
                         audio: { url: data.music_info.play },
@@ -201,7 +195,7 @@ export default {
             const caption = 
                 '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n' +
                 `┃ 👤 *Autor:* ${author}\n` +
-                `┃ 📝 *Título:* ${title}\n` +
+                `┃ 📝 *Título:* ${title.slice(0, 100)}\n` +
                 `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
                 `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
                 `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
