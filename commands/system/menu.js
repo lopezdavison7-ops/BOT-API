@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import { aplicarEstilo, obtenerCanal } from '../../lib/estilos.js';
+import { generateWAMessageFromContent } from 'baileys';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -150,28 +151,41 @@ export default {
                 menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
             }
 
+            // 1. Aplicar el estilo (Halloween, Neón, etc.)
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // MÉTODO INFALIBLE PARA "VER CANAL" (External Ad Reply)
-            await sock.sendMessage(jid, {
-                text: menuTextoFinal,
-                mentions: menciones,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `⚡ ${botName} OFICIAL`,
-                        body: 'Toca aquí para unirte a las novedades y soporte',
-                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg', // Puedes poner la URL de tu logo aquí
-                        sourceUrl: urlCanal,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
+            // 2. Preparar el mensaje usando extendedTextMessage para forzar la vista previa del canal
+            const content = {
+                extendedTextMessage: {
+                    text: menuTextoFinal + `\n\n${urlCanal}`, // El enlace al final ayuda a WhatsApp a detectarlo
+                    matchedText: urlCanal,
+                    canonicalUrl: urlCanal,
+                    description: 'Canal Oficial de Novedades y Soporte',
+                    title: botName.toUpperCase(),
+                    previewType: 0, // 0 es el tipo estándar para enlaces
+                    contextInfo: {
+                        mentionedJid: menciones,
+                        isForwarded: true,
+                        forwardingScore: 1
                     }
                 }
-            }, { quoted: msg });
+            };
+
+            // 3. Generar y enviar el mensaje
+            const waMsg = generateWAMessageFromContent(jid, content, { 
+                userJid: sock.user?.id || jid, 
+                quoted: msg 
+            });
+            
+            await sock.relayMessage(jid, waMsg.message, { messageId: waMsg.key.id });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
-            try { await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg }); } catch {}
+            try { 
+                // Fallback por si algo falla con extendedTextMessage
+                await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg }); 
+            } catch {}
         }
     }
 };
