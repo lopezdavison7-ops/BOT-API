@@ -10,10 +10,6 @@ const BOT_NAME = 'BOT-API';
 
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 
-// ⚠️ REEMPLAZA ESTE VALOR con el que te dé el comando .obtenerjid
-const NEWSLETTER_JID = '120363429914158508@newsletter@newsletter'; // <-- PEGA AQUÍ TU JID
-const NEWSLETTER_NAME = 'BOT-API Canal Oficial'; // <-- Nombre de tu canal
-
 const ALIAS_CATEGORIAS = {
     'descargas': 'Descargas', 'downloads': 'Descargas', 'dl': 'Descargas',
     'juegos': 'Diversión', 'fun': 'Diversión', 'diversion': 'Diversión', 'diversión': 'Diversión',
@@ -30,9 +26,9 @@ const ALIAS_CATEGORIAS = {
 };
 
 const ICONOS = {
-    Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
-    Multimedia: '', Grupos: '👥', Interacción: '🎭', Moderación: '️'
+    Owner: '👑', Economía: '', Diversión: '🎉', Sistema: '⚙️',
+    Otros: '', Descargas: '📥', Utilidades: '🛠️', IA: '',
+    Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
 
 function obtenerAutor(msg) {
@@ -75,7 +71,7 @@ function organizarComandos(lista) {
 
 function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
-    let texto = `━━━〔 ⚡ ${botName}  〕━━━\n\n`;
+    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
     texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
@@ -99,13 +95,13 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
-    texto += `┃  📊 *INFO DEL BOT*\n`;
+    texto += `  📊 *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
     texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
     texto += `┃  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n┃\n`;
-    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
+    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
     for (const cat of Object.keys(categorias).sort()) {
         const icono = obtenerIcono(cat);
@@ -157,25 +153,36 @@ export default {
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // ══ AQUÍ ESTÁ LA MAGIA: forwardedNewsletterMessageInfo ══
-            await sock.sendMessage(jid, {
-                text: menuTextoFinal,
-                mentions: menciones,
-                contextInfo: {
-                    // Esto hace que aparezca el botón "Ver canal" nativo de WhatsApp
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: NEWSLETTER_JID,
-                        newsletterName: NEWSLETTER_NAME,
-                        serverMessageId: -1
-                    },
-                    // Respaldo con externalAdReply por si acaso
-                    externalAdReply: {
-                        title: `${botName} - Canal Oficial`,
-                        body: 'Toca aquí para unirte',
-                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg',
-                        sourceUrl: urlCanal,
-                        mediaType: 1,
-                        renderLargerThumbnail: false
+            // ══ SOLUCIÓN DEFINITIVA: Botón interactivo real ══
+            await sock.relayMessage(jid, {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: {
+                            header: {
+                                title: `⚡ ${botName}`,
+                                subtitle: 'Menú de Comandos',
+                                hasMediaAttachment: false
+                            },
+                            body: {
+                                text: menuTextoFinal
+                            },
+                            footer: {
+                                text: 'Canal Oficial'
+                            },
+                            nativeFlowMessage: {
+                                buttons: [
+                                    {
+                                        name: 'cta_url',
+                                        buttonParamsJson: JSON.stringify({
+                                            display_text: '📢 VER CANAL',
+                                            url: urlCanal,
+                                            merchant_url: urlCanal
+                                        })
+                                    }
+                                ],
+                                messageParamsJson: ''
+                            }
+                        }
                     }
                 }
             }, { quoted: msg });
