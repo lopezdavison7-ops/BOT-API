@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import { aplicarEstilo, obtenerCanal } from '../../lib/estilos.js';
-import { generateWAMessageFromContent } from 'baileys';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -28,7 +27,7 @@ const ALIAS_CATEGORIAS = {
 
 const ICONOS = {
     Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
+    Otros: '📦', Descargas: '', Utilidades: '🛠️', IA: '🧠',
     Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
 
@@ -72,7 +71,7 @@ function organizarComandos(lista) {
 
 function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
-    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
+    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
     texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
@@ -81,7 +80,7 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
         texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
         if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
             const desc = cmd.descripcion.length > 45 ? cmd.descripcion.slice(0, 45) + '...' : cmd.descripcion;
-            texto += `┃     └ ${desc}\n`;
+            texto += `┃      ${desc}\n`;
         }
         texto += `\n`;
     }
@@ -155,35 +154,25 @@ export default {
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // 2. Preparar el mensaje usando extendedTextMessage para forzar la vista previa del canal
-            const content = {
-                extendedTextMessage: {
-                    text: menuTextoFinal + `\n\n${urlCanal}`, // El enlace al final ayuda a WhatsApp a detectarlo
-                    matchedText: urlCanal,
-                    canonicalUrl: urlCanal,
-                    description: 'Canal Oficial de Novedades y Soporte',
-                    title: botName.toUpperCase(),
-                    previewType: 0, // 0 es el tipo estándar para enlaces
-                    contextInfo: {
-                        mentionedJid: menciones,
-                        isForwarded: true,
-                        forwardingScore: 1
+            // 2. Enviar CON externalAdReply (ESTO ES LO QUE HACE APARECER EL BOTÓN "VER CANAL")
+            await sock.sendMessage(jid, {
+                text: menuTextoFinal,
+                mentions: menciones,
+                contextInfo: {
+                    externalAdReply: {
+                        title: ` ${botName} - Canal Oficial`,
+                        body: 'Toca aquí para unirte a las novedades y actualizaciones',
+                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg', // Puedes cambiar esta URL por la foto de tu bot
+                        sourceUrl: urlCanal, // ← ESTO HACE QUE APAREZCA "VER CANAL"
+                        mediaType: 1,
+                        renderLargerThumbnail: false
                     }
                 }
-            };
-
-            // 3. Generar y enviar el mensaje
-            const waMsg = generateWAMessageFromContent(jid, content, { 
-                userJid: sock.user?.id || jid, 
-                quoted: msg 
-            });
-            
-            await sock.relayMessage(jid, waMsg.message, { messageId: waMsg.key.id });
+            }, { quoted: msg });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
             try { 
-                // Fallback por si algo falla con extendedTextMessage
                 await sock.sendMessage(msg.key.remoteJid, { text: `❌ Error: ${error.message}` }, { quoted: msg }); 
             } catch {}
         }
