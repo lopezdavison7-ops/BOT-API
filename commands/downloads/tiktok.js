@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 const ANABOT_API = 'https://anabot.my.id/api';
-const ANABOT_KEY = ''; // Pon tu apikey aquí si compraste una
+const ANABOT_KEY =Alex30 ''; 
 
 export default {
     nombre: 'tiktok',
