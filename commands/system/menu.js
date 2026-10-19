@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment-timezone';
 import { aplicarEstilo, obtenerCanal } from '../../lib/estilos.js';
+import { prepareWAMessageMedia, generateWAMessageFromContent } from 'baileys';
 
 const VERSION = '2.0.0';
 const CREADOR = 'Luis González';
@@ -73,7 +74,7 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
-    texto += `┃   *COMANDOS:* ${cmds.length}\n┃\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    texto += `┃   *COMANDOS:* ${cmds.length}\n┃\n━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
     for (const cmd of cmds.sort((a, b) => a.nombre.localeCompare(b.nombre))) {
         const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
@@ -95,7 +96,7 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
-    texto += `┃  📊 *INFO DEL BOT*\n`;
+    texto += `┃   *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
@@ -153,34 +154,60 @@ export default {
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // ══ CONFIGURACIÓN DEL MENSAJE CON FOTO + TARJETA DEL CANAL ══
-            const opcionesMensaje = {
-                mentions: menciones,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `⚡ ${botName} - Canal Oficial`,
-                        body: 'Toca aquí para unirte al canal',
-                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg',
-                        sourceUrl: urlCanal,
-                        mediaType: 1,
-                        renderLargerThumbnail: false
+            let imagenPreparada = null;
+            if (fs.existsSync(FOTO_MENU)) {
+                try {
+                    const bufferImagen = fs.readFileSync(FOTO_MENU);
+                    imagenPreparada = await prepareWAMessageMedia(
+                        { image: bufferImagen },
+                        { upload: sock.waUploadToServer }
+                    );
+                } catch (e) {
+                    console.log('[MENU] No se pudo preparar la imagen:', e.message);
+                }
+            }
+
+            const contenidoInteractivo = {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: {
+                            header: imagenPreparada?.imageMessage ? {
+                                imageMessage: imagenPreparada.imageMessage,
+                                hasMediaAttachment: true
+                            } : {
+                                title: `⚡ ${botName}`,
+                                hasMediaAttachment: false
+                            },
+                            body: {
+                                text: menuTextoFinal
+                            },
+                            footer: {
+                                text: '⚡ BOT-API ⚡'
+                            },
+                            nativeFlowMessage: {
+                                buttons: [
+                                    {
+                                        name: 'cta_url',
+                                        buttonParamsJson: JSON.stringify({
+                                            display_text: '📢 VER CANAL',
+                                            url: urlCanal,
+                                            merchant_url: urlCanal
+                                        })
+                                    }
+                                ],
+                                messageParamsJson: ''
+                            }
+                        }
                     }
                 }
             };
 
-            // ══ ENVIAR CON FOTO SI EXISTE, SI NO SOLO TEXTO ══
-            if (fs.existsSync(FOTO_MENU)) {
-                await sock.sendMessage(jid, {
-                    image: { url: FOTO_MENU },
-                    caption: menuTextoFinal,
-                    ...opcionesMensaje
-                }, { quoted: msg });
-            } else {
-                await sock.sendMessage(jid, {
-                    text: menuTextoFinal,
-                    ...opcionesMensaje
-                }, { quoted: msg });
-            }
+            const waMsg = generateWAMessageFromContent(jid, contenidoInteractivo, {
+                userJid: sock.user?.id || jid,
+                quoted: msg
+            });
+
+            await sock.relayMessage(jid, waMsg.message, { messageId: waMsg.key.id });
 
         } catch (error) {
             console.error('[MENU] Error:', error);
