@@ -12,7 +12,7 @@ import { fmtTiempo } from './lib/helpers.js';
 import { estaMuteado } from './database/mutes.js';
 import { estaActivo as modoadminActivo } from './database/modoadmin.js';
 import { esAdminGrupo } from './lib/adminCheck.js';
-import { aplicarEstilo } from './lib/estilos.js'; // <-- IMPORTADO AQUÍ
+import { aplicarEstilo } from './lib/estilos.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -142,20 +142,38 @@ function buscarArchivoPlay() {
 
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
     
-    // ══ INTERCEPTOR GLOBAL: Aplica estilo a CUALQUIER mensaje de texto o imagen que envíe el bot ══
+    // ══ INTERCEPTOR 1: Atrapa sock.sendMessage (la mayoría de comandos) ══
     if (!sock._stylePatched) {
         const originalSend = sock.sendMessage.bind(sock);
         sock.sendMessage = async function(jid, message, options = {}) {
-            if (message && message.text) {
-                message.text = aplicarEstilo(message.text);
-            }
-            if (message && message.caption) {
-                message.caption = aplicarEstilo(message.caption);
-            }
+            if (message && message.text) message.text = aplicarEstilo(message.text);
+            if (message && message.caption) message.caption = aplicarEstilo(message.caption);
             return originalSend(jid, message, options);
         };
         sock._stylePatched = true;
-        console.log('[HANDLER] ✅ Interceptor de estilos global activado');
+        console.log('[HANDLER] ✅ Interceptor sendMessage activado');
+    }
+
+    // ══ INTERCEPTOR 2: Atrapa sock.relayMessage (.play, menús complejos, botones) ══
+    if (!sock._relayPatched) {
+        const originalRelay = sock.relayMessage.bind(sock);
+        sock.relayMessage = async function(jid, message, options = {}) {
+            if (message?.extendedTextMessage?.text) {
+                message.extendedTextMessage.text = aplicarEstilo(message.extendedTextMessage.text);
+            }
+            if (message?.imageMessage?.caption) {
+                message.imageMessage.caption = aplicarEstilo(message.imageMessage.caption);
+            }
+            if (message?.videoMessage?.caption) {
+                message.videoMessage.caption = aplicarEstilo(message.videoMessage.caption);
+            }
+            if (message?.interactiveMessage?.body?.text) {
+                message.interactiveMessage.body.text = aplicarEstilo(message.interactiveMessage.body.text);
+            }
+            return originalRelay(jid, message, options);
+        };
+        sock._relayPatched = true;
+        console.log('[HANDLER] ✅ Interceptor relayMessage activado');
     }
 
     const prefijo = obtenerPrefijoActual();
