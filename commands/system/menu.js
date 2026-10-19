@@ -31,37 +31,15 @@ const ICONOS = {
     Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
 
-// ══ FIX DE LID: Resuelve el @lid al número real o usa el nombre de perfil ══
-async function obtenerAutor(sock, msg) {
+function obtenerAutor(msg) {
     const key = msg?.key || {};
-    const candidatos = [key.participant, key.senderPn, key.participantAlt, key.remoteJid];
-    let jid = null;
-
+    const candidatos = [key.participant, key.remoteJid, key.senderPn, key.participantAlt];
     for (const c of candidatos) {
-        if (c && typeof c === 'string') { jid = c; break; }
+        if (!c || typeof c !== 'string') continue;
+        const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (n && n.length >= 7) return { jid: c.includes('@') ? c : `${c}@s.whatsapp.net`, num: n };
     }
-
-    // Si es un LID, intentar resolverlo al número real
-    if (jid && jid.endsWith('@lid')) {
-        try {
-            if (sock?.signalRepository?.lidMapper?.getPNForLid) {
-                const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
-                if (pn) jid = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
-            }
-        } catch (e) {}
-    }
-
-    // Si ya tenemos un JID válido (no lid), extraer número
-    if (jid && !jid.endsWith('@lid')) {
-        const n = String(jid).split('@')[0].split(':')[0].replace(/\D/g, '');
-        // Los números que empiezan con 2599 suelen ser LIDs sin resolver
-        if (n && n.length >= 7 && !n.startsWith('2599')) {
-            return { nombre: msg.pushName || n, num: n };
-        }
-    }
-
-    // Respaldo: usar el nombre de perfil de WhatsApp
-    return { nombre: msg.pushName || 'usuario', num: null };
+    return null;
 }
 
 function formatUptime(s) {
@@ -110,14 +88,14 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     return texto;
 }
 
-function generarMenuCompleto(categorias, prefijo, saludo, botName) {
+function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
-    texto += `┃  👋 ¡Hola ${saludo}!\n\n`;
-    texto += `┃   *INFO DEL BOT*\n`;
+    texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
+    texto += `┃  📊 *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
@@ -152,9 +130,9 @@ export default {
             const jid = msg?.key?.remoteJid;
             if (!jid) return;
 
-            // ══ Obtener autor con fix de LID ══
-            const autor = await obtenerAutor(sock, msg);
-            const saludo = `*${autor.nombre}*`; // Siempre usa el nombre, nunca el LID
+            const autor = obtenerAutor(msg);
+            const mencionTexto = autor ? `@${autor.num}` : 'usuario';
+            const menciones = autor ? [autor.jid] : [];
             const botName = global.botname || BOT_NAME;
             const categorias = organizarComandos(listaComandos);
             
@@ -169,45 +147,40 @@ export default {
                 const catsDisp = [...new Set(Object.values(ALIAS_CATEGORIAS))].map(c => `• ${c}`).join('\n');
                 menuTextoBase = `❌ Categoría "*${args[0]}*" no existe.\n\n*Categorías disponibles:*\n${catsDisp}\n\n💡 Ejemplo: *${prefijo}menu descargas*`;
             } else {
-                menuTextoBase = generarMenuCompleto(categorias, prefijo, saludo, botName);
+                menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
             }
 
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // ══ Menú con botón interactivo "VER CANAL" ══
-            await sock.relayMessage(jid, {
-                viewOnceMessage: {
-                    message: {
-                        interactiveMessage: {
-                            header: {
-                                title: `⚡ ${botName}`,
-                                subtitle: 'Menú de Comandos',
-                                hasMediaAttachment: false
-                            },
-                            body: {
-                                text: menuTextoFinal
-                            },
-                            footer: {
-                                text: 'Canal Oficial'
-                            },
-                            nativeFlowMessage: {
-                                buttons: [
-                                    {
-                                        name: 'cta_url',
-                                        buttonParamsJson: JSON.stringify({
-                                            display_text: '📢 VER CANAL',
-                                            url: urlCanal,
-                                            merchant_url: urlCanal
-                                        })
-                                    }
-                                ],
-                                messageParamsJson: ''
-                            }
-                        }
+            // ══ CONFIGURACIÓN DEL MENSAJE CON FOTO + TARJETA DEL CANAL ══
+            const opcionesMensaje = {
+                mentions: menciones,
+                contextInfo: {
+                    externalAdReply: {
+                        title: `⚡ ${botName} - Canal Oficial`,
+                        body: 'Toca aquí para unirte al canal',
+                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg',
+                        sourceUrl: urlCanal,
+                        mediaType: 1,
+                        renderLargerThumbnail: false
                     }
                 }
-            }, {});
+            };
+
+            // ══ ENVIAR CON FOTO SI EXISTE, SI NO SOLO TEXTO ══
+            if (fs.existsSync(FOTO_MENU)) {
+                await sock.sendMessage(jid, {
+                    image: { url: FOTO_MENU },
+                    caption: menuTextoFinal,
+                    ...opcionesMensaje
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, {
+                    text: menuTextoFinal,
+                    ...opcionesMensaje
+                }, { quoted: msg });
+            }
 
         } catch (error) {
             console.error('[MENU] Error:', error);
