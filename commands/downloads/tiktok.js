@@ -3,6 +3,12 @@ import fetch from 'node-fetch';
 const ANABOT_API = 'https://anabot.my.id/api';
 const ANABOT_KEY = 'Alex30';
 
+const HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+};
+
 export default {
     nombre: 'tiktok',
     categoria: 'Descargas',
@@ -19,7 +25,7 @@ export default {
         if (!texto) {
             await reaccion('❌');
             return await responder.texto(
-                '╭━━〔 🎵 𝐓𝐊𝐓𝐎𝐊 〕━━⬣\n' +
+                '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Ingresa un enlace o término de búsqueda.\n' +
                 '┃\n' +
@@ -27,7 +33,7 @@ export default {
                 '┃ › .tiktok https://vm.tiktok.com/...\n' +
                 '┃ › .tiktok baile trend\n' +
                 '┃\n' +
-                '╰━━━━━━━━━━━━━━━━⬣'
+                '╰━━━━━━━━━━━━━━━━'
             );
         }
 
@@ -39,9 +45,8 @@ export default {
             let data = null;
 
             if (isUrl) {
-                // Descarga directa por URL
                 try {
-                    const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
+                    const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`, { headers: HEADERS });
                     if (resAna.ok) {
                         const jsonAna = await resAna.json();
                         if (jsonAna.success && jsonAna.data?.result) {
@@ -54,8 +59,9 @@ export default {
 
                 if (!data) {
                     try {
-                        const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
-                        const jsonTikwm = await resTikwm.json();
+                        const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`, { headers: HEADERS });
+                        const textoRes = await resTikwm.text();
+                        const jsonTikwm = JSON.parse(textoRes);
                         if (jsonTikwm.code === 0 && jsonTikwm.data) {
                             const d = jsonTikwm.data;
                             data = {
@@ -67,28 +73,41 @@ export default {
                             };
                         }
                     } catch (e) {
-                        console.log('[TIKTOK] TikWM falló:', e.message);
+                        console.log('[TIKTOK] TikWM URL falló:', e.message);
                     }
                 }
             } else {
-                // Búsqueda: usar TikWM search que devuelve videos reales
-                try {
-                    const resSearch = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`);
-                    const jsonSearch = await resSearch.json();
+                const endpointsBusqueda = [
+                    `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`,
+                    `https://tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`
+                ];
 
-                    if (jsonSearch.code === 0 && jsonSearch.data?.videos && jsonSearch.data.videos.length > 0) {
-                        const primerVideo = jsonSearch.data.videos[0];
+                for (const endpoint of endpointsBusqueda) {
+                    if (data) break;
+                    try {
+                        const resSearch = await fetch(endpoint, { headers: HEADERS });
+                        const textoRes = await resSearch.text();
                         
-                        data = {
-                            username: primerVideo.author?.nickname || 'Desconocido',
-                            description: primerVideo.title || 'Sin descripción',
-                            video: primerVideo.play,
-                            audio: primerVideo.music_info?.play,
-                            image: primerVideo.images || []
-                        };
+                        if (textoRes.trim().startsWith('<')) {
+                            console.log('[TIKTOK] Endpoint devolvió HTML, probando siguiente...');
+                            continue;
+                        }
+                        
+                        const jsonSearch = JSON.parse(textoRes);
+
+                        if (jsonSearch.code === 0 && jsonSearch.data?.videos && jsonSearch.data.videos.length > 0) {
+                            const primerVideo = jsonSearch.data.videos[0];
+                            data = {
+                                username: primerVideo.author?.nickname || 'Desconocido',
+                                description: primerVideo.title || 'Sin descripción',
+                                video: primerVideo.play,
+                                audio: primerVideo.music_info?.play,
+                                image: primerVideo.images || []
+                            };
+                        }
+                    } catch (e) {
+                        console.log('[TIKTOK] Búsqueda falló en endpoint:', e.message);
                     }
-                } catch (e) {
-                    console.log('[TIKTOK] Búsqueda TikWM falló:', e.message);
                 }
             }
 
@@ -98,7 +117,7 @@ export default {
 
             if (data.video) {
                 const caption = 
-                    '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 〕━━⬣\n' +
+                    '╭━━〔 🎬 𝐓𝐊𝐓𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 〕━━⬣\n' +
                     `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
                     `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
                     '┃\n' +
@@ -119,7 +138,7 @@ export default {
                 }
             } else if (data.image && data.image.length > 0) {
                 const caption = 
-                    '╭━━〔 🖼️ 𝐓𝐈𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
+                    '╭━━〔 🖼️ 𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
                     `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
                     `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
                     `┃ 📸 *Imágenes:* ${data.image.length}\n` +
