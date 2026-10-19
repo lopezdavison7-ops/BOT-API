@@ -26,20 +26,42 @@ const ALIAS_CATEGORIAS = {
 };
 
 const ICONOS = {
-    Owner: '👑', Economía: '', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '', Descargas: '📥', Utilidades: '🛠️', IA: '',
+    Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
+    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
     Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
 };
 
-function obtenerAutor(msg) {
+// ══ FIX DE LID: Resuelve el @lid al número real o usa el nombre de perfil ══
+async function obtenerAutor(sock, msg) {
     const key = msg?.key || {};
-    const candidatos = [key.participant, key.remoteJid, key.senderPn, key.participantAlt];
+    const candidatos = [key.participant, key.senderPn, key.participantAlt, key.remoteJid];
+    let jid = null;
+
     for (const c of candidatos) {
-        if (!c || typeof c !== 'string') continue;
-        const n = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
-        if (n && n.length >= 7) return { jid: c.includes('@') ? c : `${c}@s.whatsapp.net`, num: n };
+        if (c && typeof c === 'string') { jid = c; break; }
     }
-    return null;
+
+    // Si es un LID, intentar resolverlo al número real
+    if (jid && jid.endsWith('@lid')) {
+        try {
+            if (sock?.signalRepository?.lidMapper?.getPNForLid) {
+                const pn = await sock.signalRepository.lidMapper.getPNForLid(jid);
+                if (pn) jid = pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+            }
+        } catch (e) {}
+    }
+
+    // Si ya tenemos un JID válido (no lid), extraer número
+    if (jid && !jid.endsWith('@lid')) {
+        const n = String(jid).split('@')[0].split(':')[0].replace(/\D/g, '');
+        // Los números que empiezan con 2599 suelen ser LIDs sin resolver
+        if (n && n.length >= 7 && !n.startsWith('2599')) {
+            return { nombre: msg.pushName || n, num: n };
+        }
+    }
+
+    // Respaldo: usar el nombre de perfil de WhatsApp
+    return { nombre: msg.pushName || 'usuario', num: null };
 }
 
 function formatUptime(s) {
@@ -73,14 +95,14 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
-    texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
+    texto += `┃   *COMANDOS:* ${cmds.length}\n┃\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
     for (const cmd of cmds.sort((a, b) => a.nombre.localeCompare(b.nombre))) {
         const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
         texto += `┃  ▸ *${prefijo}${cmd.nombre}*${alias}\n`;
         if (cmd.descripcion && cmd.descripcion !== 'Sin descripción') {
             const desc = cmd.descripcion.length > 45 ? cmd.descripcion.slice(0, 45) + '...' : cmd.descripcion;
-            texto += `┃      ${desc}\n`;
+            texto += `┃     └ ${desc}\n`;
         }
         texto += `\n`;
     }
@@ -88,20 +110,20 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     return texto;
 }
 
-function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
+function generarMenuCompleto(categorias, prefijo, saludo, botName) {
     const totalCmds = Object.values(categorias).flat().length;
     const totalCats = Object.keys(categorias).length;
     const now = moment.tz(ZONA_HORARIA);
 
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
-    texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
-    texto += `  📊 *INFO DEL BOT*\n`;
+    texto += `┃  👋 ¡Hola ${saludo}!\n\n`;
+    texto += `┃   *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
     texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
     texto += `┃  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n┃\n`;
-    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
 
     for (const cat of Object.keys(categorias).sort()) {
         const icono = obtenerIcono(cat);
@@ -130,9 +152,9 @@ export default {
             const jid = msg?.key?.remoteJid;
             if (!jid) return;
 
-            const autor = obtenerAutor(msg);
-            const mencionTexto = autor ? `@${autor.num}` : 'usuario';
-            const menciones = autor ? [autor.jid] : [];
+            // ══ Obtener autor con fix de LID ══
+            const autor = await obtenerAutor(sock, msg);
+            const saludo = `*${autor.nombre}*`; // Siempre usa el nombre, nunca el LID
             const botName = global.botname || BOT_NAME;
             const categorias = organizarComandos(listaComandos);
             
@@ -147,13 +169,13 @@ export default {
                 const catsDisp = [...new Set(Object.values(ALIAS_CATEGORIAS))].map(c => `• ${c}`).join('\n');
                 menuTextoBase = `❌ Categoría "*${args[0]}*" no existe.\n\n*Categorías disponibles:*\n${catsDisp}\n\n💡 Ejemplo: *${prefijo}menu descargas*`;
             } else {
-                menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
+                menuTextoBase = generarMenuCompleto(categorias, prefijo, saludo, botName);
             }
 
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // ══ SOLUCIÓN DEFINITIVA: Botón interactivo real ══
+            // ══ Menú con botón interactivo "VER CANAL" ══
             await sock.relayMessage(jid, {
                 viewOnceMessage: {
                     message: {
@@ -185,7 +207,7 @@ export default {
                         }
                     }
                 }
-            }, { quoted: msg });
+            }, {});
 
         } catch (error) {
             console.error('[MENU] Error:', error);
