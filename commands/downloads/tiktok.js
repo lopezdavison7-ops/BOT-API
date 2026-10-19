@@ -7,7 +7,9 @@ const TIKWM_API = 'https://www.tikwm.com/api';
 const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'es-ES,es;q=0.9'
+    'Accept-Language': 'es-ES,es;q=0.9',
+    'Origin': 'https://alyacore.xyz',
+    'Referer': 'https://alyacore.xyz/'
 };
 
 const searchCache = new Map();
@@ -46,7 +48,7 @@ export default {
         await reaccion('⏳');
 
         try {
-            const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(query);
+            const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(query);
 
             let url = null;
             const now = Date.now();
@@ -60,28 +62,45 @@ export default {
                 if (cached && cached.exp > now) {
                     url = cached.url;
                 } else {
-                    // Intento 1: Alya API (api.alyacore.xyz)
-                    try {
-                        const res = await fetch(
-                            `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
-                            { headers: HEADERS, timeout: 15000 }
-                        );
-                        if (res.ok) {
+                    // Intento 1: Alya API con múltiples endpoints
+                    const alyaEndpoints = [
+                        `${ALYA_API}/api/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
+                        `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
+                        `${ALYA_API}/api/tiktok/search?query=${encodeURIComponent(query)}&apikey=${ALYA_KEY}`,
+                        `${ALYA_API}/tiktok/search?q=${encodeURIComponent(query)}&apikey=${ALYA_KEY}`
+                    ];
+
+                    for (const endpoint of alyaEndpoints) {
+                        if (url) break;
+                        try {
+                            const res = await fetch(endpoint, { headers: HEADERS, timeout: 10000 });
                             const text = await res.text();
-                            if (!text.trim().startsWith('<')) {
-                                const json = JSON.parse(text);
-                                if (json?.data && Array.isArray(json.data) && json.data.length > 0) {
-                                    url = json.data[0].url || json.data[0].link || json.data[0].video_url;
-                                } else if (json?.result && Array.isArray(json.result) && json.result.length > 0) {
-                                    url = json.result[0].url || json.result[0].link;
-                                }
+                            
+                            if (text.trim().startsWith('<')) {
+                                console.log(`[TT] Alya devolvió HTML en ${endpoint}`);
+                                continue;
                             }
+                            
+                            const json = JSON.parse(text);
+                            console.log(`[TT] Alya respondió:`, JSON.stringify(json).slice(0, 200));
+                            
+                            if (json?.status === false || json?.success === false) {
+                                console.log(`[TT] Alya devolvió error:`, json.message || json.error);
+                                continue;
+                            }
+                            
+                            const dataArray = json.data || json.result || json.results || json.videos || [];
+                            if (Array.isArray(dataArray) && dataArray.length > 0) {
+                                url = dataArray[0].url || dataArray[0].link || dataArray[0].video_url || dataArray[0].video;
+                            } else if (json?.data?.url) {
+                                url = json.data.url;
+                            }
+                        } catch (e) {
+                            console.log(`[TT] Alya endpoint falló:`, e.message);
                         }
-                    } catch (e) {
-                        console.log('[TT] Alya falló:', e.message);
                     }
 
-                    // Intento 2: TikWM search como respaldo
+                    // Intento 2: TikWM search
                     if (!url) {
                         try {
                             const res = await fetch(
@@ -89,20 +108,42 @@ export default {
                                 { headers: HEADERS, timeout: 15000 }
                             );
                             const text = await res.text();
+                            
                             if (!text.trim().startsWith('<')) {
                                 const json = JSON.parse(text);
+                                console.log(`[TT] TikWM search respondió:`, JSON.stringify(json).slice(0, 200));
+                                
                                 if (json?.code === 0 && json?.data?.videos?.length > 0) {
                                     const vid = json.data.videos[0];
                                     url = `https://www.tiktok.com/@${vid.author?.unique_id || 'user'}/video/${vid.video_id || vid.id}`;
                                 }
+                            } else {
+                                console.log(`[TT] TikWM devolvió HTML`);
                             }
                         } catch (e) {
-                            console.log('[TT] TikWM search falló:', e.message);
+                            console.log(`[TT] TikWM search falló:`, e.message);
+                        }
+                    }
+
+                    // Intento 3: Búsqueda directa en TikTok
+                    if (!url) {
+                        try {
+                            const res = await fetch(
+                                `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`,
+                                { headers: HEADERS, timeout: 15000 }
+                            );
+                            const html = await res.text();
+                            const match = html.match(/"video_id":"(\d+)".*?"author":\{.*?"unique_id":"([^"]+)"/);
+                            if (match) {
+                                url = `https://www.tiktok.com/@${match[2]}/video/${match[1]}`;
+                            }
+                        } catch (e) {
+                            console.log(`[TT] Scraping TikTok falló:`, e.message);
                         }
                     }
 
                     if (!url) {
-                        throw new Error('No se encontró ningún video para esa búsqueda. Intenta con otro término.');
+                        throw new Error('No se encontró ningún video para esa búsqueda. Todas las APIs fallaron.');
                     }
 
                     if (searchCache.size > 150) searchCache.clear();
@@ -122,10 +163,13 @@ export default {
                     const json = JSON.parse(text);
                     if (json?.code === 0 && json?.data) {
                         data = json.data;
+                    } else {
+                        throw new Error(json?.msg || 'TikWM devolvió error');
                     }
                 }
             } catch (e) {
                 console.log('[TT] TikWM download falló:', e.message);
+                throw new Error('No se pudo descargar el video: ' + e.message);
             }
 
             if (!data) {
