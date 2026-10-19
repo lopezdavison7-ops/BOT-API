@@ -12,6 +12,7 @@ import { fmtTiempo } from './lib/helpers.js';
 import { estaMuteado } from './database/mutes.js';
 import { estaActivo as modoadminActivo } from './database/modoadmin.js';
 import { esAdminGrupo } from './lib/adminCheck.js';
+import { aplicarEstilo } from './lib/estilos.js'; // <-- IMPORTADO AQUÍ
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -139,38 +140,22 @@ function buscarArchivoPlay() {
     return encontrado;
 }
 
-// ══ SISTEMA DE ESTILOS GLOBAL ══
-let aplicarEstiloGlobal = (texto) => texto;
-let estilosCargados = false;
-
-async function cargarEstilos() {
-    if (estilosCargados) return;
-    try {
-        const mod = await import('./lib/estilos.js');
-        aplicarEstiloGlobal = mod.aplicarEstilo || aplicarEstiloGlobal;
-        estilosCargados = true;
-        console.log('[HANDLER] ✅ Sistema de estilos cargado globalmente');
-    } catch (e) {
-        console.log('[HANDLER] ⚠️ No se pudo cargar estilos.js');
-    }
-}
-
 export async function handleMessage(sock, msg, _ignorado = null, listaComandos = []) {
-    await cargarEstilos();
-
-    // ══ RED DE SEGURIDAD: Parche global para cualquier sock.sendMessage directo ══
-    if (!sock._sendMessagePatched) {
+    
+    // ══ INTERCEPTOR GLOBAL: Aplica estilo a CUALQUIER mensaje de texto o imagen que envíe el bot ══
+    if (!sock._stylePatched) {
         const originalSend = sock.sendMessage.bind(sock);
         sock.sendMessage = async function(jid, message, options = {}) {
             if (message && message.text) {
-                message.text = aplicarEstiloGlobal(message.text);
+                message.text = aplicarEstilo(message.text);
             }
             if (message && message.caption) {
-                message.caption = aplicarEstiloGlobal(message.caption);
+                message.caption = aplicarEstilo(message.caption);
             }
             return originalSend(jid, message, options);
         };
-        sock._sendMessagePatched = true;
+        sock._stylePatched = true;
+        console.log('[HANDLER] ✅ Interceptor de estilos global activado');
     }
 
     const prefijo = obtenerPrefijoActual();
@@ -266,22 +251,13 @@ export async function handleMessage(sock, msg, _ignorado = null, listaComandos =
 
         registrarUsoComando(cmd.nombre || nombreComando, String(msg.key.participant || msg.key.remoteJid || '').split('@')[0].replace(/\D/g, ''));
 
-        // ══ CAPA 1: Aplicar estilo directamente en el objeto responder ══
         await cmd.ejecutar({
             sock, msg, args, argumento, listaComandos, prefijo, fromMe, isGroup, jid, botJid,
             responder: {
-                texto: async (text) => { 
-                    await sock.sendMessage(jid, { text: aplicarEstiloGlobal(text) }, { quoted: msg }); 
-                },
-                imagen: async (img, caption = '') => { 
-                    await sock.sendMessage(jid, { image: img, caption: aplicarEstiloGlobal(caption) }, { quoted: msg }); 
-                },
-                video: async (vid, caption = '') => { 
-                    await sock.sendMessage(jid, { video: vid, caption: aplicarEstiloGlobal(caption) }, { quoted: msg }); 
-                },
-                audio: async (aud, ptt = true) => { 
-                    await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); 
-                }
+                texto: async (text) => { await sock.sendMessage(jid, { text }, { quoted: msg }); },
+                imagen: async (img, caption = '') => { await sock.sendMessage(jid, { image: img, caption }, { quoted: msg }); },
+                video: async (vid, caption = '') => { await sock.sendMessage(jid, { video: vid, caption }, { quoted: msg }); },
+                audio: async (aud, ptt = true) => { await sock.sendMessage(jid, { audio: aud, mimetype: 'audio/mpeg', ptt }, { quoted: msg }); }
             }
         });
 
