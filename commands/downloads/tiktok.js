@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const ALYA_API = 'https://alyacore.xyz/api';
+const ALYA_API = 'https://api.alyacore.xyz/api';
 const ALYA_KEY = 'OBOE-AERETHIX';
 const TIKWM_API = 'https://www.tikwm.com/api';
 
