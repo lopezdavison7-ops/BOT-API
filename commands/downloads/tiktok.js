@@ -1,7 +1,5 @@
 import fetch from 'node-fetch';
 
-const ALYA_API = 'https://api.alyacore.xyz';
-const ALYA_KEY = 'OBOE-AERETHIX';
 const TIKWM_API = 'https://www.tikwm.com/api';
 
 const HEADERS = {
@@ -49,7 +47,6 @@ export default {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(query);
 
             let url = null;
-            let data = null;
             const now = Date.now();
 
             if (isUrl) {
@@ -60,73 +57,40 @@ export default {
 
                 if (cached && cached.exp > now) {
                     url = cached.url;
+                    console.log(`[TT] Usando URL de caché: ${url}`);
                 } else {
-                    // Intento 1: Alya search endpoints
-                    const alyaSearchEndpoints = [
-                        `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
-                        `${ALYA_API}/sr/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
-                        `${ALYA_API}/search?q=${encodeURIComponent(query)}&platform=tiktok&key=${ALYA_KEY}`,
-                        `${ALYA_API}/tiktok/search?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`
-                    ];
-
-                    for (const endpoint of alyaSearchEndpoints) {
-                        if (url) break;
-                        try {
-                            const res = await fetch(endpoint, { headers: HEADERS, timeout: 15000 });
-                            const text = await res.text();
-                            
-                            console.log(`[TT] Alya search endpoint: ${endpoint}`);
-                            console.log(`[TT] Respuesta (primeros 500 chars):`, text.slice(0, 500));
-                            
-                            if (text.trim().startsWith('<')) {
-                                console.log(`[TT] Alya devolvió HTML`);
-                                continue;
-                            }
-                            
-                            const json = JSON.parse(text);
-                            
-                            if (json?.status === false || json?.success === false) {
-                                console.log(`[TT] Alya error:`, json.message || json.error);
-                                continue;
-                            }
-                            
-                            const dataArray = json.data || json.result || json.results || json.videos || [];
-                            if (Array.isArray(dataArray) && dataArray.length > 0) {
-                                url = dataArray[0].url || dataArray[0].link || dataArray[0].video_url || dataArray[0].video;
-                                console.log(`[TT] Alya encontró URL: ${url}`);
-                            } else if (json?.data?.url) {
-                                url = json.data.url;
-                                console.log(`[TT] Alya encontró URL: ${url}`);
-                            }
-                        } catch (e) {
-                            console.log(`[TT] Alya search falló:`, e.message);
+                    // Búsqueda con TikWM
+                    try {
+                        const res = await fetch(
+                            `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=10`,
+                            { headers: HEADERS, timeout: 20000 }
+                        );
+                        const text = await res.text();
+                        
+                        console.log(`[TT] TikWM search respuesta:`, text.slice(0, 300));
+                        
+                        if (text.trim().startsWith('<')) {
+                            throw new Error('TikWM devolvió HTML (bloqueado)');
                         }
-                    }
-
-                    // Intento 2: TikWM search
-                    if (!url) {
-                        try {
-                            const res = await fetch(
-                                `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=10`,
-                                { headers: HEADERS, timeout: 15000 }
-                            );
-                            const text = await res.text();
-                            
-                            if (!text.trim().startsWith('<')) {
-                                const json = JSON.parse(text);
-                                if (json?.code === 0 && json?.data?.videos?.length > 0) {
-                                    const vid = json.data.videos[0];
-                                    url = `https://www.tiktok.com/@${vid.author?.unique_id || 'user'}/video/${vid.video_id || vid.id}`;
-                                    console.log(`[TT] TikWM encontró URL: ${url}`);
-                                }
-                            }
-                        } catch (e) {
-                            console.log(`[TT] TikWM search falló:`, e.message);
+                        
+                        const json = JSON.parse(text);
+                        
+                        if (json?.code !== 0) {
+                            throw new Error(`TikWM error: ${json.msg || 'Error desconocido'}`);
                         }
-                    }
-
-                    if (!url) {
-                        throw new Error('No se encontró ningún video para esa búsqueda.');
+                        
+                        if (!json?.data?.videos || json.data.videos.length === 0) {
+                            throw new Error('TikWM no devolvió videos');
+                        }
+                        
+                        const vid = json.data.videos[0];
+                        url = `https://www.tiktok.com/@${vid.author?.unique_id || 'user'}/video/${vid.video_id || vid.id}`;
+                        
+                        console.log(`[TT] TikWM encontró URL: ${url}`);
+                        
+                    } catch (e) {
+                        console.error('[TT] TikWM search falló:', e.message);
+                        throw new Error('No se pudo buscar videos. Intenta con un enlace directo.');
                     }
 
                     if (searchCache.size > 150) searchCache.clear();
@@ -134,59 +98,36 @@ export default {
                 }
             }
 
-            // Descargar usando Alya API (endpoint oficial: /dl/tiktok)
+            // Descargar con TikWM
+            let data = null;
             try {
                 const res = await fetch(
-                    `${ALYA_API}/dl/tiktok?url=${encodeURIComponent(url)}&key=${ALYA_KEY}`,
-                    { headers: HEADERS, timeout: 45000 }
+                    `${TIKWM_API}/?url=${encodeURIComponent(url)}&hd=1`,
+                    { headers: HEADERS, timeout: 60000 }
                 );
                 const text = await res.text();
                 
-                console.log(`[TT] Alya download respuesta (primeros 500 chars):`, text.slice(0, 500));
+                console.log(`[TT] TikWM download respuesta:`, text.slice(0, 300));
                 
-                if (!text.trim().startsWith('<')) {
-                    const json = JSON.parse(text);
-                    
-                    if (json?.status === false || json?.success === false) {
-                        console.log(`[TT] Alya download error:`, json.message || json.error);
-                        throw new Error(json.message || 'Alya devolvió error');
-                    }
-                    
-                    if (json?.data) {
-                        data = json.data;
-                    } else if (json?.result) {
-                        data = json.result;
-                    } else {
-                        data = json;
-                    }
+                if (text.trim().startsWith('<')) {
+                    throw new Error('TikWM devolvió HTML (bloqueado)');
                 }
+                
+                const json = JSON.parse(text);
+                
+                if (json?.code !== 0) {
+                    throw new Error(`TikWM error: ${json.msg || 'Error desconocido'}`);
+                }
+                
+                if (!json?.data) {
+                    throw new Error('TikWM no devolvió datos');
+                }
+                
+                data = json.data;
+                
             } catch (e) {
-                console.log('[TT] Alya download falló:', e.message);
-            }
-
-            // Fallback a TikWM si Alya falla
-            if (!data) {
-                try {
-                    const res = await fetch(
-                        `${TIKWM_API}/?url=${encodeURIComponent(url)}&hd=1`,
-                        { headers: HEADERS, timeout: 45000 }
-                    );
-                    const text = await res.text();
-                    
-                    if (!text.trim().startsWith('<')) {
-                        const json = JSON.parse(text);
-                        if (json?.code === 0 && json?.data) {
-                            data = json.data;
-                            console.log(`[TT] Usando TikWM como respaldo`);
-                        }
-                    }
-                } catch (e) {
-                    console.log('[TT] TikWM download falló:', e.message);
-                }
-            }
-
-            if (!data) {
-                throw new Error('La API no devolvió datos válidos.');
+                console.error('[TT] TikWM download falló:', e.message);
+                throw new Error('No se pudo descargar el video: ' + e.message);
             }
 
             const author = data.author?.nickname || data.author?.fullname || data.author?.unique_id || 'Desconocido';
@@ -244,9 +185,9 @@ export default {
             }
 
             // Video
-            const videoUrl = data.hdplay || data.play || data.wmplay || data.video || data.url;
+            const videoUrl = data.hdplay || data.play || data.wmplay;
             if (!videoUrl) {
-                throw new Error('La API no devolvió un video descargable.');
+                throw new Error('TikWM no devolvió un video descargable.');
             }
 
             const caption = 
