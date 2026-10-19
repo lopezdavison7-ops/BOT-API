@@ -19,7 +19,7 @@ export default {
         if (!texto) {
             await reaccion('❌');
             return await responder.texto(
-                '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 〕━━⬣\n' +
+                '╭━━〔 🎵 𝐓𝐊𝐓𝐎𝐊 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Ingresa un enlace o término de búsqueda.\n' +
                 '┃\n' +
@@ -37,67 +37,63 @@ export default {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
 
             let data = null;
-            let videoUrl = null;
 
             if (isUrl) {
-                videoUrl = texto;
-            } else {
-                // Búsqueda: obtener el primer resultado
+                // Descarga directa por URL
                 try {
-                    const resSearch = await fetch(`${ANABOT_API}/search/tiktokSearch?username=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
-                    if (resSearch.ok) {
-                        const dataSearch = await resSearch.json();
-                        if (dataSearch.success && dataSearch.data?.result && dataSearch.data.result.length > 0) {
-                            const primerResultado = dataSearch.data.result[0];
-                            // Construir URL de búsqueda de TikTok
-                            videoUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(primerResultado.content)}`;
+                    const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
+                    if (resAna.ok) {
+                        const jsonAna = await resAna.json();
+                        if (jsonAna.success && jsonAna.data?.result) {
+                            data = jsonAna.data.result;
                         }
                     }
                 } catch (e) {
-                    console.log('[TIKTOK] Búsqueda falló:', e.message);
+                    console.log('[TIKTOK] AnaBot falló:', e.message);
                 }
 
-                if (!videoUrl) {
-                    throw new Error('No se encontraron resultados para tu búsqueda.');
-                }
-            }
-
-            // Descargar el video usando AnaBot
-            try {
-                const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(videoUrl)}&apikey=${ANABOT_KEY}`);
-                if (resAna.ok) {
-                    const jsonAna = await resAna.json();
-                    if (jsonAna.success && jsonAna.data?.result) {
-                        data = jsonAna.data.result;
+                if (!data) {
+                    try {
+                        const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
+                        const jsonTikwm = await resTikwm.json();
+                        if (jsonTikwm.code === 0 && jsonTikwm.data) {
+                            const d = jsonTikwm.data;
+                            data = {
+                                username: d.author?.nickname || 'Desconocido',
+                                description: d.title || 'Sin descripción',
+                                video: d.play,
+                                audio: d.music,
+                                image: d.images || []
+                            };
+                        }
+                    } catch (e) {
+                        console.log('[TIKTOK] TikWM falló:', e.message);
                     }
                 }
-            } catch (e) {
-                console.log('[TIKTOK] AnaBot download falló:', e.message);
-            }
-
-            // Fallback a TikWM si AnaBot falla
-            if (!data) {
+            } else {
+                // Búsqueda: usar TikWM search que devuelve videos reales
                 try {
-                    const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(videoUrl)}`);
-                    const jsonTikwm = await resTikwm.json();
+                    const resSearch = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(texto)}&count=5`);
+                    const jsonSearch = await resSearch.json();
 
-                    if (jsonTikwm.code === 0 && jsonTikwm.data) {
-                        const d = jsonTikwm.data;
+                    if (jsonSearch.code === 0 && jsonSearch.data?.videos && jsonSearch.data.videos.length > 0) {
+                        const primerVideo = jsonSearch.data.videos[0];
+                        
                         data = {
-                            username: d.author?.nickname || 'Desconocido',
-                            description: d.title || 'Sin descripción',
-                            video: d.play,
-                            audio: d.music,
-                            image: d.images || []
+                            username: primerVideo.author?.nickname || 'Desconocido',
+                            description: primerVideo.title || 'Sin descripción',
+                            video: primerVideo.play,
+                            audio: primerVideo.music_info?.play,
+                            image: primerVideo.images || []
                         };
                     }
                 } catch (e) {
-                    console.log('[TIKTOK] TikWM falló:', e.message);
+                    console.log('[TIKTOK] Búsqueda TikWM falló:', e.message);
                 }
             }
 
             if (!data) {
-                throw new Error('No se pudo descargar el video. El enlace puede ser privado o estar roto.');
+                throw new Error('No se encontraron resultados. Intenta con otro término o verifica el enlace.');
             }
 
             if (data.video) {
@@ -123,7 +119,7 @@ export default {
                 }
             } else if (data.image && data.image.length > 0) {
                 const caption = 
-                    '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
+                    '╭━━〔 🖼️ 𝐓𝐈𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
                     `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
                     `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
                     `┃ 📸 *Imágenes:* ${data.image.length}\n` +
