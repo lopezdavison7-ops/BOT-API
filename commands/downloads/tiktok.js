@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 
 const ANABOT_API = 'https://anabot.my.id/api';
+const ANABOT_KEY = ''; // Pon tu apikey aquí si compraste una
 
 export default {
     nombre: 'tiktok',
@@ -35,56 +36,87 @@ export default {
         try {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
             
+            let data = null;
+            let apiUsada = '';
+
             if (isUrl) {
-                const resDownload = await fetch(`${ANABOT_API}/downloader/tiktok?url=${encodeURIComponent(texto)}`);
-                
-                if (!resDownload.ok) {
-                    throw new Error(`API respondió con código ${resDownload.status}`);
+                // Intento 1: AnaBot (si hay apikey)
+                if (ANABOT_KEY) {
+                    try {
+                        const resAna = await fetch(`${ANABOT_API}/download/tiktok?url=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
+                        if (resAna.ok) {
+                            const jsonAna = await resAna.json();
+                            if (jsonAna.success && jsonAna.data?.result) {
+                                data = jsonAna.data.result;
+                                apiUsada = 'AnaBot';
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[TIKTOK] AnaBot falló:', e.message);
+                    }
                 }
 
-                const data = await resDownload.json();
-
-                if (!data.success || !data.data?.result) {
-                    throw new Error('La API no devolvió datos válidos');
+                // Intento 2: TikWM (gratuito)
+                if (!data) {
+                    try {
+                        const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
+                        const jsonTikwm = await resTikwm.json();
+                        
+                        if (jsonTikwm.code === 0 && jsonTikwm.data) {
+                            const d = jsonTikwm.data;
+                            data = {
+                                username: d.author?.nickname || 'Desconocido',
+                                description: d.title || 'Sin descripción',
+                                video: d.play,
+                                audio: d.music,
+                                image: d.images || []
+                            };
+                            apiUsada = 'TikWM';
+                        }
+                    } catch (e) {
+                        console.log('[TIKTOK] TikWM falló:', e.message);
+                    }
                 }
 
-                const result = data.data.result;
+                if (!data) {
+                    throw new Error('Todas las APIs fallaron. El enlace puede ser privado o estar roto.');
+                }
 
-                if (result.video) {
+                if (data.video) {
                     const caption = 
                         '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 〕━━⬣\n' +
-                        `┃ 👤 *Usuario:* ${result.username || 'Desconocido'}\n` +
-                        `┃ 📝 *Descripción:* ${result.description || 'Sin descripción'}\n` +
+                        `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
+                        `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
                         '┃\n' +
-                        '┃ ⚡ Fuente: AnaBot API\n' +
+                        `┃ ⚡ Fuente: ${apiUsada}\n` +
                         '╰━━━━━━━━━━━━━━━━⬣';
 
                     await sock.sendMessage(jid, {
-                        video: { url: result.video },
+                        video: { url: data.video },
                         caption: caption,
                         mimetype: 'video/mp4'
                     }, { quoted: msg });
 
-                    if (result.audio) {
+                    if (data.audio) {
                         await sock.sendMessage(jid, {
-                            audio: { url: result.audio },
+                            audio: { url: data.audio },
                             mimetype: 'audio/mpeg',
                             ptt: false
                         }, { quoted: msg });
                     }
-                } else if (result.image && result.image.length > 0) {
+                } else if (data.image && data.image.length > 0) {
                     const caption = 
                         '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
-                        `┃ 👤 *Usuario:* ${result.username || 'Desconocido'}\n` +
-                        `┃ 📝 *Descripción:* ${result.description || 'Sin descripción'}\n` +
-                        `┃ 📸 *Imágenes:* ${result.image.length}\n` +
+                        `┃ 👤 *Usuario:* ${data.username || 'Desconocido'}\n` +
+                        `┃ 📝 *Descripción:* ${data.description || 'Sin descripción'}\n` +
+                        `┃ 📸 *Imágenes:* ${data.image.length}\n` +
                         '┃\n' +
-                        '┃ ⚡ Fuente: AnaBot API\n' +
+                        `┃ ⚡ Fuente: ${apiUsada}\n` +
                         '╰━━━━━━━━━━━━━━━━⬣';
 
                     await responder.texto(caption);
 
-                    for (const imageUrl of result.image) {
+                    for (const imageUrl of data.image) {
                         await sock.sendMessage(jid, {
                             image: { url: imageUrl },
                             mimetype: 'image/jpeg'
@@ -92,9 +124,9 @@ export default {
                         await new Promise(r => setTimeout(r, 1000));
                     }
 
-                    if (result.audio) {
+                    if (data.audio) {
                         await sock.sendMessage(jid, {
-                            audio: { url: result.audio },
+                            audio: { url: data.audio },
                             mimetype: 'audio/mpeg',
                             ptt: false
                         }, { quoted: msg });
@@ -103,40 +135,45 @@ export default {
                     throw new Error('No se encontraron videos ni imágenes en el enlace');
                 }
             } else {
-                const resSearch = await fetch(`${ANABOT_API}/search/tiktokSearch?q=${encodeURIComponent(texto)}`);
-                
-                if (!resSearch.ok) {
-                    throw new Error(`API de búsqueda respondió con código ${resSearch.status}`);
+                // Búsqueda
+                if (ANABOT_KEY) {
+                    try {
+                        const resSearch = await fetch(`${ANABOT_API}/search/tiktokSearch?username=${encodeURIComponent(texto)}&apikey=${ANABOT_KEY}`);
+                        if (resSearch.ok) {
+                            const dataSearch = await resSearch.json();
+                            if (dataSearch.success && dataSearch.data?.result) {
+                                const suggestions = dataSearch.data.result.slice(0, 10);
+                                
+                                let mensaje = 
+                                    '╭━━〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
+                                    '┃\n' +
+                                    `┃ 📝 Búsqueda: *${texto}*\n` +
+                                    '┃\n' +
+                                    '┃ 💡 Sugerencias encontradas:\n';
+
+                                suggestions.forEach((item, index) => {
+                                    mensaje += `┃ ${index + 1}. ${item.content}\n`;
+                                });
+
+                                mensaje += 
+                                    '┃\n' +
+                                    '┃ 📌 Para descargar, usa:\n' +
+                                    '┃ › .tiktok <enlace completo>\n' +
+                                    '┃\n' +
+                                    '┃ ⚡ Fuente: AnaBot\n' +
+                                    '╰━━━━━━━━━━━━━━━━⬣';
+
+                                await responder.texto(mensaje);
+                                await reaccion('✅');
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[TIKTOK] Búsqueda AnaBot falló:', e.message);
+                    }
                 }
 
-                const data = await resSearch.json();
-
-                if (!data.success || !data.data?.result || data.data.result.length === 0) {
-                    throw new Error('No se encontraron resultados de búsqueda');
-                }
-
-                const suggestions = data.data.result.slice(0, 10);
-                
-                let mensaje = 
-                    '╭━━〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
-                    '┃\n' +
-                    `┃ 📝 Búsqueda: *${texto}*\n` +
-                    '┃\n' +
-                    '┃ 💡 Sugerencias encontradas:\n';
-
-                suggestions.forEach((item, index) => {
-                    mensaje += `┃ ${index + 1}. ${item.content}\n`;
-                });
-
-                mensaje += 
-                    '┃\n' +
-                    '┃ 📌 Para descargar, usa:\n' +
-                    '┃ › .tiktok <enlace completo>\n' +
-                    '┃\n' +
-                    '┃ ⚡ Fuente: AnaBot API\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣';
-
-                await responder.texto(mensaje);
+                throw new Error('La búsqueda requiere API key de AnaBot. Usa un enlace completo para descargar.');
             }
 
             await reaccion('✅');
