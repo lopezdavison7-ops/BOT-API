@@ -1,7 +1,6 @@
 import fetch from 'node-fetch';
 
-const YUKI_URL = 'https://api.yuki-wabot.my.id';
-const YUKI_KEY = 'YukiBot-MD';
+const ANABOT_API = 'https://anabot.my.id/api';
 
 export default {
     nombre: 'tiktok',
@@ -36,132 +35,108 @@ export default {
         try {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(texto);
             
-            let data = null;
-            let apiUsada = 'Yuki';
-
             if (isUrl) {
-                // ─── INTENTO 1: API YUKI ───
-                try {
-                    const resYuki = await fetch(`${YUKI_URL}/dl/tiktok?url=${encodeURIComponent(texto)}&key=${YUKI_KEY}`);
-                    if (resYuki.ok) {
-                        const jsonYuki = await resYuki.json();
-                        if (jsonYuki.status && jsonYuki.data) {
-                            data = jsonYuki.data;
-                        }
-                    } else if (resYuki.status === 402) {
-                        console.log('[TIKTOK] Yuki API sin créditos (402), usando respaldo...');
-                    }
-                } catch (e) {
-                    console.log('[TIKTOK] Yuki API falló, usando respaldo:', e.message);
-                }
-
-                // ─── INTENTO 2: API TIKWM (Respaldo gratuito y estable) ───
-                if (!data) {
-                    apiUsada = 'TikWM (Respaldo)';
-                    const resTikwm = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(texto)}`);
-                    const jsonTikwm = await resTikwm.json();
-                    
-                    if (jsonTikwm.code === 0 && jsonTikwm.data) {
-                        // Adaptar formato de TikWM al formato que espera el resto del código
-                        const d = jsonTikwm.data;
-                        data = {
-                            title: d.title || 'Sin título',
-                            duration: d.duration || 'N/A',
-                            author: { nickname: d.author?.nickname || 'Desconocido', unique_id: d.author?.unique_id || '' },
-                            stats: { likes: d.digg_count, comments: d.comment_count, views: d.play_count, shares: d.share_count },
-                            created_at: new Date(d.create_time * 1000).toLocaleDateString('es-ES'),
-                            type: d.images && d.images.length > 0 ? 'image' : 'video',
-                            dl: d.images && d.images.length > 0 ? d.images : d.play
-                        };
-                    }
-                }
-            } else {
-                // ─── BÚSQUEDA (Solo Yuki soporta búsqueda bien, si falla, avisa) ───
-                const resYuki = await fetch(`${YUKI_URL}/search/tiktok?query=${encodeURIComponent(texto)}&key=${YUKI_KEY}`);
-                if (!resYuki.ok) throw new Error(`La API de búsqueda respondió con estado ${resYuki.status} (Probablemente sin créditos).`);
+                const resDownload = await fetch(`${ANABOT_API}/downloader/tiktok?url=${encodeURIComponent(texto)}`);
                 
-                const jsonYuki = await resYuki.json();
-                if (!jsonYuki.status || !jsonYuki.data) {
-                    throw new Error('No se encontraron resultados de búsqueda.');
+                if (!resDownload.ok) {
+                    throw new Error(`API respondió con código ${resDownload.status}`);
                 }
-                data = jsonYuki.data; // En búsqueda, data es un array
-            }
 
-            if (!data) {
-                throw new Error('No se pudo obtener el contenido. El enlace puede ser privado o estar roto.');
-            }
+                const data = await resDownload.json();
 
-            // ─── PROCESAR RESPUESTA ───
-            if (isUrl) {
-                const { title, duration, dl, author, stats, created_at, type } = data;
-                const autorNombre = author?.nickname || author?.unique_id || 'Desconocido';
-                
-                const caption = 
-                    '╭━━〔 🎵 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐋 〕━━⬣\n' +
-                    `┃ 📌 *Título:* ${title || 'Sin título'}\n` +
-                    `┃ 👤 *Autor:* ${autorNombre}\n` +
-                    `┃ ⏱️ *Duración:* ${duration || 'N/A'}\n` +
-                    `┃ ❤️ *Likes:* ${(stats?.likes || 0).toLocaleString()}\n` +
-                    `┃ 💬 *Comentarios:* ${(stats?.comments || 0).toLocaleString()}\n` +
-                    `┃ 👁️ *Vistas:* ${(stats?.views || 0).toLocaleString()}\n` +
-                    `┃ 📅 *Fecha:* ${created_at || 'N/A'}\n` +
-                    `┃ ⚡ *Fuente:* ${apiUsada}\n` +
-                    '╰━━━━━━━━━━━━━━━━⬣';
+                if (!data.success || !data.data?.result) {
+                    throw new Error('La API no devolvió datos válidos');
+                }
 
-                if (type === 'image' || (Array.isArray(dl) && dl.length > 1)) {
-                    await responder.texto('📸 Descargando carrusel de imágenes...');
-                    const images = Array.isArray(dl) ? dl : [dl];
-                    
-                    for (let i = 0; i < images.length; i++) {
+                const result = data.data.result;
+
+                if (result.video) {
+                    const caption = 
+                        '╭━━〔 🎬 𝐓𝐈𝐊𝐓𝐎𝐊 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 〕━━⬣\n' +
+                        `┃ 👤 *Usuario:* ${result.username || 'Desconocido'}\n` +
+                        `┃ 📝 *Descripción:* ${result.description || 'Sin descripción'}\n` +
+                        '┃\n' +
+                        '┃ ⚡ Fuente: AnaBot API\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣';
+
+                    await sock.sendMessage(jid, {
+                        video: { url: result.video },
+                        caption: caption,
+                        mimetype: 'video/mp4'
+                    }, { quoted: msg });
+
+                    if (result.audio) {
                         await sock.sendMessage(jid, {
-                            image: typeof images[i] === 'string' ? { url: images[i] } : images[i],
-                            caption: i === 0 ? caption : `┃ 📸 Imagen ${i + 1}/${images.length}`
+                            audio: { url: result.audio },
+                            mimetype: 'audio/mpeg',
+                            ptt: false
+                        }, { quoted: msg });
+                    }
+                } else if (result.image && result.image.length > 0) {
+                    const caption = 
+                        '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
+                        `┃ 👤 *Usuario:* ${result.username || 'Desconocido'}\n` +
+                        `┃ 📝 *Descripción:* ${result.description || 'Sin descripción'}\n` +
+                        `┃ 📸 *Imágenes:* ${result.image.length}\n` +
+                        '┃\n' +
+                        '┃ ⚡ Fuente: AnaBot API\n' +
+                        '╰━━━━━━━━━━━━━━━━⬣';
+
+                    await responder.texto(caption);
+
+                    for (const imageUrl of result.image) {
+                        await sock.sendMessage(jid, {
+                            image: { url: imageUrl },
+                            mimetype: 'image/jpeg'
                         }, { quoted: msg });
                         await new Promise(r => setTimeout(r, 1000));
                     }
 
-                    // Audio de fondo para carruseles (solo si usamos TikWM que lo provee fácil)
-                    if (apiUsada.includes('TikWM') && data.dl_audio) {
+                    if (result.audio) {
                         await sock.sendMessage(jid, {
-                            audio: { url: data.dl_audio },
+                            audio: { url: result.audio },
                             mimetype: 'audio/mpeg',
                             ptt: false
                         }, { quoted: msg });
                     }
                 } else {
-                    const videoUrl = Array.isArray(dl) ? dl[0] : dl;
-                    await sock.sendMessage(jid, {
-                        video: typeof videoUrl === 'string' ? { url: videoUrl } : videoUrl,
-                        caption: caption,
-                        mimetype: 'video/mp4'
-                    }, { quoted: msg });
+                    throw new Error('No se encontraron videos ni imágenes en el enlace');
                 }
             } else {
-                // ─── PROCESAR BÚSQUEDA ───
-                const validResults = data.filter(v => v.dl && typeof v.dl === 'string' && v.dl.startsWith('http'));
-                if (validResults.length === 0) throw new Error('No se encontraron resultados descargables.');
-
-                await responder.texto(`🔍 Se encontraron ${validResults.length} resultados. Enviando los más relevantes...`);
+                const resSearch = await fetch(`${ANABOT_API}/search/tiktokSearch?q=${encodeURIComponent(texto)}`);
                 
-                const limit = Math.min(validResults.length, 5);
-                for (let i = 0; i < limit; i++) {
-                    const v = validResults[i];
-                    const cap = 
-                        '╭━━〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
-                        `┃ 📌 *Título:* ${v.title || 'Sin título'}\n` +
-                        `┃ 👤 *Autor:* ${v.author?.nickname || 'Desconocido'}\n` +
-                        `┃ ⏱️ *Duración:* ${v.duration || 'N/A'}\n` +
-                        `┃ ❤️ *Likes:* ${(v.stats?.likes || 0).toLocaleString()}\n` +
-                        '╰━━━━━━━━━━━━━━━━⬣';
-
-                    await sock.sendMessage(jid, {
-                        video: { url: v.dl },
-                        caption: cap,
-                        mimetype: 'video/mp4'
-                    }, { quoted: msg });
-                    
-                    if (i < limit - 1) await new Promise(r => setTimeout(r, 1500));
+                if (!resSearch.ok) {
+                    throw new Error(`API de búsqueda respondió con código ${resSearch.status}`);
                 }
+
+                const data = await resSearch.json();
+
+                if (!data.success || !data.data?.result || data.data.result.length === 0) {
+                    throw new Error('No se encontraron resultados de búsqueda');
+                }
+
+                const suggestions = data.data.result.slice(0, 10);
+                
+                let mensaje = 
+                    '╭━━〔 🔍 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐄𝐀𝐑𝐂𝐇 〕━━⬣\n' +
+                    '┃\n' +
+                    `┃ 📝 Búsqueda: *${texto}*\n` +
+                    '┃\n' +
+                    '┃ 💡 Sugerencias encontradas:\n';
+
+                suggestions.forEach((item, index) => {
+                    mensaje += `┃ ${index + 1}. ${item.content}\n`;
+                });
+
+                mensaje += 
+                    '┃\n' +
+                    '┃ 📌 Para descargar, usa:\n' +
+                    '┃ › .tiktok <enlace completo>\n' +
+                    '┃\n' +
+                    '┃ ⚡ Fuente: AnaBot API\n' +
+                    '╰━━━━━━━━━━━━━━━━⬣';
+
+                await responder.texto(mensaje);
             }
 
             await reaccion('✅');
@@ -172,7 +147,7 @@ export default {
             await responder.texto(
                 '❌ Ocurrió un error al procesar el contenido de TikTok.\n\n' +
                 '⚠️ Detalle: ' + (error?.message || 'Error desconocido') + '\n\n' +
-                '💡 Nota: Si el enlace es correcto, la API principal puede estar saturada.'
+                '💡 Nota: Si el enlace es correcto, la API puede estar saturada.'
             );
         }
     }
