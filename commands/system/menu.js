@@ -10,6 +10,10 @@ const BOT_NAME = 'BOT-API';
 
 const FOTO_MENU = path.join(process.cwd(), 'media', 'menu', 'menu.jpg');
 
+// ⚠️ REEMPLAZA ESTE VALOR con el que te dé el comando .obtenerjid
+const NEWSLETTER_JID = '120363424808187278@newsletter'; // <-- PEGA AQUÍ TU JID
+const NEWSLETTER_NAME = 'BOT-API Canal Oficial'; // <-- Nombre de tu canal
+
 const ALIAS_CATEGORIAS = {
     'descargas': 'Descargas', 'downloads': 'Descargas', 'dl': 'Descargas',
     'juegos': 'Diversión', 'fun': 'Diversión', 'diversion': 'Diversión', 'diversión': 'Diversión',
@@ -27,8 +31,8 @@ const ALIAS_CATEGORIAS = {
 
 const ICONOS = {
     Owner: '👑', Economía: '💸', Diversión: '🎉', Sistema: '⚙️',
-    Otros: '📦', Descargas: '', Utilidades: '🛠️', IA: '🧠',
-    Multimedia: '🎨', Grupos: '👥', Interacción: '🎭', Moderación: '🛡️'
+    Otros: '📦', Descargas: '📥', Utilidades: '🛠️', IA: '🧠',
+    Multimedia: '', Grupos: '👥', Interacción: '🎭', Moderación: '️'
 };
 
 function obtenerAutor(msg) {
@@ -71,7 +75,7 @@ function organizarComandos(lista) {
 
 function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
-    let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━\n\n`;
+    let texto = `━━━〔 ⚡ ${botName}  〕━━━\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
     texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
@@ -150,20 +154,26 @@ export default {
                 menuTextoBase = generarMenuCompleto(categorias, prefijo, mencionTexto, botName);
             }
 
-            // 1. Aplicar el estilo (Halloween, Neón, etc.)
             const menuTextoFinal = aplicarEstilo(menuTextoBase);
             const urlCanal = obtenerCanal();
 
-            // 2. Enviar CON externalAdReply (ESTO ES LO QUE HACE APARECER EL BOTÓN "VER CANAL")
+            // ══ AQUÍ ESTÁ LA MAGIA: forwardedNewsletterMessageInfo ══
             await sock.sendMessage(jid, {
                 text: menuTextoFinal,
                 mentions: menciones,
                 contextInfo: {
+                    // Esto hace que aparezca el botón "Ver canal" nativo de WhatsApp
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: NEWSLETTER_JID,
+                        newsletterName: NEWSLETTER_NAME,
+                        serverMessageId: -1
+                    },
+                    // Respaldo con externalAdReply por si acaso
                     externalAdReply: {
-                        title: ` ${botName} - Canal Oficial`,
-                        body: 'Toca aquí para unirte a las novedades y actualizaciones',
-                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg', // Puedes cambiar esta URL por la foto de tu bot
-                        sourceUrl: urlCanal, // ← ESTO HACE QUE APAREZCA "VER CANAL"
+                        title: `${botName} - Canal Oficial`,
+                        body: 'Toca aquí para unirte',
+                        thumbnailUrl: 'https://i.imgur.com/8Qj8Qj8.jpg',
+                        sourceUrl: urlCanal,
                         mediaType: 1,
                         renderLargerThumbnail: false
                     }
