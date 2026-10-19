@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const ALYA_API = 'https://api.alyacore.xyz/api';
+const ALYA_API = 'https://api.alyacore.xyz';
 const ALYA_KEY = 'OBOE-AERETHIX';
 const TIKWM_API = 'https://www.tikwm.com/api';
 
@@ -60,7 +60,7 @@ export default {
                 if (cached && cached.exp > now) {
                     url = cached.url;
                 } else {
-                    // Intento 1: Alya API (alyacore.xyz)
+                    // Intento 1: Alya API (api.alyacore.xyz)
                     try {
                         const res = await fetch(
                             `${ALYA_API}/search/tiktok?query=${encodeURIComponent(query)}&key=${ALYA_KEY}`,
