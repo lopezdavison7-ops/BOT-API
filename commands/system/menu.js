@@ -74,7 +74,7 @@ function generarMenuFiltrado(categoriaReal, cmds, prefijo, botName) {
     const icono = obtenerIcono(categoriaReal);
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  📂 *CATEGORÍA:* ${categoriaReal.toUpperCase()}\n`;
-    texto += `┃   *COMANDOS:* ${cmds.length}\n┃\n━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
+    texto += `┃  📦 *COMANDOS:* ${cmds.length}\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n\n`;
 
     for (const cmd of cmds.sort((a, b) => a.nombre.localeCompare(b.nombre))) {
         const alias = cmd.alias?.length ? ` (${cmd.alias.join(', ')})` : '';
@@ -96,10 +96,11 @@ function generarMenuCompleto(categorias, prefijo, mencionTexto, botName) {
 
     let texto = `╭━━━〔 ⚡ ${botName} ⚡ 〕━━━⬣\n\n`;
     texto += `┃  👋 ¡Hola ${mencionTexto}!\n\n`;
-    texto += `┃   *INFO DEL BOT*\n`;
+    texto += `┃  📊 *INFO DEL BOT*\n`;
     texto += `┃  ▸ Creador: ${CREADOR}\n`;
     texto += `┃  ▸ Versión: ${VERSION}\n`;
     texto += `┃  ▸ Comandos: ${totalCmds}\n`;
+    texto += `┃  ▸ Categorías: ${totalCats}\n`;
     texto += `┃  ▸ Uptime: ${formatUptime(process.uptime())}\n`;
     texto += `┃  ▸ ${now.format('DD/MM/YYYY HH:mm')}\n┃\n`;
     texto += `╰━━━━━━━━━━━━━━━━━━━━━━━━⬣\n`;
@@ -136,7 +137,7 @@ export default {
             const menciones = autor ? [autor.jid] : [];
             const botName = global.botname || BOT_NAME;
             const categorias = organizarComandos(listaComandos);
-            
+
             const busqueda = args && args[0] ? args[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : null;
             let menuTextoBase = '';
 
@@ -196,6 +197,11 @@ export default {
                                     }
                                 ],
                                 messageParamsJson: ''
+                            },
+                            contextInfo: {
+                                mentionedJid: menciones,
+                                forwardingScore: 1,
+                                isForwarded: true
                             }
                         }
                     }
