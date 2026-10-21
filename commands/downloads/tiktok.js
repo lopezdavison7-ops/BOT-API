@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const TIKWM_API = 'https://www.tikwm.com/api';
+const FAA_API = 'https://api-faa.my.id/faa';
 
 const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -46,96 +46,82 @@ export default {
         try {
             const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/)([^\s&]+)/i.test(query);
 
-            let url = null;
+            let videoData = null;
             const now = Date.now();
 
             if (isUrl) {
-                url = query;
+                // Descarga directa por URL
+                try {
+                    const res = await fetch(
+                        `${FAA_API}/tiktok?url=${encodeURIComponent(query)}`,
+                        { headers: HEADERS, timeout: 30000 }
+                    );
+                    
+                    const json = await res.json();
+                    
+                    if (json?.estado && json?.resultado) {
+                        videoData = json.resultado;
+                    } else {
+                        throw new Error('La API no devolvió datos válidos');
+                    }
+                } catch (e) {
+                    console.error('[TT] Descarga falló:', e.message);
+                    throw new Error('No se pudo descargar el video: ' + e.message);
+                }
             } else {
+                // Búsqueda
                 const cacheKey = query.toLowerCase();
                 const cached = searchCache.get(cacheKey);
 
                 if (cached && cached.exp > now) {
-                    url = cached.url;
-                    console.log(`[TT] Usando URL de caché: ${url}`);
+                    videoData = cached.data;
                 } else {
-                    // Búsqueda con TikWM
                     try {
                         const res = await fetch(
-                            `${TIKWM_API}/feed/search?keywords=${encodeURIComponent(query)}&count=10`,
-                            { headers: HEADERS, timeout: 20000 }
+                            `${FAA_API}/tiktok-search?q=${encodeURIComponent(query)}`,
+                            { headers: HEADERS, timeout: 30000 }
                         );
-                        const text = await res.text();
                         
-                        console.log(`[TT] TikWM search respuesta:`, text.slice(0, 300));
+                        const json = await res.json();
                         
-                        if (text.trim().startsWith('<')) {
-                            throw new Error('TikWM devolvió HTML (bloqueado)');
+                        if (json?.estado && json?.resultado && Array.isArray(json.resultado) && json.resultado.length > 0) {
+                            // Tomar el primer resultado y descargarlo
+                            const primerVideo = json.resultado[0];
+                            
+                            // Construir URL de TikTok para descargar
+                            const videoUrl = `https://www.tiktok.com/@${primerVideo.autor?.username || 'user'}/video/${primerVideo.id}`;
+                            
+                            const resDownload = await fetch(
+                                `${FAA_API}/tiktok?url=${encodeURIComponent(videoUrl)}`,
+                                { headers: HEADERS, timeout: 30000 }
+                            );
+                            
+                            const jsonDownload = await resDownload.json();
+                            
+                            if (jsonDownload?.estado && jsonDownload?.resultado) {
+                                videoData = jsonDownload.resultado;
+                            } else {
+                                throw new Error('No se pudo descargar el video de búsqueda');
+                            }
+                        } else {
+                            throw new Error('No se encontraron resultados');
                         }
-                        
-                        const json = JSON.parse(text);
-                        
-                        if (json?.code !== 0) {
-                            throw new Error(`TikWM error: ${json.msg || 'Error desconocido'}`);
-                        }
-                        
-                        if (!json?.data?.videos || json.data.videos.length === 0) {
-                            throw new Error('TikWM no devolvió videos');
-                        }
-                        
-                        const vid = json.data.videos[0];
-                        url = `https://www.tiktok.com/@${vid.author?.unique_id || 'user'}/video/${vid.video_id || vid.id}`;
-                        
-                        console.log(`[TT] TikWM encontró URL: ${url}`);
-                        
                     } catch (e) {
-                        console.error('[TT] TikWM search falló:', e.message);
-                        throw new Error('No se pudo buscar videos. Intenta con un enlace directo.');
+                        console.error('[TT] Búsqueda falló:', e.message);
+                        throw new Error('No se pudo buscar videos: ' + e.message);
                     }
 
-                    if (searchCache.size > 150) searchCache.clear();
-                    searchCache.set(cacheKey, { url, exp: now + CACHE_TTL });
+                    if (videoData && searchCache.size < 150) {
+                        searchCache.set(cacheKey, { data: videoData, exp: now + CACHE_TTL });
+                    }
                 }
             }
 
-            // Descargar con TikWM
-            let data = null;
-            try {
-                const res = await fetch(
-                    `${TIKWM_API}/?url=${encodeURIComponent(url)}&hd=1`,
-                    { headers: HEADERS, timeout: 60000 }
-                );
-                const text = await res.text();
-                
-                console.log(`[TT] TikWM download respuesta:`, text.slice(0, 300));
-                
-                if (text.trim().startsWith('<')) {
-                    throw new Error('TikWM devolvió HTML (bloqueado)');
-                }
-                
-                const json = JSON.parse(text);
-                
-                if (json?.code !== 0) {
-                    throw new Error(`TikWM error: ${json.msg || 'Error desconocido'}`);
-                }
-                
-                if (!json?.data) {
-                    throw new Error('TikWM no devolvió datos');
-                }
-                
-                data = json.data;
-                
-            } catch (e) {
-                console.error('[TT] TikWM download falló:', e.message);
-                throw new Error('No se pudo descargar el video: ' + e.message);
-            }
-
-            const author = data.author?.nickname || data.author?.fullname || data.author?.unique_id || 'Desconocido';
-            const title = data.title || 'TikTok';
-            const views = data.play_count;
-            const likes = data.digg_count;
-            const comments = data.comment_count;
-            const shares = data.share_count;
+            // Extraer información del video
+            const author = videoData.autor?.nickname || videoData.autor?.username || 'Desconocido';
+            const title = videoData.title || 'TikTok';
+            const videoUrl = videoData.alternativas?.seleccionado || videoData.alternativas?.hd || videoData.datos;
+            const audioUrl = videoData.music_info?.url;
 
             const formatCount = (n) => {
                 if (!n && n !== 0) return '0';
@@ -145,49 +131,12 @@ export default {
                 return String(num);
             };
 
-            // Imágenes (slideshows)
-            const imageUrls = Array.isArray(data.images) 
-                ? data.images.filter(img => typeof img === 'string' && /^https?:\/\//.test(img))
-                : [];
+            const views = videoData.estadísticas?.vistas || videoData.stats?.views || 0;
+            const likes = videoData.estadísticas?.['Me gusta'] || videoData.stats?.likes || 0;
+            const comments = videoData.estadísticas?.comentario || videoData.stats?.comments || 0;
 
-            if (imageUrls.length > 0) {
-                const caption = 
-                    '╭━━〔 🖼️ 𝐓𝐈𝐊𝐓𝐎𝐊 𝐒𝐋𝐈𝐃𝐄𝐒 〕━━⬣\n' +
-                    `┃ 👤 *Autor:* ${author}\n` +
-                    `┃ 📝 *Título:* ${title.slice(0, 100)}\n` +
-                    `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
-                    `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
-                    `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
-                    `┃ 📤 *Compartidos:* ${formatCount(shares)}\n` +
-                    `┃ 📸 *Imágenes:* ${imageUrls.length}\n` +
-                    '┃\n' +
-                    '╰━━━━━━━━━━━━━━━━⬣';
-
-                for (let i = 0; i < Math.min(imageUrls.length, 10); i++) {
-                    await sock.sendMessage(jid, {
-                        image: { url: imageUrls[i] },
-                        caption: i === 0 ? caption : '',
-                        mimetype: 'image/jpeg'
-                    }, { quoted: msg });
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-
-                if (data.music_info?.play) {
-                    await sock.sendMessage(jid, {
-                        audio: { url: data.music_info.play },
-                        mimetype: 'audio/mpeg',
-                        fileName: `${title.slice(0, 30)}.mp3`
-                    }, { quoted: msg });
-                }
-
-                await reaccion('✅');
-                return;
-            }
-
-            // Video
-            const videoUrl = data.hdplay || data.play || data.wmplay;
             if (!videoUrl) {
-                throw new Error('TikWM no devolvió un video descargable.');
+                throw new Error('La API no devolvió un video descargable');
             }
 
             const caption = 
@@ -197,16 +146,25 @@ export default {
                 `┃ 👁️ *Vistas:* ${formatCount(views)}\n` +
                 `┃ ❤️ *Likes:* ${formatCount(likes)}\n` +
                 `┃ 💬 *Comentarios:* ${formatCount(comments)}\n` +
-                `┃ 📤 *Compartidos:* ${formatCount(shares)}\n` +
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣';
 
+            // Enviar video
             await sock.sendMessage(jid, {
                 video: { url: videoUrl },
                 caption: caption,
                 mimetype: 'video/mp4',
-                fileName: `${title.slice(0, 30)}.mp4`
+                fileName: `${title.slice(0, 30).replace(/[^\w\s]/g, '')}.mp4`
             }, { quoted: msg });
+
+            // Enviar audio si está disponible
+            if (audioUrl) {
+                await sock.sendMessage(jid, {
+                    audio: { url: audioUrl },
+                    mimetype: 'audio/mpeg',
+                    fileName: `${title.slice(0, 30).replace(/[^\w\s]/g, '')}.mp3`
+                }, { quoted: msg });
+            }
 
             await reaccion('✅');
 
