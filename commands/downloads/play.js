@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import { generateWAMessageFromContent, prepareWAMessageMedia } from '@whiskeysockets/baileys';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
@@ -277,8 +278,7 @@ async function enviarConBotones(sock, msg, video, jid) {
         '┃ ⏱️ ' + video.duracion + '\n' +
         '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
         '┃\n' +
-        '┃ 🎯 Elige con botones o\n' +
-        '┃    responde *1* o *2*\n' +
+        '┃ 🎯 Elige el formato:\n' +
         '┃\n' +
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
@@ -288,15 +288,67 @@ async function enviarConBotones(sock, msg, video, jid) {
         timestamp: Date.now()
     };
 
-    await sock.sendMessage(jid, {
-        text: caption,
-        footer: '⚡ BOT-API ',
-        buttons: [
-            { buttonId: 'play_audio', buttonText: { displayText: '🎵 Audio' }, type: 1 },
-            { buttonId: 'play_video', buttonText: { displayText: '🎬 Video' }, type: 1 }
-        ],
-        headerType: 1
-    }, { quoted: msg });
+    // Preparar thumbnail
+    let imagenMedia = null;
+    try {
+        if (video.thumbnail) {
+            imagenMedia = await prepareWAMessageMedia(
+                { image: { url: video.thumbnail } },
+                { upload: sock.waUploadToServer }
+            );
+        }
+    } catch (e) {
+        console.log('[PLAY] No se pudo subir thumbnail:', e.message);
+    }
+
+    // Construir mensaje interactivo moderno (el que SÍ funciona)
+    const msgInteractive = {
+        viewOnceMessage: {
+            message: {
+                messageContextInfo: {
+                    deviceListMetadata: {},
+                    deviceListMetadataVersion: 2
+                },
+                interactiveMessage: {
+                    body: { text: caption },
+                    footer: { text: '⚡ BOT-API ⚡' },
+                    header: imagenMedia?.imageMessage ? {
+                        imageMessage: imagenMedia.imageMessage,
+                        hasMediaAttachment: true
+                    } : {
+                        title: '🎵 YouTube Downloader',
+                        hasMediaAttachment: false
+                    },
+                    nativeFlowMessage: {
+                        buttons: [
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎵 Audio MP3',
+                                    id: 'play_audio'
+                                })
+                            },
+                            {
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: '🎬 Video MP4',
+                                    id: 'play_video'
+                                })
+                            }
+                        ],
+                        messageParamsJson: ''
+                    }
+                }
+            }
+        }
+    };
+
+    const waMsg = generateWAMessageFromContent(jid, msgInteractive, {
+        userJid: sock.user?.id || jid,
+        quoted: msg
+    });
+
+    await sock.relayMessage(jid, waMsg.message, { messageId: waMsg.key.id });
 }
 
 export default {
