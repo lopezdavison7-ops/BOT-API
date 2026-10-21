@@ -20,7 +20,7 @@ const UAS = [
 ];
 
 if (!global.playCache) global.playCache = new Map();
-if (!global.playSessions) global.playSessions = new Map();
+if (!global.playSessions) global.playSessions = {};
 
 function getUA() {
     return UAS[Math.floor(Math.random() * UAS.length)];
@@ -189,24 +189,28 @@ async function descargarBuffer(url, timeoutMs) {
     return buffer;
 }
 
-async function enviarAudio(sock, msg, video, responder) {
+export async function procesarAudio(sock, msg, video, responder) {
+    const jid = msg.key.remoteJid;
     try {
         await responder.texto('🎵 Descargando audio...');
 
         const info = await infoAudio(video.url);
         const buffer = await descargarBuffer(info.downloadUrl, 60000);
 
-        const caption =
-            '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
-            '┃ 🎧 *' + (info.titulo || video.titulo) + '*\n' +
-            '┃ 👤 ' + (info.autor || video.autor) + '\n' +
-            '┃ ⏱️ ' + video.duracion + '\n' +
-            '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
-            '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
-
-        await sock.sendMessage(msg.key.remoteJid, {
+        await sock.sendMessage(jid, {
             audio: buffer,
-            mimetype: 'audio/mpeg'
+            mimetype: 'audio/mpeg',
+            fileName: `${String(info.titulo || video.titulo).replace(/[^\w\s.-]/g, '').slice(0, 80)}.mp3`,
+            contextInfo: {
+                externalAdReply: {
+                    title: info.titulo || video.titulo,
+                    body: info.autor || video.autor,
+                    thumbnailUrl: video.thumbnail,
+                    mediaType: 2,
+                    mediaUrl: video.url,
+                    sourceUrl: video.url
+                }
+            }
         }, { quoted: msg });
     } catch (error) {
         console.error('[PLAY-AUDIO] Error:', error?.message || error);
@@ -220,7 +224,8 @@ async function enviarAudio(sock, msg, video, responder) {
     }
 }
 
-async function enviarVideo(sock, msg, video, responder) {
+export async function procesarVideo(sock, msg, video, responder) {
+    const jid = msg.key.remoteJid;
     try {
         await responder.texto('🎬 Descargando video...');
 
@@ -239,14 +244,14 @@ async function enviarVideo(sock, msg, video, responder) {
             '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
         if (buffer.length > 16 * 1024 * 1024) {
-            await sock.sendMessage(msg.key.remoteJid, {
+            await sock.sendMessage(jid, {
                 document: buffer,
                 mimetype: 'video/mp4',
                 fileName: `${String(titulo).replace(/[^\w\s.-]/g, '').slice(0, 80)}.mp4`,
                 caption
             }, { quoted: msg });
         } else {
-            await sock.sendMessage(msg.key.remoteJid, {
+            await sock.sendMessage(jid, {
                 video: buffer,
                 mimetype: 'video/mp4',
                 caption
@@ -273,47 +278,40 @@ async function enviarConBotones(sock, msg, video, jid) {
         '┃ ⏱️ ' + video.duracion + '\n' +
         '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
         '┃\n' +
-        '┃ 📥 Elige el formato:\n' +
+        '┃ 🎯 Elige con botones o\n' +
+        '┃    responde *1* o *2*\n' +
         '┃\n' +
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-    const sessionKey = msg.key.participant || msg.key.remoteJid;
-    global.playSessions.set(sessionKey, {
+    const sessionKey = msg.key.participant || msg.key.senderPn || msg.key.participantAlt || msg.key.remoteJid;
+    global.playSessions[sessionKey] = {
         video,
         timestamp: Date.now()
-    });
-
-    const buttons = [
-        { buttonId: 'play_audio', buttonText: { displayText: '🎵 Audio' }, type: 1 },
-        { buttonId: 'play_video', buttonText: { displayText: '🎬 Video' }, type: 1 }
-    ];
-
-    const buttonMessage = {
-        image: { url: video.thumbnail },
-        caption: caption,
-        footer: 'Selecciona una opción',
-        buttons: buttons,
-        headerType: 4,
-        contextInfo: {
-            mentionedJid: [msg.key.participant || msg.key.remoteJid]
-        }
     };
 
-    await sock.sendMessage(jid, buttonMessage, { quoted: msg });
+    await sock.sendMessage(jid, {
+        text: caption,
+        footer: '⚡ BOT-API ',
+        buttons: [
+            { buttonId: 'play_audio', buttonText: { displayText: '🎵 Audio' }, type: 1 },
+            { buttonId: 'play_video', buttonText: { displayText: '🎬 Video' }, type: 1 }
+        ],
+        headerType: 1
+    }, { quoted: msg });
 }
 
 export default {
     nombre: 'play',
     categoria: 'Descargas',
     alias: ['p', 'musica', 'reproducir', 'song', 'play2', 'playvideo', 'video'],
-    descripcion: '.play → audio directo | .play2 → video directo',
+    descripcion: '.play → audio directo | .play2 → video directo | .play <link> → botones',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid, nombreComando }) => {
         const query = String(argumento || '').trim();
 
         if (!query) {
             return await responder.texto(
-                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '╭━━〔  𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
@@ -336,9 +334,9 @@ export default {
                 await enviarConBotones(sock, msg, video, jid);
             } else {
                 if (esVideo) {
-                    await enviarVideo(sock, msg, video, responder);
+                    await procesarVideo(sock, msg, video, responder);
                 } else {
-                    await enviarAudio(sock, msg, video, responder);
+                    await procesarAudio(sock, msg, video, responder);
                 }
             }
 
