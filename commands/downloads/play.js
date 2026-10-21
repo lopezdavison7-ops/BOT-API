@@ -288,7 +288,6 @@ async function enviarConBotones(sock, msg, video, jid) {
         timestamp: Date.now()
     };
 
-    // Preparar thumbnail
     let imagenMedia = null;
     try {
         if (video.thumbnail) {
@@ -301,7 +300,6 @@ async function enviarConBotones(sock, msg, video, jid) {
         console.log('[PLAY] No se pudo subir thumbnail:', e.message);
     }
 
-    // Construir mensaje interactivo moderno
     const msgInteractive = {
         viewOnceMessage: {
             message: {
@@ -355,7 +353,7 @@ export default {
     nombre: 'play',
     categoria: 'Descargas',
     alias: ['p', 'musica', 'reproducir', 'song', 'play2', 'playvideo', 'video'],
-    descripcion: '.play → audio directo | .play2 → video directo | .play <link> → botones',
+    descripcion: '.play → botones | .play2 → video directo',
 
     ejecutar: async ({ sock, msg, argumento, responder, jid, nombreComando }) => {
         const query = String(argumento || '').trim();
@@ -367,28 +365,26 @@ export default {
                 '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
                 '┃ 💡 Ejemplos:\n' +
-                '┃ ➪ .play hola (audio)\n' +
-                '┃ ➪ .play2 hola (video)\n' +
+                '┃ ➪ .play hola (botones)\n' +
+                '┃ ➪ .play2 hola (video directo)\n' +
                 '┃ ➪ .play https://youtu.be/...\n' +
                 '┃\n' +
                 '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
             );
         }
 
-        const esVideo = ['play2', 'playvideo', 'video'].includes(nombreComando);
-        const esLink = esURL(query);
+        // Solo .play2, .playvideo, .video envían directo sin botones
+        const enviarDirecto = ['play2', 'playvideo', 'video'].includes(nombreComando);
 
         try {
             const video = await buscarYouTube(query);
 
-            if (esLink) {
-                await enviarConBotones(sock, msg, video, jid);
+            if (enviarDirecto) {
+                // Envío directo de video (solo con play2/playvideo/video)
+                await procesarVideo(sock, msg, video, responder);
             } else {
-                if (esVideo) {
-                    await procesarVideo(sock, msg, video, responder);
-                } else {
-                    await procesarAudio(sock, msg, video, responder);
-                }
+                // CUALQUIER OTRO caso (.play, .p, .musica, etc.) muestra botones
+                await enviarConBotones(sock, msg, video, jid);
             }
 
         } catch (error) {
