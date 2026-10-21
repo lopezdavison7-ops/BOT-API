@@ -50,29 +50,25 @@ export default {
             const now = Date.now();
 
             if (isUrl) {
-                // Descarga directa por URL
                 const res = await fetch(
                     `${FAA_API}/tiktok?url=${encodeURIComponent(query)}`,
                     { headers: HEADERS, timeout: 30000 }
                 );
                 
                 const text = await res.text();
-                console.log('[TT] Descarga respuesta (primeros 500):', text.slice(0, 500));
-                
                 const json = JSON.parse(text);
-                console.log('[TT] Descarga JSON keys:', Object.keys(json));
-                console.log('[TT] Descarga estado:', json.estado, typeof json.estado);
                 
-                // Manejar tanto true como "verdadero"
-                const estadoValido = json.estado === true || json.estado === 'verdadero';
+                console.log('[TT] Descarga keys:', Object.keys(json));
                 
-                if (estadoValido && json.resultado) {
+                if (json.status && json.result) {
+                    videoData = json.result;
+                } else if (json.estado && json.resultado) {
                     videoData = json.resultado;
                 } else {
+                    console.log('[TT] Descarga JSON completo:', JSON.stringify(json).slice(0, 500));
                     throw new Error('La API no devolvió datos válidos');
                 }
             } else {
-                // Búsqueda
                 const cacheKey = query.toLowerCase();
                 const cached = searchCache.get(cacheKey);
 
@@ -85,23 +81,21 @@ export default {
                     );
                     
                     const text = await res.text();
-                    console.log('[TT] Búsqueda respuesta (primeros 500):', text.slice(0, 500));
-                    
                     const json = JSON.parse(text);
-                    console.log('[TT] Búsqueda JSON keys:', Object.keys(json));
-                    console.log('[TT] Búsqueda estado:', json.estado, typeof json.estado);
-                    console.log('[TT] Búsqueda resultado tipo:', typeof json.resultado);
-                    console.log('[TT] Búsqueda resultado length:', Array.isArray(json.resultado) ? json.resultado.length : 'no es array');
                     
-                    // Manejar tanto true como "verdadero"
-                    const estadoValido = json.estado === true || json.estado === 'verdadero';
+                    console.log('[TT] Búsqueda keys:', Object.keys(json));
+                    console.log('[TT] Búsqueda status:', json.status);
+                    console.log('[TT] Búsqueda result length:', Array.isArray(json.result) ? json.result.length : 'no es array');
                     
-                    if (estadoValido && json.resultado && Array.isArray(json.resultado) && json.resultado.length > 0) {
-                        const primerVideo = json.resultado[0];
-                        console.log('[TT] Primer video:', JSON.stringify(primerVideo).slice(0, 300));
+                    const resultArray = json.result || json.resultado;
+                    
+                    if ((json.status || json.estado) && resultArray && Array.isArray(resultArray) && resultArray.length > 0) {
+                        const primerVideo = resultArray[0];
+                        console.log('[TT] Primer video keys:', Object.keys(primerVideo));
+                        console.log('[TT] Primer video:', JSON.stringify(primerVideo).slice(0, 500));
                         
-                        // Construir URL de TikTok para descargar
-                        const username = primerVideo.autor?.username || primerVideo.author?.username || 'user';
+                        const authorData = primerVideo.author || primerVideo.autor || {};
+                        const username = authorData.username || authorData.nombre_de_usuario || authorData.unique_id || 'user';
                         const videoId = primerVideo.id;
                         const videoUrl = `https://www.tiktok.com/@${username}/video/${videoId}`;
                         
@@ -113,14 +107,16 @@ export default {
                         );
                         
                         const textDownload = await resDownload.text();
-                        console.log('[TT] Descarga desde búsqueda (primeros 500):', textDownload.slice(0, 500));
-                        
                         const jsonDownload = JSON.parse(textDownload);
-                        const estadoDownloadValido = jsonDownload.estado === true || jsonDownload.estado === 'verdadero';
                         
-                        if (estadoDownloadValido && jsonDownload.resultado) {
+                        console.log('[TT] Descarga desde búsqueda keys:', Object.keys(jsonDownload));
+                        
+                        if (jsonDownload.status && jsonDownload.result) {
+                            videoData = jsonDownload.result;
+                        } else if (jsonDownload.estado && jsonDownload.resultado) {
                             videoData = jsonDownload.resultado;
                         } else {
+                            console.log('[TT] Descarga JSON completo:', JSON.stringify(jsonDownload).slice(0, 500));
                             throw new Error('No se pudo descargar el video de búsqueda');
                         }
                     } else {
@@ -133,13 +129,25 @@ export default {
                 }
             }
 
-            // Extraer información del video
-            const author = videoData.autor?.nickname || videoData.autor?.username || 
-                          videoData.author?.nickname || videoData.author?.username || 'Desconocido';
+            // Extraer información - manejar ambas estructuras (inglés y español)
+            const authorData = videoData.author || videoData.autor || {};
+            const author = authorData.nickname || authorData.apodo || authorData.username || authorData.nombre_de_usuario || 'Desconocido';
             const title = videoData.title || videoData.título || 'TikTok';
-            const videoUrl = videoData.alternativas?.seleccionado || videoData.alternativas?.hd || 
-                            videoData.datos || videoData.url_nowm;
-            const audioUrl = videoData.music_info?.url || videoData.música?.url;
+            
+            // URL del video - intentar múltiples campos
+            const videoUrl = videoData.alternativas?.seleccionado || 
+                            videoData.alternativas?.hd || 
+                            videoData.datos || 
+                            videoData.url_nowm ||
+                            videoData.play ||
+                            videoData.hdplay;
+            
+            // URL del audio
+            const musicData = videoData.music_info || videoData.música || {};
+            const audioUrl = musicData.url || videoData.music;
+
+            console.log('[TT] Video URL encontrada:', videoUrl ? videoUrl.slice(0, 100) + '...' : 'NO ENCONTRADA');
+            console.log('[TT] Audio URL encontrada:', audioUrl ? audioUrl.slice(0, 100) + '...' : 'NO ENCONTRADA');
 
             const formatCount = (n) => {
                 if (!n && n !== 0) return '0';
@@ -150,10 +158,10 @@ export default {
                 return String(num);
             };
 
-            const stats = videoData.estadísticas || videoData.stats || {};
-            const views = stats.vistas || stats.views || 0;
-            const likes = stats['Me gusta'] || stats.likes || 0;
-            const comments = stats.comentario || stats.comments || 0;
+            const stats = videoData.estadísticas || videoData.stats || videoData.statistics || {};
+            const views = stats.vistas || stats.views || stats.view_count || 0;
+            const likes = stats['Me gusta'] || stats.likes || stats.like_count || stats.digg_count || 0;
+            const comments = stats.comentario || stats.comments || stats.comment_count || 0;
 
             if (!videoUrl) {
                 console.log('[TT] videoData completo:', JSON.stringify(videoData).slice(0, 1000));
@@ -170,7 +178,6 @@ export default {
                 '┃\n' +
                 '╰━━━━━━━━━━━━━━━━⬣';
 
-            // Enviar video
             await sock.sendMessage(jid, {
                 video: { url: videoUrl },
                 caption: caption,
@@ -178,7 +185,6 @@ export default {
                 fileName: `${title.slice(0, 30).replace(/[^\w\s]/g, '')}.mp4`
             }, { quoted: msg });
 
-            // Enviar audio si está disponible
             if (audioUrl) {
                 await sock.sendMessage(jid, {
                     audio: { url: audioUrl },
@@ -190,7 +196,7 @@ export default {
             await reaccion('✅');
 
         } catch (error) {
-            console.error('[TIKTOK] Error completo:', error);
+            console.error('[TIKTOK] Error completo:', error?.message || error);
             await reaccion('❌');
             await responder.texto(
                 '❌ Ocurrió un error al procesar el contenido.\n\n' +
