@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
@@ -20,6 +21,7 @@ const UAS = [
 ];
 
 if (!global.playCache) global.playCache = new Map();
+if (!global.playSessions) global.playSessions = new Map();
 
 function getUA() {
     return UAS[Math.floor(Math.random() * UAS.length)];
@@ -96,7 +98,6 @@ async function videoDesdeURL(url) {
 
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
-    // Obtener metadatos del video usando la API de búsqueda
     try {
         const data = await getJSON(`${API_BUSCAR}?q=${videoId}`, 10000);
         if ((data.status === true || data.estado === true) && data.data && data.data.length > 0) {
@@ -107,7 +108,6 @@ async function videoDesdeURL(url) {
         console.log('[PLAY] No se pudieron obtener metadatos de la URL, usando valores por defecto');
     }
 
-    // Si falla la búsqueda, devolver valores básicos
     return {
         videoId,
         url: videoUrl,
@@ -265,6 +265,45 @@ async function enviarVideo(sock, msg, video, responder) {
     }
 }
 
+async function enviarConBotones(sock, msg, video, jid) {
+    const caption = 
+        '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+        '┃\n' +
+        '┃ 🎧 *' + video.titulo + '*\n' +
+        '┃ 👤 ' + video.autor + '\n' +
+        '┃ ⏱️ ' + video.duracion + '\n' +
+        '┃ 👀 ' + formatearVistas(video.vistas) + '\n' +
+        '┃\n' +
+        '┃ 📥 Elige el formato:\n' +
+        '┃\n' +
+        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
+
+    // Guardar sesión para manejar la respuesta del botón
+    const sessionKey = msg.key.participant || msg.key.remoteJid;
+    global.playSessions.set(sessionKey, {
+        video,
+        timestamp: Date.now()
+    });
+
+    const buttons = [
+        { buttonId: 'play_audio', buttonText: { displayText: '🎵 Audio' }, type: 1 },
+        { buttonId: 'play_video', buttonText: { displayText: '🎬 Video' }, type: 1 }
+    ];
+
+    const buttonMessage = {
+        image: { url: video.thumbnail },
+        caption: caption,
+        footer: 'Selecciona una opción',
+        buttons: buttons,
+        headerType: 4,
+        contextInfo: {
+            mentionedJid: [msg.key.participant || msg.key.remoteJid]
+        }
+    };
+
+    await sock.sendMessage(jid, buttonMessage, { quoted: msg });
+}
+
 export default {
     nombre: 'play',
     categoria: 'Descargas',
@@ -293,11 +332,18 @@ export default {
 
         try {
             const video = await buscarYouTube(query);
+            const esLink = esURL(query);
 
-            if (esVideo) {
-                await enviarVideo(sock, msg, video, responder);
+            // Si es link directo, mostrar botones para elegir
+            if (esLink) {
+                await enviarConBotones(sock, msg, video, jid);
             } else {
-                await enviarAudio(sock, msg, video, responder);
+                // Si es búsqueda, enviar directamente según el comando
+                if (esVideo) {
+                    await enviarVideo(sock, msg, video, responder);
+                } else {
+                    await enviarAudio(sock, msg, video, responder);
+                }
             }
 
         } catch (error) {
