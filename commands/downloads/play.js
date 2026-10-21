@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
-import { generateWAMessageFromContent, prepareWAMessageMedia } from '@whiskeysockets/baileys';
+import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
@@ -301,7 +301,7 @@ async function enviarConBotones(sock, msg, video, jid) {
         console.log('[PLAY] No se pudo subir thumbnail:', e.message);
     }
 
-    // Construir mensaje interactivo moderno (el que SÍ funciona)
+    // Construir mensaje interactivo moderno
     const msgInteractive = {
         viewOnceMessage: {
             message: {
