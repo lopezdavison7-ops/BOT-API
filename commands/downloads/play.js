@@ -104,7 +104,7 @@ async function videoDesdeURL(url) {
             return normVideo(v);
         }
     } catch (error) {
-        console.log('[PLAY] No se pudieron obtener metadatos de la URL, usando valores por defecto');
+        console.log('[PLAY] No se pudieron obtener metadatos de la URL');
     }
 
     return {
@@ -200,7 +200,6 @@ export async function procesarAudio(sock, msg, video, responder) {
         await sock.sendMessage(jid, {
             audio: buffer,
             mimetype: 'audio/mpeg',
-            fileName: `${String(info.titulo || video.titulo).replace(/[^\w\s.-]/g, '').slice(0, 80)}.mp3`,
             contextInfo: {
                 externalAdReply: {
                     title: info.titulo || video.titulo,
@@ -311,7 +310,7 @@ export default {
 
         if (!query) {
             return await responder.texto(
-                '╭━━〔  𝐏𝐋𝐀𝐘 〕━━⬣\n' +
+                '╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n' +
                 '┃\n' +
                 '┃ ❌ Escribe el nombre o URL\n' +
                 '┃\n' +
@@ -325,10 +324,10 @@ export default {
         }
 
         const esVideo = ['play2', 'playvideo', 'video'].includes(nombreComando);
+        const esLink = esURL(query);
 
         try {
             const video = await buscarYouTube(query);
-            const esLink = esURL(query);
 
             if (esLink) {
                 await enviarConBotones(sock, msg, video, jid);
