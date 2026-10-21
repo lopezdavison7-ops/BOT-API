@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
-import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
 
 const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
 
@@ -278,7 +277,6 @@ async function enviarConBotones(sock, msg, video, jid) {
         '┃\n' +
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣';
 
-    // Guardar sesión para manejar la respuesta del botón
     const sessionKey = msg.key.participant || msg.key.remoteJid;
     global.playSessions.set(sessionKey, {
         video,
@@ -334,11 +332,9 @@ export default {
             const video = await buscarYouTube(query);
             const esLink = esURL(query);
 
-            // Si es link directo, mostrar botones para elegir
             if (esLink) {
                 await enviarConBotones(sock, msg, video, jid);
             } else {
-                // Si es búsqueda, enviar directamente según el comando
                 if (esVideo) {
                     await enviarVideo(sock, msg, video, responder);
                 } else {
