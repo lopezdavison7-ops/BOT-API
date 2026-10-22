@@ -3,7 +3,7 @@ import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
     nombre: 'akinator',
-    categoria: 'Juegos',
+    categoria: 'fun',
     alias: ['aki', 'genio', 'adivina'],
     descripcion: 'Akinator: piensa en un personaje y yo lo adivino (ES/EN)',
     uso: '.akinator',
