@@ -7,7 +7,7 @@ import {
 export default {
     nombre: 'adivinanza',
 
-    categoria: 'Diversión',
+    categoria: 'fun',
 
     alias: [
         'acertijo'
