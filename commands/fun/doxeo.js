@@ -1,7 +1,7 @@
 
 export default {
     nombre: 'doxeo',
-    categoria: 'Diversión',
+    categoria: 'fun',
     alias: ['dox', 'fakedox', 'info'],
     descripcion: 'Simula un doxeo falso realista basado en el número del usuario',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
