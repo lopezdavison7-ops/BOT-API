@@ -1,7 +1,7 @@
 
 export default {
     nombre: '8ball',
-    categoria: 'Diversión',
+    categoria: 'fun',
     alias: ['bola', 'magicball'],
     descripcion: 'Responde una pregunta con la bola mágica 8ball',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
