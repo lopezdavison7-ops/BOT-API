@@ -1,7 +1,7 @@
 
 export default {
     nombre: 'chiste',
-    categoria: 'Diversión',
+    categoria: 'fun',
     alias: ['chistes'],
     descripcion: 'Cuenta un chiste aleatorio',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
