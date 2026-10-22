@@ -1,7 +1,7 @@
 
 export default {
     nombre: 'dado',
-    categoria: 'Diversión',
+    categoria: 'fun',
     alias: ['dados'],
     descripcion: 'Tira un dado de 6 caras',
     ejecutar: async ({ msg, responder, argumento, sock }) => {
