@@ -6,7 +6,7 @@ import {
 export default {
     nombre: 'adivinanzacancelar',
 
-    categoria: 'Diversión',
+    categoria: 'fun',
 
     alias: [
         'cancelaradivinanza'
