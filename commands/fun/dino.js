@@ -3,7 +3,7 @@ import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 export default {
     nombre: 'dino',
-    categoria: 'Juegos',
+    categoria: 'fun',
     alias: ['dinosaurio', 'trex', 'chrome'],
     descripcion: 'Juego del dinosaurio estilo Chrome, sin lag',
     uso: '.dino',
