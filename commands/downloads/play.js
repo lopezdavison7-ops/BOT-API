@@ -1,14 +1,28 @@
 import fetch from 'node-fetch';
 import https from 'node:https';
+import http from 'http';
 import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
-const AGENTE = new https.Agent({ keepAlive: true, maxSockets: 8 });
-const FAA_API = 'https://api-faa.my.id/faa';
+const ALYA_API = 'https://api.alyacore.xyz';
+const ALYA_KEY = 'OBOE-AERETHIX';
 
-const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
+const AGENTE_HTTPS = new https.Agent({ 
+    keepAlive: true, 
+    maxSockets: 25,
+    maxFreeSockets: 10,
+    timeout: 60000,
+    freeSocketTimeout: 30000
+});
+
+const AGENTE_HTTP = new http.Agent({ 
+    keepAlive: true, 
+    maxSockets: 25,
+    maxFreeSockets: 10
+});
+
 const CACHE_TTL = 5 * 60 * 1000;
 const SESION_TTL = 10 * 60 * 1000;
-const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics'];
+const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics', 'audio', 'letra'];
 const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 'que', 'aaa', 'a']);
 
 const UAS = [
@@ -76,24 +90,35 @@ function limpiarSesionesViejas() {
     }
 }
 
-async function getJSON(url, timeoutMs) {
-    const res = await fetch(url, {
-        agent: AGENTE,
+async function alyaFetch(endpoint, params = {}, timeoutMs = 15000) {
+    const url = new URL(`${ALYA_API}${endpoint}`);
+    for (const [k, v] of Object.entries(params)) {
+        url.searchParams.set(k, v);
+    }
+    url.searchParams.set('key', ALYA_KEY);
+    
+    const inicio = Date.now();
+    const res = await fetch(url.toString(), {
+        agent: url.protocol === 'https:' ? AGENTE_HTTPS : AGENTE_HTTP,
         headers: {
             'Accept': 'application/json',
             'User-Agent': getUA(),
-            'Referer': 'https://www.youtube.com/'
+            'Referer': 'https://alyacore.xyz/'
         },
         signal: AbortSignal.timeout(timeoutMs)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    
+    const ms = Date.now() - inicio;
+    console.log(`[ALYA] ${endpoint} → ${res.status} (${ms}ms)`);
+    
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
 }
 
 function normVideo(v) {
     return {
-        videoId: v.videoId,
-        url: v.url || `https://www.youtube.com/watch?v=${v.videoId}`,
+        videoId: v.videoId || v.id,
+        url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id}`,
         titulo: v.title || v.título || 'Sin título',
         thumbnail: v.image || v.imagen || v.thumbnail || '',
         duracion: v.duration || v.duración || '0:00',
@@ -103,12 +128,34 @@ function normVideo(v) {
 }
 
 async function buscarUna(query) {
-    const data = await getJSON(`${API_BUSCAR}?q=${encodeURIComponent(query)}`, 10000);
-    if (data.status !== true && data.estado !== true) throw new Error('API sin éxito');
-    const lista = data.data || data.datos || [];
-    const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-    if (!v) throw new Error('Sin resultados');
-    return normVideo(v);
+    const endpoints = ['/sr/youtube', '/search/youtube', '/sr/yt', '/search/yt'];
+    let ultimoErr = null;
+    
+    for (const ep of endpoints) {
+        try {
+            const data = await alyaFetch(ep, { query: query, q: query }, 12000);
+            console.log(`[ALYA-SEARCH] ${ep} keys:`, Object.keys(data || {}));
+            
+            if (data?.status === false || data?.success === false) {
+                ultimoErr = new Error(data?.message || 'API sin éxito');
+                continue;
+            }
+            
+            const lista = data?.data || data?.result || data?.results || [];
+            if (!Array.isArray(lista) || lista.length === 0) continue;
+            
+            const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
+            if (v) {
+                console.log(`[ALYA-SEARCH] ✅ ${ep} OK: "${v.title || v.título}"`);
+                return normVideo(v);
+            }
+        } catch (e) {
+            ultimoErr = e;
+            console.log(`[ALYA-SEARCH] ${ep} falló: ${e.message}`);
+        }
+    }
+    
+    throw ultimoErr || new Error('Sin resultados en Alya');
 }
 
 async function videoDesdeURL(url) {
@@ -118,13 +165,14 @@ async function videoDesdeURL(url) {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     try {
-        const data = await getJSON(`${API_BUSCAR}?q=${videoId}`, 10000);
-        if ((data.status === true || data.estado === true) && data.data && data.data.length > 0) {
-            const v = data.data.find(x => x.videoId === videoId) || data.data[0];
+        const data = await alyaFetch('/sr/youtube', { query: videoId, q: videoId }, 12000);
+        const lista = data?.data || data?.result || data?.results || [];
+        if (Array.isArray(lista) && lista.length > 0) {
+            const v = lista.find(x => (x.videoId || x.id) === videoId) || lista[0];
             return normVideo(v);
         }
     } catch (error) {
-        console.log('[PLAY] No se pudieron obtener metadatos de la URL');
+        console.log('[ALYA] No se pudieron obtener metadatos de la URL:', error.message);
     }
 
     return {
@@ -183,14 +231,15 @@ async function buscarYouTube(query) {
 
 async function descargarMedia(url, timeoutMs, tipo) {
     try {
-        console.log(`[PLAY-${tipo}] Descargando: ${url.substring(0, 100)}...`);
+        console.log(`[DL-${tipo}] Descargando: ${url.substring(0, 100)}...`);
+        const inicio = Date.now();
         
         const res = await fetch(url, {
-            agent: AGENTE,
+            agent: url.startsWith('https') ? AGENTE_HTTPS : AGENTE_HTTP,
             headers: {
                 'User-Agent': getUA(),
                 'Accept': '*/*',
-                'Referer': 'https://www.youtube.com/'
+                'Referer': 'https://alyacore.xyz/'
             },
             signal: AbortSignal.timeout(timeoutMs)
         });
@@ -199,10 +248,11 @@ async function descargarMedia(url, timeoutMs, tipo) {
 
         const contentType = (res.headers.get('content-type') || '').split(';')[0].trim();
         const buffer = Buffer.from(await res.arrayBuffer());
+        const ms = Date.now() - inicio;
 
         if (!buffer.length) throw new Error('Buffer vacío');
 
-        console.log(`[PLAY-${tipo}] Descargado: ct=${contentType} bytes=${buffer.length}`);
+        console.log(`[DL-${tipo}] OK: ${buffer.length} bytes, ct=${contentType} (${ms}ms)`);
 
         if (tipo === 'audio') {
             const mime = detectarFormatoAudio(buffer);
@@ -219,73 +269,50 @@ async function descargarMedia(url, timeoutMs, tipo) {
         return { buffer, mimetype: contentType || 'application/octet-stream' };
 
     } catch (e) {
-        console.log(`[PLAY-${tipo}] Error: ${e.message}`);
+        console.log(`[DL-${tipo}] Error: ${e.message}`);
         throw e;
     }
 }
 
-async function audioDesdeFaa(videoUrl) {
-    const endpoints = [
-        `${FAA_API}/youtube?url=`,
-        `${FAA_API}/yt?url=`,
-        `${FAA_API}/ytmp3?url=`
-    ];
-
-    for (const endpoint of endpoints) {
-        try {
-            console.log(`[PLAY-AUDIO] Faa endpoint: ${endpoint}`);
-            const data = await getJSON(`${endpoint}${encodeURIComponent(videoUrl)}`, 15000);
-            console.log('[PLAY-AUDIO] Faa JSON completo:', JSON.stringify(data));
-            
-            if (data?.status === true || data?.status === 'true') {
-                const result = data.result || data.data || {};
-                const urlMp3 = result.mp3 || result.audio || result.url || result.download;
-                
-                if (urlMp3) {
-                    console.log('[PLAY-AUDIO] ✅ Faa OK:', urlMp3);
-                    return {
-                        urlMp3,
-                        titulo: result.title || result.titulo || '',
-                        duracion: result.duration || result.duracion || ''
-                    };
-                }
-            }
-            
-            console.log('[PLAY-AUDIO] ❌ Faa: respuesta inválida');
-        } catch (e) {
-            console.log('[PLAY-AUDIO] ❌ Faa error:', e.message);
-        }
-    }
+async function descargarDesdeAlya(videoUrl, tipo) {
+    const endpointsAudio = ['/dl/youtube', '/dl/yt', '/dl/ytmp3', '/dl/yta', '/downloader/youtube'];
+    const endpointsVideo = ['/dl/ytmp4', '/dl/yt-video', '/dl/youtube-video', '/downloader/youtube'];
+    const endpoints = tipo === 'audio' ? endpointsAudio : endpointsVideo;
     
-    return null;
-}
-
-async function videoDesdeFaa(videoUrl) {
-    const endpoints = [
-        `${FAA_API}/ytmp4?url=`,
-        `${FAA_API}/youtube-video?url=`,
-        `${FAA_API}/yt-video?url=`
-    ];
-
-    for (const endpoint of endpoints) {
+    for (const ep of endpoints) {
         try {
-            console.log(`[PLAY-VIDEO] Faa endpoint: ${endpoint}`);
-            const data = await getJSON(`${endpoint}${encodeURIComponent(videoUrl)}`, 15000);
-            console.log('[PLAY-VIDEO] Faa JSON completo:', JSON.stringify(data));
+            const data = await alyaFetch(ep, { url: videoUrl }, 25000);
+            console.log(`[ALYA-DL] ${ep} keys:`, Object.keys(data || {}));
             
-            if (data?.status === true || data?.status === 'true') {
-                const result = data.result || data.data || {};
-                const urlVideo = result.download_url || result.video || result.url || result.download || result.mp4;
-                
-                if (urlVideo) {
-                    console.log('[PLAY-VIDEO] ✅ Faa OK:', urlVideo);
-                    return urlVideo;
-                }
+            if (data?.status === false || data?.success === false) {
+                console.log(`[ALYA-DL] ${ep}: ${data?.message || 'error'}`);
+                continue;
             }
             
-            console.log('[PLAY-VIDEO] ❌ Faa: respuesta inválida');
+            console.log(`[ALYA-DL] ${ep} JSON completo:`, JSON.stringify(data).substring(0, 500));
+            
+            const result = data?.data || data?.result || data;
+            let urlDescarga = null;
+            
+            if (tipo === 'audio') {
+                urlDescarga = result?.mp3 || result?.audio || result?.url || result?.download || result?.link;
+                if (typeof urlDescarga === 'object' && urlDescarga?.url) urlDescarga = urlDescarga.url;
+            } else {
+                urlDescarga = result?.mp4 || result?.video || result?.download_url || result?.url || result?.download || result?.link;
+                if (typeof urlDescarga === 'object' && urlDescarga?.url) urlDescarga = urlDescarga.url;
+            }
+            
+            if (urlDescarga && typeof urlDescarga === 'string' && urlDescarga.startsWith('http')) {
+                console.log(`[ALYA-DL] ✅ ${ep} OK: ${urlDescarga.substring(0, 80)}`);
+                return {
+                    urlDescarga,
+                    titulo: result?.title || result?.titulo || '',
+                    duracion: result?.duration || result?.duracion || '',
+                    autor: result?.author || result?.autor || result?.channel || ''
+                };
+            }
         } catch (e) {
-            console.log('[PLAY-VIDEO] ❌ Faa error:', e.message);
+            console.log(`[ALYA-DL] ${ep} falló: ${e.message}`);
         }
     }
     
@@ -297,16 +324,16 @@ export async function procesarAudio(sock, msg, video, responder) {
     try {
         await responder.texto('🎵 Descargando audio...');
 
-        const fuenteFaa = await audioDesdeFaa(video.url);
+        const fuente = await descargarDesdeAlya(video.url, 'audio');
         
-        if (!fuenteFaa) {
-            throw new Error('Faa no devolvió enlace de audio');
+        if (!fuente) {
+            throw new Error('Alya no devolvió enlace de audio');
         }
 
-        const resultado = await descargarMedia(fuenteFaa.urlMp3, 60000, 'audio');
+        const resultado = await descargarMedia(fuente.urlDescarga, 60000, 'audio');
         const { buffer, mimetype } = resultado;
         
-        const duracionFinal = fuenteFaa.duracion || video.duracion;
+        const duracionFinal = fuente.duracion || video.duracion;
         const segundos = parsearDuracion(duracionFinal);
         const extension = mimetype === 'audio/mp4' ? 'm4a' : (mimetype === 'audio/ogg' ? 'ogg' : 'mp3');
 
@@ -318,8 +345,8 @@ export async function procesarAudio(sock, msg, video, responder) {
             seconds: segundos,
             contextInfo: {
                 externalAdReply: {
-                    title: fuenteFaa.titulo || video.titulo,
-                    body: video.autor,
+                    title: fuente.titulo || video.titulo,
+                    body: fuente.autor || video.autor,
                     thumbnailUrl: video.thumbnail,
                     mediaType: 2,
                     mediaUrl: video.url,
@@ -345,13 +372,13 @@ export async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
 
-        const urlFaa = await videoDesdeFaa(video.url);
+        const fuente = await descargarDesdeAlya(video.url, 'video');
         
-        if (!urlFaa) {
-            throw new Error('Faa no devolvió enlace de video');
+        if (!fuente) {
+            throw new Error('Alya no devolvió enlace de video');
         }
 
-        const resultado = await descargarMedia(urlFaa, 120000, 'video');
+        const resultado = await descargarMedia(fuente.urlDescarga, 120000, 'video');
         const { buffer } = resultado;
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
 
