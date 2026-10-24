@@ -8,6 +8,7 @@ const FAA_API = 'https://api-faa.my.id/faa';
 const API_BUSCAR = 'https://api.delirius.online/search/ytsearch';
 const API_MP3 = 'https://api.delirius.online/download/ytmp3';
 const API_MP4 = 'https://api.delirius.online/download/ytmp4';
+const COBALT_API = 'https://api.cobalt.tools';
 
 const PIPED_INSTANCES = [
     'https://pipedapi.kavin.rocks',
@@ -202,6 +203,8 @@ async function descargarMedia(url, timeoutMs, tipo) {
 
     for (let intento = 1; intento <= 2; intento++) {
         try {
+            console.log(`[PLAY-${tipo}] Intento ${intento}: Descargando ${url.substring(0, 80)}...`);
+            
             const res = await fetch(url, {
                 agent: AGENTE,
                 headers: {
@@ -219,16 +222,16 @@ async function descargarMedia(url, timeoutMs, tipo) {
 
             if (!buffer.length) throw new Error('Buffer vacío');
 
+            console.log(`[PLAY-${tipo}] Intento ${intento}: ct=${contentType} bytes=${buffer.length}`);
+
             if (tipo === 'audio') {
                 const mime = detectarFormatoAudio(buffer);
-                console.log(`[PLAY-AUDIO] Intento ${intento}: ct=${contentType} bytes=${buffer.length} formato=${mime}`);
                 if (!mime) throw new Error('Audio no reconocido (ct=' + contentType + ')');
                 return { buffer, mimetype: mime };
             }
 
             if (tipo === 'video') {
                 const ok = esMp4Valido(buffer);
-                console.log(`[PLAY-VIDEO] Intento ${intento}: ct=${contentType} bytes=${buffer.length} mp4=${ok}`);
                 if (!ok) throw new Error('Video no reconocido (ct=' + contentType + ')');
                 return { buffer, mimetype: 'video/mp4' };
             }
@@ -247,30 +250,75 @@ async function descargarMedia(url, timeoutMs, tipo) {
 
 async function audioDesdeFaa(videoUrl) {
     try {
+        console.log('[PLAY-AUDIO] Intentando Faa...');
         const data = await getJSON(`${FAA_API}/youtube?url=${encodeURIComponent(videoUrl)}`, 20000);
+        console.log('[PLAY-AUDIO] Faa respuesta:', JSON.stringify(data).substring(0, 200));
+        
         if (data?.status === true && data?.result?.mp3) {
-            console.log('[PLAY-AUDIO] Faa OK: mp3 encontrado');
+            console.log('[PLAY-AUDIO] ✅ Faa OK');
             return {
                 urlMp3: data.result.mp3,
                 titulo: data.result.title || '',
                 duracion: data.result.duration || ''
             };
         }
+        console.log('[PLAY-AUDIO] ❌ Faa: respuesta inválida');
     } catch (e) {
-        console.log('[PLAY-AUDIO] Faa falló:', e.message);
+        console.log('[PLAY-AUDIO] ❌ Faa falló:', e.message);
+    }
+    return null;
+}
+
+async function audioDesdeCobalt(videoUrl) {
+    try {
+        console.log('[PLAY-AUDIO] Intentando Cobalt...');
+        const res = await fetch(`${COBALT_API}/api/json`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': getUA()
+            },
+            body: JSON.stringify({
+                url: videoUrl,
+                vCodec: 'h264',
+                vQuality: '720',
+                aFormat: 'mp3',
+                filenamePattern: 'basic',
+                isAudioOnly: true
+            }),
+            signal: AbortSignal.timeout(20000)
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        
+        const data = await res.json();
+        console.log('[PLAY-AUDIO] Cobalt respuesta:', JSON.stringify(data).substring(0, 200));
+        
+        if (data?.status === 'stream' && data?.url) {
+            console.log('[PLAY-AUDIO] ✅ Cobalt OK');
+            return { urlMp3: data.url, titulo: '', duracion: '' };
+        }
+        console.log('[PLAY-AUDIO] ❌ Cobalt: respuesta inválida');
+    } catch (e) {
+        console.log('[PLAY-AUDIO] ❌ Cobalt falló:', e.message);
     }
     return null;
 }
 
 async function audioDesdeDelirius(videoUrl) {
     try {
+        console.log('[PLAY-AUDIO] Intentando Delirius...');
         const data = await getJSON(`${API_MP3}?url=${encodeURIComponent(videoUrl)}`, 18000);
+        console.log('[PLAY-AUDIO] Delirius respuesta:', JSON.stringify(data).substring(0, 200));
+        
         if ((data.status === true || data.estado === true) && data.data?.download) {
-            console.log('[PLAY-AUDIO] Delirius OK');
+            console.log('[PLAY-AUDIO] ✅ Delirius OK');
             return { urlMp3: data.data.download, titulo: data.data.title || '', autor: data.data.author || '' };
         }
+        console.log('[PLAY-AUDIO] ❌ Delirius: respuesta inválida');
     } catch (e) {
-        console.log('[PLAY-AUDIO] Delirius falló:', e.message);
+        console.log('[PLAY-AUDIO] ❌ Delirius falló:', e.message);
     }
     return null;
 }
@@ -278,17 +326,22 @@ async function audioDesdeDelirius(videoUrl) {
 async function audioDesdePiped(videoId) {
     for (const inst of PIPED_INSTANCES) {
         try {
+            console.log(`[PLAY-AUDIO] Intentando Piped ${inst}...`);
             const data = await getJSON(`${inst}/streams/${videoId}`, 12000);
+            console.log(`[PLAY-AUDIO] Piped ${inst} respuesta: streams=${data?.audioStreams?.length || 0}`);
+            
             const streams = data?.audioStreams || [];
             if (!streams.length) continue;
+            
             const ordenados = [...streams].sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
             const elegido = ordenados.find(s => s.mimeType?.includes('mp4a')) || ordenados[0];
+            
             if (elegido?.url) {
-                console.log(`[PLAY-AUDIO] Piped OK: ${inst}`);
+                console.log(`[PLAY-AUDIO] ✅ Piped ${inst} OK`);
                 return { urlMp3: elegido.url, titulo: '', duracion: '' };
             }
         } catch (e) {
-            console.log(`[PLAY-AUDIO] Piped ${inst} falló: ${e.message}`);
+            console.log(`[PLAY-AUDIO] ❌ Piped ${inst} falló: ${e.message}`);
         }
     }
     return null;
@@ -297,21 +350,30 @@ async function audioDesdePiped(videoId) {
 async function audioDesdeInvidious(videoId) {
     for (const inst of INVIDIOUS_INSTANCES) {
         try {
+            console.log(`[PLAY-AUDIO] Intentando Invidious ${inst}...`);
             const res = await fetch(`${inst}/latest_version?id=${videoId}&itag=140`, {
                 agent: AGENTE,
                 headers: { 'User-Agent': getUA() },
                 signal: AbortSignal.timeout(20000),
                 redirect: 'follow'
             });
+            
             if (!res.ok) continue;
+            
             const ct = (res.headers.get('content-type') || '').split(';')[0].trim();
             if (ct.includes('text/html')) continue;
+            
             const buffer = Buffer.from(await res.arrayBuffer());
             const mime = detectarFormatoAudio(buffer);
+            
             console.log(`[PLAY-AUDIO] Invidious ${inst}: bytes=${buffer.length} formato=${mime}`);
-            if (mime) return { buffer, mimetype: mime };
+            
+            if (mime) {
+                console.log(`[PLAY-AUDIO] ✅ Invidious ${inst} OK`);
+                return { buffer, mimetype: mime };
+            }
         } catch (e) {
-            console.log(`[PLAY-AUDIO] Invidious ${inst} falló: ${e.message}`);
+            console.log(`[PLAY-AUDIO] ❌ Invidious ${inst} falló: ${e.message}`);
         }
     }
     return null;
@@ -319,26 +381,71 @@ async function audioDesdeInvidious(videoId) {
 
 async function videoDesdeFaa(videoUrl) {
     try {
+        console.log('[PLAY-VIDEO] Intentando Faa...');
         const data = await getJSON(`${FAA_API}/ytmp4?url=${encodeURIComponent(videoUrl)}`, 25000);
+        console.log('[PLAY-VIDEO] Faa respuesta:', JSON.stringify(data).substring(0, 200));
+        
         if (data?.status === true && data?.result?.download_url) {
-            console.log('[PLAY-VIDEO] Faa OK: mp4 encontrado');
+            console.log('[PLAY-VIDEO] ✅ Faa OK');
             return data.result.download_url;
         }
+        console.log('[PLAY-VIDEO] ❌ Faa: respuesta inválida');
     } catch (e) {
-        console.log('[PLAY-VIDEO] Faa falló:', e.message);
+        console.log('[PLAY-VIDEO] ❌ Faa falló:', e.message);
+    }
+    return null;
+}
+
+async function videoDesdeCobalt(videoUrl) {
+    try {
+        console.log('[PLAY-VIDEO] Intentando Cobalt...');
+        const res = await fetch(`${COBALT_API}/api/json`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': getUA()
+            },
+            body: JSON.stringify({
+                url: videoUrl,
+                vCodec: 'h264',
+                vQuality: '720',
+                aFormat: 'mp3',
+                filenamePattern: 'basic',
+                isAudioOnly: false
+            }),
+            signal: AbortSignal.timeout(25000)
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        
+        const data = await res.json();
+        console.log('[PLAY-VIDEO] Cobalt respuesta:', JSON.stringify(data).substring(0, 200));
+        
+        if (data?.status === 'stream' && data?.url) {
+            console.log('[PLAY-VIDEO] ✅ Cobalt OK');
+            return data.url;
+        }
+        console.log('[PLAY-VIDEO] ❌ Cobalt: respuesta inválida');
+    } catch (e) {
+        console.log('[PLAY-VIDEO] ❌ Cobalt falló:', e.message);
     }
     return null;
 }
 
 async function videoDesdeDelirius(videoUrl) {
     try {
+        console.log('[PLAY-VIDEO] Intentando Delirius...');
         const data = await getJSON(`${API_MP4}?url=${encodeURIComponent(videoUrl)}&format=360p`, 18000);
+        console.log('[PLAY-VIDEO] Delirius respuesta:', JSON.stringify(data).substring(0, 200));
+        
         if ((data.status === true || data.estado === true) && data.data?.download) {
-            console.log('[PLAY-VIDEO] Delirius OK');
+            console.log('[PLAY-VIDEO] ✅ Delirius OK');
             return data.data.download;
         }
+        console.log('[PLAY-VIDEO] ❌ Delirius: respuesta inválida');
     } catch (e) {
-        console.log('[PLAY-VIDEO] Delirius falló:', e.message);
+        console.log('[PLAY-VIDEO] ❌ Delirius falló:', e.message);
     }
     return null;
 }
@@ -346,18 +453,23 @@ async function videoDesdeDelirius(videoUrl) {
 async function videoDesdePiped(videoId) {
     for (const inst of PIPED_INSTANCES) {
         try {
+            console.log(`[PLAY-VIDEO] Intentando Piped ${inst}...`);
             const data = await getJSON(`${inst}/streams/${videoId}`, 12000);
+            console.log(`[PLAY-VIDEO] Piped ${inst} respuesta: streams=${data?.videoStreams?.length || 0}`);
+            
             const streams = (data?.videoStreams || []).filter(s => s.mimeType?.includes('mp4') && !s.videoOnly);
             if (!streams.length) continue;
+            
             const elegido = streams.find(s => s.quality?.startsWith('360')) ||
                             streams.find(s => s.quality?.startsWith('480')) ||
                             streams.find(s => s.quality?.startsWith('720')) || streams[0];
+            
             if (elegido?.url) {
-                console.log(`[PLAY-VIDEO] Piped OK: ${inst} (${elegido.quality})`);
+                console.log(`[PLAY-VIDEO] ✅ Piped ${inst} OK (${elegido.quality})`);
                 return elegido.url;
             }
         } catch (e) {
-            console.log(`[PLAY-VIDEO] Piped ${inst} falló: ${e.message}`);
+            console.log(`[PLAY-VIDEO] ❌ Piped ${inst} falló: ${e.message}`);
         }
     }
     return null;
@@ -370,11 +482,23 @@ export async function procesarAudio(sock, msg, video, responder) {
 
         let resultado = null;
         let meta = null;
+        const proveedoresIntentados = [];
 
-        const fuenteFaa = await audioDesdeFaa(video.url);
-        if (fuenteFaa) {
-            meta = fuenteFaa;
-            resultado = await descargarMedia(fuenteFaa.urlMp3, 60000, 'audio').catch(() => null);
+        if (!resultado) {
+            const fuenteFaa = await audioDesdeFaa(video.url);
+            if (fuenteFaa) {
+                meta = fuenteFaa;
+                resultado = await descargarMedia(fuenteFaa.urlMp3, 60000, 'audio').catch(() => null);
+            }
+            proveedoresIntentados.push('Faa: ' + (resultado ? 'OK' : 'FAIL'));
+        }
+
+        if (!resultado) {
+            const fuenteCobalt = await audioDesdeCobalt(video.url);
+            if (fuenteCobalt) {
+                resultado = await descargarMedia(fuenteCobalt.urlMp3, 60000, 'audio').catch(() => null);
+            }
+            proveedoresIntentados.push('Cobalt: ' + (resultado ? 'OK' : 'FAIL'));
         }
 
         if (!resultado) {
@@ -383,6 +507,7 @@ export async function procesarAudio(sock, msg, video, responder) {
                 meta = meta || fuenteDelirius;
                 resultado = await descargarMedia(fuenteDelirius.urlMp3, 60000, 'audio').catch(() => null);
             }
+            proveedoresIntentados.push('Delirius: ' + (resultado ? 'OK' : 'FAIL'));
         }
 
         if (!resultado) {
@@ -390,11 +515,15 @@ export async function procesarAudio(sock, msg, video, responder) {
             if (fuentePiped) {
                 resultado = await descargarMedia(fuentePiped.urlMp3, 60000, 'audio').catch(() => null);
             }
+            proveedoresIntentados.push('Piped: ' + (resultado ? 'OK' : 'FAIL'));
         }
 
         if (!resultado) {
             resultado = await audioDesdeInvidious(video.videoId);
+            proveedoresIntentados.push('Invidious: ' + (resultado ? 'OK' : 'FAIL'));
         }
+
+        console.log('[PLAY-AUDIO] Resumen:', proveedoresIntentados.join(' | '));
 
         if (!resultado) throw new Error('Ningún proveedor de audio respondió');
 
@@ -438,19 +567,33 @@ export async function procesarVideo(sock, msg, video, responder) {
         await responder.texto('🎬 Descargando video...');
 
         let resultado = null;
+        const proveedoresIntentados = [];
 
-        const urlFaa = await videoDesdeFaa(video.url);
-        if (urlFaa) resultado = await descargarMedia(urlFaa, 120000, 'video').catch(() => null);
+        if (!resultado) {
+            const urlFaa = await videoDesdeFaa(video.url);
+            if (urlFaa) resultado = await descargarMedia(urlFaa, 120000, 'video').catch(() => null);
+            proveedoresIntentados.push('Faa: ' + (resultado ? 'OK' : 'FAIL'));
+        }
+
+        if (!resultado) {
+            const urlCobalt = await videoDesdeCobalt(video.url);
+            if (urlCobalt) resultado = await descargarMedia(urlCobalt, 120000, 'video').catch(() => null);
+            proveedoresIntentados.push('Cobalt: ' + (resultado ? 'OK' : 'FAIL'));
+        }
 
         if (!resultado) {
             const urlDelirius = await videoDesdeDelirius(video.url);
             if (urlDelirius) resultado = await descargarMedia(urlDelirius, 120000, 'video').catch(() => null);
+            proveedoresIntentados.push('Delirius: ' + (resultado ? 'OK' : 'FAIL'));
         }
 
         if (!resultado) {
             const urlPiped = await videoDesdePiped(video.videoId);
             if (urlPiped) resultado = await descargarMedia(urlPiped, 120000, 'video').catch(() => null);
+            proveedoresIntentados.push('Piped: ' + (resultado ? 'OK' : 'FAIL'));
         }
+
+        console.log('[PLAY-VIDEO] Resumen:', proveedoresIntentados.join(' | '));
 
         if (!resultado) throw new Error('Ningún proveedor de video respondió');
 
