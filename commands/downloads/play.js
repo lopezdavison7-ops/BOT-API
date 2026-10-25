@@ -4,7 +4,7 @@ import http from 'http';
 import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
 const ALYA_API = 'https://api.alyacore.xyz';
-const ALYA_KEY = 'OBOE-AERETHIX';
+const ALYA_KEY = 'AURA-BOT-JERIELB';
 const FAA_API = 'https://api-faa.my.id/faa';
 
 const AGENTE_HTTPS = new https.Agent({ 
