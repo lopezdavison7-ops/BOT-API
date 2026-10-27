@@ -82,40 +82,6 @@ function limpiarSesionesViejas() {
     }
 }
 
-async function fallbackToMp3Buffer(url) {
-    const tempDir = path.join(process.cwd(), 'temp');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-    const id = crypto.randomBytes(6).toString('hex');
-    const inputPath = path.join(tempDir, `ytfb_${id}.bin`);
-    const outputPath = path.join(tempDir, `ytfb_${id}.mp3`);
-
-    try {
-        const { data } = await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 60000,
-        });
-
-        const buffer = Buffer.from(data);
-        if (!buffer.length) throw new Error('Audio fallback vacío');
-
-        fs.writeFileSync(inputPath, buffer);
-
-        await run(
-            `ffmpeg -y -i "${inputPath}" -vn -map_metadata -1 -ac 2 -ar 44100 -c:a libmp3lame -b:a 192k "${outputPath}"`,
-            { timeout: 120000 }
-        );
-
-        const mp3Buffer = fs.readFileSync(outputPath);
-        if (!mp3Buffer.length) throw new Error('Conversión a MP3 falló');
-
-        return mp3Buffer;
-    } finally {
-        try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); } catch {}
-        try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
-    }
-}
-
 async function callKyzoApi(query) {
     const { data } = await axios.get(KYZO_API_URL, {
         params: { query, key: KYZO_API_KEY },
@@ -197,47 +163,57 @@ async function descargarYtmp3Mobi(url, videoId) {
 }
 
 async function descargarDesdeFaa(videoUrl, tipo) {
-    const endpoint = tipo === 'audio' ? '/youtube' : '/ytmp4';
+    const endpoints = tipo === 'audio' 
+        ? ['/youtube', '/yt', '/ytmp3']
+        : ['/ytmp4', '/youtube-video', '/yt-video'];
     
-    try {
-        console.log(`[FAA-DL] Intentando: ${endpoint}`);
-        const url = `${FAA_API}${endpoint}?url=${encodeURIComponent(videoUrl)}`;
-        const res = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            signal: AbortSignal.timeout(20000)
-        });
-        
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        
-        const data = await res.json();
-        console.log(`[FAA-DL] JSON completo:`, JSON.stringify(data).substring(0, 500));
-        
-        if (data?.status !== true && data?.estado !== true) {
-            console.log(`[FAA-DL] Error: ${data?.message || 'sin éxito'}`);
-            return null;
+    for (const endpoint of endpoints) {
+        try {
+            console.log(`[FAA-DL] Intentando: ${endpoint}`);
+            const url = `${FAA_API}${endpoint}?url=${encodeURIComponent(videoUrl)}`;
+            console.log(`[FAA-DL] URL completa: ${url.substring(0, 100)}`);
+            
+            const res = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                signal: AbortSignal.timeout(20000)
+            });
+            
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                console.log(`[FAA-DL] Error HTTP ${res.status}: ${text.substring(0, 200)}`);
+                continue;
+            }
+            
+            const data = await res.json();
+            console.log(`[FAA-DL] ${endpoint} JSON:`, JSON.stringify(data).substring(0, 500));
+            
+            if (data?.status !== true && data?.estado !== true) {
+                console.log(`[FAA-DL] ${endpoint}: ${data?.message || 'sin éxito'}`);
+                continue;
+            }
+            
+            const result = data?.result || data?.data || {};
+            let urlDescarga = tipo === 'audio' 
+                ? (result?.mp3 || result?.audio || result?.url || result?.download)
+                : (result?.download_url || result?.mp4 || result?.video || result?.url || result?.download);
+            
+            if (typeof urlDescarga === 'object' && urlDescarga?.url) urlDescarga = urlDescarga.url;
+            
+            if (urlDescarga && typeof urlDescarga === 'string' && urlDescarga.startsWith('http')) {
+                console.log(`[FAA-DL] ✅ ${endpoint} OK: ${urlDescarga.substring(0, 80)}`);
+                return {
+                    urlDescarga,
+                    titulo: result?.title || result?.titulo || '',
+                    duracion: result?.duration || result?.duracion || '',
+                    autor: result?.author || result?.autor || result?.channel || ''
+                };
+            }
+        } catch (e) {
+            console.log(`[FAA-DL] ${endpoint} error: ${e.message}`);
         }
-        
-        const result = data?.result || data?.data || {};
-        let urlDescarga = tipo === 'audio' 
-            ? (result?.mp3 || result?.audio || result?.url || result?.download)
-            : (result?.download_url || result?.mp4 || result?.video || result?.url || result?.download);
-        
-        if (typeof urlDescarga === 'object' && urlDescarga?.url) urlDescarga = urlDescarga.url;
-        
-        if (urlDescarga && typeof urlDescarga === 'string' && urlDescarga.startsWith('http')) {
-            console.log(`[FAA-DL] ✅ OK: ${urlDescarga.substring(0, 80)}`);
-            return {
-                urlDescarga,
-                titulo: result?.title || result?.titulo || '',
-                duracion: result?.duration || result?.duracion || '',
-                autor: result?.author || result?.autor || result?.channel || ''
-            };
-        }
-    } catch (e) {
-        console.log(`[FAA-DL] Error: ${e.message}`);
     }
     
     return null;
@@ -327,6 +303,7 @@ async function buscarVideo(query) {
     return video;
 }
 
+
 async function descargarBuffer(url, timeoutMs = 60000) {
     const res = await fetch(url, {
         headers: {
@@ -354,23 +331,25 @@ export async function procesarAudio(sock, msg, video, responder) {
         try {
             const audioKyzo = await ytdlAudioKyzo(video.url, video.videoId, video.titulo);
             if (audioKyzo?.dl) {
-                try {
-                    buffer = await descargarBuffer(audioKyzo.dl, 60000);
-                    const detectedMime = detectarFormatoAudio(buffer);
-                    if (detectedMime) {
-                        mimetype = detectedMime;
-                    } else {
-                        console.log('[PLAY-AUDIO] Kyzo devolvió audio no reconocido, usando ffmpeg fallback');
-                        buffer = await fallbackToMp3Buffer(audioKyzo.dl);
-                        mimetype = 'audio/mpeg';
-                    }
-                } catch (e) {
-                    console.log('[PLAY-AUDIO] Kyzo descarga falló:', e.message);
-                    buffer = null;
+                console.log(`[PLAY-AUDIO] Kyzo URL: ${audioKyzo.dl.substring(0, 80)}`);
+                buffer = await descargarBuffer(audioKyzo.dl, 60000);
+                console.log(`[PLAY-AUDIO] Kyzo buffer: ${buffer.length} bytes`);
+                
+                if (buffer.length < 50000) {
+                    throw new Error('Buffer demasiado pequeño');
+                }
+                
+                const detectedMime = detectarFormatoAudio(buffer);
+                if (detectedMime) {
+                    mimetype = detectedMime;
+                } else {
+                    console.log('[PLAY-AUDIO] Kyzo: formato no detectado, asumiendo audio/mpeg');
+                    mimetype = 'audio/mpeg';
                 }
             }
         } catch (e) {
-            console.log('[PLAY-AUDIO] Kyzo API falló:', e.message);
+            console.log('[PLAY-AUDIO] Kyzo falló:', e.message);
+            buffer = null;
         }
 
         if (!buffer) {
@@ -378,13 +357,19 @@ export async function procesarAudio(sock, msg, video, responder) {
             const faaResult = await descargarDesdeFaa(video.url, 'audio');
             if (faaResult?.urlDescarga) {
                 try {
+                    console.log(`[PLAY-AUDIO] Faa URL: ${faaResult.urlDescarga.substring(0, 80)}`);
                     buffer = await descargarBuffer(faaResult.urlDescarga, 60000);
+                    console.log(`[PLAY-AUDIO] Faa buffer: ${buffer.length} bytes`);
+                    
+                    if (buffer.length < 50000) {
+                        throw new Error('Buffer demasiado pequeño');
+                    }
+                    
                     const detectedMime = detectarFormatoAudio(buffer);
                     if (detectedMime) {
                         mimetype = detectedMime;
                     } else {
-                        console.log('[PLAY-AUDIO] Faa devolvió audio no reconocido, usando ffmpeg fallback');
-                        buffer = await fallbackToMp3Buffer(faaResult.urlDescarga);
+                        console.log('[PLAY-AUDIO] Faa: formato no detectado, asumiendo audio/mpeg');
                         mimetype = 'audio/mpeg';
                     }
                     fuente = 'Faa';
@@ -444,7 +429,10 @@ export async function procesarVideo(sock, msg, video, responder) {
         try {
             const videoMobi = await descargarYtmp3Mobi(video.url, video.videoId);
             if (videoMobi?.status && videoMobi?.dl) {
+                console.log(`[PLAY-VIDEO] ytmp3.mobi URL: ${videoMobi.dl.substring(0, 80)}`);
                 buffer = await descargarBuffer(videoMobi.dl, 120000);
+                console.log(`[PLAY-VIDEO] ytmp3.mobi buffer: ${buffer.length} bytes`);
+                
                 if (!esMp4Valido(buffer)) {
                     throw new Error('Video no es MP4 válido');
                 }
@@ -458,7 +446,10 @@ export async function procesarVideo(sock, msg, video, responder) {
             const faaResult = await descargarDesdeFaa(video.url, 'video');
             if (faaResult?.urlDescarga) {
                 try {
+                    console.log(`[PLAY-VIDEO] Faa URL: ${faaResult.urlDescarga.substring(0, 80)}`);
                     buffer = await descargarBuffer(faaResult.urlDescarga, 120000);
+                    console.log(`[PLAY-VIDEO] Faa buffer: ${buffer.length} bytes`);
+                    
                     if (!esMp4Valido(buffer)) {
                         throw new Error('Video no es MP4 válido');
                     }
