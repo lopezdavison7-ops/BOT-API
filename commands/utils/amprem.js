@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 
-const OWNER = '50578391933';
+const OWNER_NUMERO = '50578391933';
 
 const cfg = {
   key: 'AIzaSyDtG1AU22ErnQD60AzBAcaknySiz9_CEq0',
@@ -39,8 +39,6 @@ const bad = (e) => {
   const d = e.response?.data;
   return d ? (typeof d === 'object' ? JSON.stringify(d) : String(d)) : e.message;
 };
-
-const extraerNumero = (jid) => String(jid || '').split('@')[0].split(':')[0].replace(/\D/g, '');
 
 if (!global.ampremSessions) global.ampremSessions = new Map();
 
@@ -154,15 +152,20 @@ export default {
   descripcion: 'Inyecta Premium a Alight Motion (Solo Owner)',
   
   ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
-    const sender = msg.key.participant || msg.key.senderPn || msg.key.remoteJid;
-    const numeroSender = extraerNumero(sender);
+    const sender = msg.key.participant || msg.key.remoteJid || '';
+    const numeroSender = String(sender).split('@')[0].split(':')[0].replace(/\D/g, '');
 
-    if (numeroSender !== OWNER) {
+    console.log(`[AMPPREM] Número detectado del remitente: ${numeroSender}`);
+    console.log(`[AMPPREM] Owner configurado: ${OWNER_NUMERO}`);
+
+    if (numeroSender !== OWNER_NUMERO) {
       return responder.texto(
         '╭━━〔 🔒 𝐀𝐂𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
         '┃\n' +
         '┃ ❌ Este comando es exclusivo\n' +
         '┃    para el Owner del bot.\n' +
+        '┃\n' +
+        `┃ 🔍 Tu número detectado: ${numeroSender}\n` +
         '┃\n' +
         '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
       );
