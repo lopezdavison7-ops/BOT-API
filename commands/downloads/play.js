@@ -1,43 +1,36 @@
 import fetch from 'node-fetch';
-import https from 'node:https';
-import http from 'http';
+import axios from 'axios';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import yts from 'yt-search';
 import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
-const ALYA_API = 'https://api.alyacore.xyz';
-const ALYA_KEY = 'AURA-BOT-JERIELB';
+const run = promisify(exec);
+const YOUTUBE_ID_REGEX = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+
+const KYZO_API_URL = 'https://kyzorohan.web.id/api/ytplay';
+const KYZO_API_KEY = 'kyzo_450f7983414f9ec5';
 const FAA_API = 'https://api-faa.my.id/faa';
-
-const AGENTE_HTTPS = new https.Agent({ 
-    keepAlive: true, 
-    maxSockets: 25,
-    maxFreeSockets: 10,
-    timeout: 60000,
-    freeSocketTimeout: 30000
-});
-
-const AGENTE_HTTP = new http.Agent({ 
-    keepAlive: true, 
-    maxSockets: 25,
-    maxFreeSockets: 10
-});
 
 const CACHE_TTL = 5 * 60 * 1000;
 const SESION_TTL = 10 * 60 * 1000;
 const MODIFICADORES = ['remix', 'official audio', 'song', 'lyrics', 'audio', 'letra'];
 const GENERICAS = new Set(['hola', 'hey', 'hi', 'test', 'xd', 'ok', 'no', 'si', 'que', 'aaa', 'a']);
 
-const UAS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
-];
-
 if (!global.playCache) global.playCache = new Map();
 if (!global.playSessions) global.playSessions = {};
 
-function getUA() {
-    return UAS[Math.floor(Math.random() * UAS.length)];
+function extractVideoId(url) {
+    return String(url || '').match(YOUTUBE_ID_REGEX)?.[1] || null;
+}
+
+function esURL(input) {
+    return /^https?:\/\//i.test(input) || 
+           /youtube\.com\/watch/i.test(input) || 
+           /youtu\.be\//i.test(input);
 }
 
 function formatearVistas(vistas) {
@@ -48,9 +41,19 @@ function formatearVistas(vistas) {
     return String(num);
 }
 
-function parsearDuracion(duracionStr) {
+function parsearDuracion(segundos) {
+    if (!segundos || isNaN(segundos)) return '0:00';
+    const s = Math.floor(Number(segundos));
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function parsearDuracionASegundos(duracionStr) {
     if (!duracionStr) return 0;
+    if (typeof duracionStr === 'number') return duracionStr;
     const str = String(duracionStr).trim();
+    if (/^\d+$/.test(str)) return parseInt(str) || 0;
     const partes = str.split(':').map(p => parseInt(p) || 0);
     if (partes.length === 3) return partes[0] * 3600 + partes[1] * 60 + partes[2];
     if (partes.length === 2) return partes[0] * 60 + partes[1];
@@ -70,18 +73,6 @@ function esMp4Valido(buffer) {
     return buffer.length > 12 && buffer.slice(4, 8).toString('ascii') === 'ftyp';
 }
 
-function esURL(input) {
-    return /^https?:\/\//i.test(input) || 
-           /youtube\.com\/watch/i.test(input) || 
-           /youtu\.be\//i.test(input);
-}
-
-function extraerVideoId(url) {
-    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
-}
-
 function limpiarSesionesViejas() {
     const ahora = Date.now();
     for (const k of Object.keys(global.playSessions)) {
@@ -91,273 +82,118 @@ function limpiarSesionesViejas() {
     }
 }
 
-async function alyaFetch(endpoint, params = {}, timeoutMs = 15000) {
-    const url = new URL(`${ALYA_API}${endpoint}`);
-    url.searchParams.set('key', ALYA_KEY);
-    for (const [k, v] of Object.entries(params)) {
-        url.searchParams.set(k, v);
-    }
-    
-    const inicio = Date.now();
-    const res = await fetch(url.toString(), {
-        agent: url.protocol === 'https:' ? AGENTE_HTTPS : AGENTE_HTTP,
-        headers: {
-            'Accept': 'application/json',
-            'User-Agent': getUA()
-        },
-        signal: AbortSignal.timeout(timeoutMs)
-    });
-    
-    const ms = Date.now() - inicio;
-    console.log(`[ALYA] ${endpoint} → ${res.status} (${ms}ms)`);
-    
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.log(`[ALYA] Error body: ${text.substring(0, 200)}`);
-        throw new Error(`HTTP ${res.status}`);
-    }
-    return res.json();
-}
+async function fallbackToMp3Buffer(url) {
+    const tempDir = path.join(process.cwd(), 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-async function faaFetch(endpoint, params = {}, timeoutMs = 15000) {
-    const url = new URL(`${FAA_API}${endpoint}`);
-    for (const [k, v] of Object.entries(params)) {
-        url.searchParams.set(k, v);
-    }
-    
-    const inicio = Date.now();
-    const res = await fetch(url.toString(), {
-        agent: url.protocol === 'https:' ? AGENTE_HTTPS : AGENTE_HTTP,
-        headers: {
-            'Accept': 'application/json',
-            'User-Agent': getUA()
-        },
-        signal: AbortSignal.timeout(timeoutMs)
-    });
-    
-    const ms = Date.now() - inicio;
-    console.log(`[FAA] ${endpoint} → ${res.status} (${ms}ms)`);
-    
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.log(`[FAA] Error body: ${text.substring(0, 200)}`);
-        throw new Error(`HTTP ${res.status}`);
-    }
-    return res.json();
-}
+    const id = crypto.randomBytes(6).toString('hex');
+    const inputPath = path.join(tempDir, `ytfb_${id}.bin`);
+    const outputPath = path.join(tempDir, `ytfb_${id}.mp3`);
 
-function normVideo(v) {
-    return {
-        videoId: v.videoId || v.id,
-        url: v.url || `https://www.youtube.com/watch?v=${v.videoId || v.id}`,
-        titulo: v.title || v.título || 'Sin título',
-        thumbnail: v.image || v.imagen || v.thumbnail || '',
-        duracion: v.duration || v.duración || '0:00',
-        vistas: v.views || v.vistas || 0,
-        autor: v.author?.name || v.author?.nombre || v.autor?.nombre || 'Desconocido'
-    };
-}
-
-async function buscarUna(query) {
-    const endpoints = [
-        { ep: '/search/youtube', param: 'query' },
-        { ep: '/search/yt', param: 'q' }
-    ];
-    
-    let ultimoErr = null;
-    
-    for (const { ep, param } of endpoints) {
-        try {
-            const data = await alyaFetch(ep, { [param]: query }, 12000);
-            console.log(`[ALYA-SEARCH] ${ep} keys:`, Object.keys(data || {}));
-            
-            if (data?.status === false || data?.success === false) {
-                ultimoErr = new Error(data?.message || 'API sin éxito');
-                continue;
-            }
-            
-            const lista = data?.data || data?.result || data?.results || [];
-            if (!Array.isArray(lista) || lista.length === 0) continue;
-            
-            const v = lista.find(x => (x.type || x.tipo) === 'video' && !(x.isLive || x.enVivo)) || lista[0];
-            if (v) {
-                console.log(`[ALYA-SEARCH] ✅ ${ep} OK: "${v.title || v.título}"`);
-                return normVideo(v);
-            }
-        } catch (e) {
-            ultimoErr = e;
-            console.log(`[ALYA-SEARCH] ${ep} falló: ${e.message}`);
-        }
-    }
-    
-    throw ultimoErr || new Error('Sin resultados en Alya');
-}
-
-async function videoDesdeURL(url) {
-    const videoId = extraerVideoId(url);
-    if (!videoId) throw new Error('URL de YouTube inválida');
-
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    
     try {
-        const data = await alyaFetch('/search/youtube', { query: videoId }, 12000);
-        const lista = data?.data || data?.result || data?.results || [];
-        if (Array.isArray(lista) && lista.length > 0) {
-            const v = lista.find(x => (x.videoId || x.id) === videoId) || lista[0];
-            return normVideo(v);
-        }
-    } catch (error) {
-        console.log('[ALYA] No se pudieron obtener metadatos de la URL:', error.message);
-    }
-
-    return {
-        videoId,
-        url: videoUrl,
-        titulo: 'Video de YouTube',
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        duracion: '0:00',
-        vistas: 0,
-        autor: 'Desconocido'
-    };
-}
-
-async function buscarYouTube(query) {
-    const key = query.toLowerCase().trim();
-
-    if (esURL(query)) {
-        console.log(`[PLAY] 📎 URL directa detectada: ${query}`);
-        return await videoDesdeURL(query);
-    }
-
-    const cached = global.playCache.get(key);
-    if (cached && Date.now() - cached.t < CACHE_TTL) {
-        console.log(`[PLAY] ⚡ Caché: ${key}`);
-        return cached.video;
-    }
-
-    let video = null;
-    const esGenerica = key.length <= 5 || GENERICAS.has(key);
-
-    if (!esGenerica) {
-        video = await buscarUna(key);
-    } else {
-        const variantes = [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4);
-        console.log(`[PLAY] Genérica → variantes: ${variantes.join(' | ')}`);
-
-        const resultados = await Promise.allSettled(variantes.map(v => buscarUna(v).then(r => ({ r, v }))));
-
-        for (const v of variantes) {
-            const exito = resultados.find(s => s.status === 'fulfilled' && s.value.v === v);
-            if (exito) {
-                video = exito.value.r;
-                console.log(`[PLAY] ✅ Variante ganadora: "${v}"`);
-                break;
-            }
-        }
-
-        if (!video) throw new Error('Sin resultados');
-    }
-
-    if (global.playCache.size > 50) global.playCache.clear();
-    global.playCache.set(key, { video, t: Date.now() });
-
-    return video;
-}
-
-async function descargarMedia(url, timeoutMs, tipo) {
-    try {
-        console.log(`[DL-${tipo}] Descargando: ${url.substring(0, 100)}...`);
-        const inicio = Date.now();
-        
-        const res = await fetch(url, {
-            agent: url.startsWith('https') ? AGENTE_HTTPS : AGENTE_HTTP,
-            headers: {
-                'User-Agent': getUA(),
-                'Accept': '*/*'
-            },
-            signal: AbortSignal.timeout(timeoutMs)
+        const { data } = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
         });
 
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const buffer = Buffer.from(data);
+        if (!buffer.length) throw new Error('Audio fallback vacío');
 
-        const contentType = (res.headers.get('content-type') || '').split(';')[0].trim();
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const ms = Date.now() - inicio;
+        fs.writeFileSync(inputPath, buffer);
 
-        if (!buffer.length) throw new Error('Buffer vacío');
+        await run(
+            `ffmpeg -y -i "${inputPath}" -vn -map_metadata -1 -ac 2 -ar 44100 -c:a libmp3lame -b:a 192k "${outputPath}"`,
+            { timeout: 120000 }
+        );
 
-        console.log(`[DL-${tipo}] OK: ${buffer.length} bytes, ct=${contentType} (${ms}ms)`);
+        const mp3Buffer = fs.readFileSync(outputPath);
+        if (!mp3Buffer.length) throw new Error('Conversión a MP3 falló');
 
-        if (tipo === 'audio') {
-            const mime = detectarFormatoAudio(buffer);
-            if (!mime) throw new Error('Audio no reconocido (ct=' + contentType + ')');
-            return { buffer, mimetype: mime };
-        }
-
-        if (tipo === 'video') {
-            const ok = esMp4Valido(buffer);
-            if (!ok) throw new Error('Video no reconocido (ct=' + contentType + ')');
-            return { buffer, mimetype: 'video/mp4' };
-        }
-
-        return { buffer, mimetype: contentType || 'application/octet-stream' };
-
-    } catch (e) {
-        console.log(`[DL-${tipo}] Error: ${e.message}`);
-        throw e;
+        return mp3Buffer;
+    } finally {
+        try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); } catch {}
+        try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
     }
 }
 
-async function descargarDesdeAlyaConReintentos(videoUrl, tipo, maxReintentos = 3) {
-    const endpoint = tipo === 'audio' ? '/dl/ytmp3' : '/dl/ytmp4';
-    
-    for (let intento = 1; intento <= maxReintentos; intento++) {
-        try {
-            console.log(`[ALYA-DL] Intento ${intento}/${maxReintentos}: ${endpoint}`);
-            const data = await alyaFetch(endpoint, { url: videoUrl }, 25000);
-            
-            if (data?.status === false || data?.success === false) {
-                const mensaje = data?.message || '';
-                console.log(`[ALYA-DL] Error: ${mensaje}`);
-                
-                if (mensaje.toLowerCase().includes('ocupado') || mensaje.toLowerCase().includes('busy')) {
-                    if (intento < maxReintentos) {
-                        const delay = intento * 2000;
-                        console.log(`[ALYA-DL] Servidor ocupado, reintentando en ${delay}ms...`);
-                        await new Promise(r => setTimeout(r, delay));
-                        continue;
-                    }
-                }
-                continue;
-            }
-            
-            console.log(`[ALYA-DL] JSON completo:`, JSON.stringify(data).substring(0, 500));
-            
-            const result = data?.data || data?.result || data;
-            let urlDescarga = tipo === 'audio' 
-                ? (result?.mp3 || result?.audio || result?.url || result?.download)
-                : (result?.mp4 || result?.video || result?.download_url || result?.url || result?.download);
-            
-            if (typeof urlDescarga === 'object' && urlDescarga?.url) urlDescarga = urlDescarga.url;
-            
-            if (urlDescarga && typeof urlDescarga === 'string' && urlDescarga.startsWith('http')) {
-                console.log(`[ALYA-DL] ✅ OK: ${urlDescarga.substring(0, 80)}`);
-                return {
-                    urlDescarga,
-                    titulo: result?.title || result?.titulo || '',
-                    duracion: result?.duration || result?.duracion || '',
-                    autor: result?.author || result?.autor || result?.channel || ''
-                };
-            }
-        } catch (e) {
-            console.log(`[ALYA-DL] Intento ${intento} falló: ${e.message}`);
-            if (intento < maxReintentos) {
-                await new Promise(r => setTimeout(r, 1500));
+async function callKyzoApi(query) {
+    const { data } = await axios.get(KYZO_API_URL, {
+        params: { query, key: KYZO_API_KEY },
+        timeout: 30000,
+    });
+
+    if (!data?.status || !data?.download) {
+        throw new Error('Kyzo: API devolvió datos vacíos/inválidos');
+    }
+
+    return {
+        status: true,
+        title: data.title || '',
+        dl: data.download,
+    };
+}
+
+async function ytdlAudioKyzo(url, videoId, titulo) {
+    const query = titulo || videoId || url;
+    try {
+        return await callKyzoApi(query);
+    } catch (err) {
+        if (query !== url) {
+            return await callKyzoApi(url);
+        }
+        throw err;
+    }
+}
+
+async function descargarYtmp3Mobi(url, videoId) {
+    try {
+        const client = axios.create({
+            timeout: 60000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 16; NX729J) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7271.123 Mobile Safari/537.36',
+                'Referer': 'https://id.ytmp3.mobi/',
+            },
+        });
+
+        const { data: init } = await client.get('https://d.ymcdn.org/api/v1/init', {
+            params: { p: 'y', 23: '1llum1n471', _: Math.random() },
+        });
+
+        if (!init?.convertURL) throw new Error('Init failed');
+
+        const { data: convert } = await client.get(init.convertURL, {
+            params: { v: videoId, f: 'mp4', _: Math.random() },
+        });
+
+        if (!convert?.progressURL || !convert?.downloadURL) {
+            throw new Error('No se obtuvo URL de conversión');
+        }
+
+        let progress = 0;
+        let title = convert.title || '';
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (progress < 3 && attempts < maxAttempts) {
+            const { data } = await client.get(convert.progressURL);
+            if ((data?.error || 0) > 0) throw new Error(`Error: ${data.error}`);
+            progress = Number(data?.progress || 0);
+            title = data?.title || title;
+            if (progress < 3) {
+                attempts += 1;
+                await new Promise(resolve => setTimeout(resolve, 250));
             }
         }
+
+        if (attempts >= maxAttempts && progress < 3) {
+            throw new Error('Timeout');
+        }
+
+        return { status: true, title, dl: convert.downloadURL };
+    } catch (e) {
+        console.log('[YTDL-MOBI] Error:', e.message);
+        return { status: false, mess: e.message };
     }
-    
-    return null;
 }
 
 async function descargarDesdeFaa(videoUrl, tipo) {
@@ -365,7 +201,18 @@ async function descargarDesdeFaa(videoUrl, tipo) {
     
     try {
         console.log(`[FAA-DL] Intentando: ${endpoint}`);
-        const data = await faaFetch(endpoint, { url: videoUrl }, 20000);
+        const url = `${FAA_API}${endpoint}?url=${encodeURIComponent(videoUrl)}`;
+        const res = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            signal: AbortSignal.timeout(20000)
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
         console.log(`[FAA-DL] JSON completo:`, JSON.stringify(data).substring(0, 500));
         
         if (data?.status !== true && data?.estado !== true) {
@@ -396,27 +243,164 @@ async function descargarDesdeFaa(videoUrl, tipo) {
     return null;
 }
 
+async function buscarVideo(query) {
+    if (esURL(query)) {
+        const videoId = extractVideoId(query);
+        if (!videoId) throw new Error('URL de YouTube inválida');
+        
+        try {
+            const info = await yts({ videoId });
+            if (info?.title) {
+                return {
+                    videoId,
+                    url: `https://www.youtube.com/watch?v=${videoId}`,
+                    titulo: info.title,
+                    thumbnail: info.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                    duracion: parsearDuracion(info.seconds),
+                    duracionSegundos: info.seconds || 0,
+                    vistas: info.views || 0,
+                    autor: info.author?.name || 'Desconocido'
+                };
+            }
+        } catch (e) {
+            console.log('[YT-SEARCH] Error buscando por ID:', e.message);
+        }
+        
+        return {
+            videoId,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            titulo: 'Video de YouTube',
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            duracion: '0:00',
+            duracionSegundos: 0,
+            vistas: 0,
+            autor: 'Desconocido'
+        };
+    }
+
+    const key = query.toLowerCase().trim();
+    const cached = global.playCache.get(key);
+    if (cached && Date.now() - cached.t < CACHE_TTL) {
+        console.log(`[PLAY] ⚡ Caché: ${key}`);
+        return cached.video;
+    }
+
+    let video = null;
+    const esGenerica = key.length <= 5 || GENERICAS.has(key);
+    const variantes = esGenerica 
+        ? [key, ...MODIFICADORES.map(m => `${key} ${m}`)].slice(0, 4)
+        : [key];
+
+    console.log(`[PLAY] Buscando: ${variantes.join(' | ')}`);
+
+    for (const variante of variantes) {
+        try {
+            const results = await yts(variante);
+            const videos = results?.videos || [];
+            if (!videos.length) continue;
+            
+            const v = videos.find(x => x.type === 'video' && !x.isLive) || videos[0];
+            if (v) {
+                video = {
+                    videoId: v.videoId,
+                    url: v.url || `https://www.youtube.com/watch?v=${v.videoId}`,
+                    titulo: v.title || 'Sin título',
+                    thumbnail: v.thumbnail || v.image || '',
+                    duracion: parsearDuracion(v.seconds),
+                    duracionSegundos: v.seconds || 0,
+                    vistas: v.views || 0,
+                    autor: v.author?.name || 'Desconocido'
+                };
+                console.log(`[PLAY] ✅ Encontrado: "${v.title}"`);
+                break;
+            }
+        } catch (e) {
+            console.log(`[PLAY] Error buscando "${variante}":`, e.message);
+        }
+    }
+
+    if (!video) throw new Error('Sin resultados de búsqueda');
+
+    if (global.playCache.size > 50) global.playCache.clear();
+    global.playCache.set(key, { video, t: Date.now() });
+
+    return video;
+}
+
+async function descargarBuffer(url, timeoutMs = 60000) {
+    const res = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': '*/*'
+        },
+        signal: AbortSignal.timeout(timeoutMs)
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (!buffer.length) throw new Error('Buffer vacío');
+    return buffer;
+}
+
 export async function procesarAudio(sock, msg, video, responder) {
     const jid = msg.key.remoteJid;
     try {
         await responder.texto('🎵 Descargando audio...');
 
-        let fuente = await descargarDesdeAlyaConReintentos(video.url, 'audio', 3);
-        
-        if (!fuente) {
-            console.log('[PLAY-AUDIO] Alya falló, usando Faa como fallback...');
-            fuente = await descargarDesdeFaa(video.url, 'audio');
-        }
-        
-        if (!fuente) {
-            throw new Error('Ninguna API devolvió enlace de audio');
+        let buffer = null;
+        let mimetype = 'audio/mpeg';
+        let fuente = 'Kyzo';
+
+        try {
+            const audioKyzo = await ytdlAudioKyzo(video.url, video.videoId, video.titulo);
+            if (audioKyzo?.dl) {
+                try {
+                    buffer = await descargarBuffer(audioKyzo.dl, 60000);
+                    const detectedMime = detectarFormatoAudio(buffer);
+                    if (detectedMime) {
+                        mimetype = detectedMime;
+                    } else {
+                        console.log('[PLAY-AUDIO] Kyzo devolvió audio no reconocido, usando ffmpeg fallback');
+                        buffer = await fallbackToMp3Buffer(audioKyzo.dl);
+                        mimetype = 'audio/mpeg';
+                    }
+                } catch (e) {
+                    console.log('[PLAY-AUDIO] Kyzo descarga falló:', e.message);
+                    buffer = null;
+                }
+            }
+        } catch (e) {
+            console.log('[PLAY-AUDIO] Kyzo API falló:', e.message);
         }
 
-        const resultado = await descargarMedia(fuente.urlDescarga, 60000, 'audio');
-        const { buffer, mimetype } = resultado;
-        
-        const duracionFinal = fuente.duracion || video.duracion;
-        const segundos = parsearDuracion(duracionFinal);
+        if (!buffer) {
+            console.log('[PLAY-AUDIO] Kyzo falló, usando Faa como fallback...');
+            const faaResult = await descargarDesdeFaa(video.url, 'audio');
+            if (faaResult?.urlDescarga) {
+                try {
+                    buffer = await descargarBuffer(faaResult.urlDescarga, 60000);
+                    const detectedMime = detectarFormatoAudio(buffer);
+                    if (detectedMime) {
+                        mimetype = detectedMime;
+                    } else {
+                        console.log('[PLAY-AUDIO] Faa devolvió audio no reconocido, usando ffmpeg fallback');
+                        buffer = await fallbackToMp3Buffer(faaResult.urlDescarga);
+                        mimetype = 'audio/mpeg';
+                    }
+                    fuente = 'Faa';
+                } catch (e) {
+                    console.log('[PLAY-AUDIO] Faa descarga falló:', e.message);
+                }
+            }
+        }
+
+        if (!buffer) {
+            throw new Error('Ningún proveedor devolvió audio válido');
+        }
+
+        console.log(`[PLAY-AUDIO] ✅ Descargado con ${fuente}: ${buffer.length} bytes, ${mimetype}`);
+
+        const segundos = video.duracionSegundos || parsearDuracionASegundos(video.duracion);
         const extension = mimetype === 'audio/mp4' ? 'm4a' : (mimetype === 'audio/ogg' ? 'ogg' : 'mp3');
 
         await sock.sendMessage(jid, {
@@ -427,8 +411,8 @@ export async function procesarAudio(sock, msg, video, responder) {
             seconds: segundos,
             contextInfo: {
                 externalAdReply: {
-                    title: fuente.titulo || video.titulo,
-                    body: fuente.autor || video.autor,
+                    title: video.titulo,
+                    body: video.autor,
                     thumbnailUrl: video.thumbnail,
                     mediaType: 2,
                     mediaUrl: video.url,
@@ -454,19 +438,43 @@ export async function procesarVideo(sock, msg, video, responder) {
     try {
         await responder.texto('🎬 Descargando video...');
 
-        let fuente = await descargarDesdeAlyaConReintentos(video.url, 'video', 3);
-        
-        if (!fuente) {
-            console.log('[PLAY-VIDEO] Alya falló, usando Faa como fallback...');
-            fuente = await descargarDesdeFaa(video.url, 'video');
-        }
-        
-        if (!fuente) {
-            throw new Error('Ninguna API devolvió enlace de video');
+        let buffer = null;
+        let fuente = 'ytmp3.mobi';
+
+        try {
+            const videoMobi = await descargarYtmp3Mobi(video.url, video.videoId);
+            if (videoMobi?.status && videoMobi?.dl) {
+                buffer = await descargarBuffer(videoMobi.dl, 120000);
+                if (!esMp4Valido(buffer)) {
+                    throw new Error('Video no es MP4 válido');
+                }
+            }
+        } catch (e) {
+            console.log('[PLAY-VIDEO] ytmp3.mobi falló:', e.message);
         }
 
-        const resultado = await descargarMedia(fuente.urlDescarga, 120000, 'video');
-        const { buffer } = resultado;
+        if (!buffer) {
+            console.log('[PLAY-VIDEO] ytmp3.mobi falló, usando Faa como fallback...');
+            const faaResult = await descargarDesdeFaa(video.url, 'video');
+            if (faaResult?.urlDescarga) {
+                try {
+                    buffer = await descargarBuffer(faaResult.urlDescarga, 120000);
+                    if (!esMp4Valido(buffer)) {
+                        throw new Error('Video no es MP4 válido');
+                    }
+                    fuente = 'Faa';
+                } catch (e) {
+                    console.log('[PLAY-VIDEO] Faa descarga falló:', e.message);
+                }
+            }
+        }
+
+        if (!buffer) {
+            throw new Error('Ningún proveedor devolvió video válido');
+        }
+
+        console.log(`[PLAY-VIDEO] ✅ Descargado con ${fuente}: ${buffer.length} bytes`);
+
         const tamañoMB = (buffer.length / 1024 / 1024).toFixed(2);
 
         const caption =
@@ -623,7 +631,7 @@ export default {
         const enviarDirecto = ['play2', 'playvideo', 'video'].includes(nombreComando);
 
         try {
-            const video = await buscarYouTube(query);
+            const video = await buscarVideo(query);
 
             if (enviarDirecto) {
                 await procesarVideo(sock, msg, video, responder);
