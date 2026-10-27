@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 
-const OWNER_NUMERO = '50578391933';
+const OWNERS = ['50578391933', '2599176675473', '527443556928'];
 
 const cfg = {
   key: 'AIzaSyDtG1AU22ErnQD60AzBAcaknySiz9_CEq0',
@@ -155,19 +155,19 @@ export default {
     const sender = msg.key.participant || msg.key.remoteJid || '';
     const numeroSender = String(sender).split('@')[0].split(':')[0].replace(/\D/g, '');
 
-    console.log(`[AMPPREM] Número detectado del remitente: ${numeroSender}`);
-    console.log(`[AMPPREM] Owner configurado: ${OWNER_NUMERO}`);
+    console.log(`[AMPPREM] Número detectado: ${numeroSender}`);
+    console.log(`[AMPPREM] Owners permitidos: ${OWNERS.join(', ')}`);
 
-    if (numeroSender !== OWNER_NUMERO) {
+    if (!OWNERS.includes(numeroSender)) {
       return responder.texto(
-        '╭━━〔 🔒 𝐀𝐂𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
+        '━━〔 🔒 𝐀𝐂𝐄𝐒𝐎 𝐃𝐄𝐍𝐄𝐆𝐀𝐃𝐎 〕━━⬣\n' +
         '┃\n' +
         '┃ ❌ Este comando es exclusivo\n' +
         '┃    para el Owner del bot.\n' +
         '┃\n' +
-        `┃ 🔍 Tu número detectado: ${numeroSender}\n` +
+        `┃ 🔍 Tu número: ${numeroSender}\n` +
         '┃\n' +
-        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+        '╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈  〕━━⬣'
       );
     }
 
@@ -175,15 +175,15 @@ export default {
 
     if (!input) {
       return responder.texto(
-        '╭━━〔 🎬 𝐀𝐌𝐏𝐑𝐄𝐌 〕━━⬣\n' +
+        '╭━━〔  𝐀𝐌𝐏𝐑𝐄𝐌 〕━━⬣\n' +
         '┃\n' +
         '┃ ❌ Falta el email o link\n' +
-        '┃\n' +
+        '\n' +
         '┃ 💡 Uso:\n' +
         '┃ ➪ .amprem email@gmail.com\n' +
         '┃ ➪ .amprem <link_verificacion>\n' +
         '┃\n' +
-        '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+        '╰━━〔 ⚡ 𝐎𝐓-𝐀𝐈 ⚡ 〕━━'
       );
     }
 
@@ -198,9 +198,9 @@ export default {
         global.ampremSessions.set(sender, { email: input });
         
         await responder.texto(
-          '╭━━〔 ✅ 𝐄𝐍𝐕𝐈𝐀𝐃𝐎 〕━━⬣\n' +
+          '━━〔 ✅ 𝐄𝐍𝐈𝐀𝐃 〕━━⬣\n' +
           '┃\n' +
-          '┃ 📧 *Email:* ' + input + '\n' +
+          ' 📧 *Email:* ' + input + '\n' +
           '┃\n' +
           '┃ 📬 Revisa tu Bandeja de Entrada\n' +
           '┃    o la carpeta de Spam.\n' +
@@ -209,7 +209,7 @@ export default {
           '┃    con el link de Alight:\n' +
           '┃    .amprem <link_aqui>\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔 ⚡ 𝐁𝐎-𝐀𝐏𝐈  〕━━⬣'
         );
       } else {
         await responder.texto(
@@ -219,7 +219,7 @@ export default {
           '┃\n' +
           '┃ ' + res.why + '\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
       }
       return;
@@ -230,30 +230,30 @@ export default {
       
       if (!session || !session.email) {
         return responder.texto(
-          '╭━━〔 ⚠️ 𝐒𝐈𝐍 𝐒𝐄𝐒𝐈𝐎𝐍 〕━━⬣\n' +
+          '╭━━〔 ⚠️ 𝐒𝐈 𝐒𝐄𝐈𝐎𝐍 〕━━⬣\n' +
           '┃\n' +
           '┃ ❌ No hay email guardado.\n' +
           '┃\n' +
-          '┃ 💡 Empieza de nuevo:\n' +
+          ' 💡 Empieza de nuevo:\n' +
           '┃    .amprem email@gmail.com\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐈 ⚡ 〕━━'
         );
       }
 
       const email = session.email;
-      await responder.texto('⏳ Verificando login para *' + email + '*...');
+      await responder.texto(' Verificando login para *' + email + '*...');
 
       const authRes = await auth(email, input);
       if (!authRes.ok) {
         return responder.texto(
-          '╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n' +
+          '╭━━〔 ❌ 𝐄𝐑𝐎𝐑 〕━━\n' +
           '┃\n' +
           '┃ ⚠️ Fallo la verificación:\n' +
-          '┃\n' +
+          '\n' +
           '┃ ' + authRes.why + '\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔 ⚡ 𝐁𝐎-𝐀𝐏𝐈  〕━━⬣'
         );
       }
 
@@ -264,18 +264,18 @@ export default {
         global.ampremSessions.delete(sender);
         
         await responder.texto(
-          '╭━━〔 🎉 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐂𝐓𝐈𝐕𝐎 〕━━⬣\n' +
+          '╭━━〔 🎉 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐓𝐈𝐕𝐎 〕━━⬣\n' +
           '┃\n' +
           '┃ 🎬 *ALIGHT MOTION PREMIUM*\n' +
           '┃\n' +
           '┃ 📧 *Email:* ' + email + '\n' +
-          '┃ 🆔 *Order ID:* ' + proRes.order + '\n' +
-          '┃ 📅 *Estado:* Activo (Anual)\n' +
+          ' 🆔 *Order ID:* ' + proRes.order + '\n' +
+          '┃  *Estado:* Activo (Anual)\n' +
           '┃\n' +
           '┃ ✅ Cuenta actualizada.\n' +
           '┃    Abre la app de Alight Motion.\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔  𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣'
         );
       } else {
         await responder.texto(
@@ -285,21 +285,21 @@ export default {
           '┃\n' +
           '┃ ' + proRes.why + '\n' +
           '┃\n' +
-          '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+          '╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
         );
       }
       return;
     }
 
     return responder.texto(
-      '╭━━〔 ⚠️ 𝐈𝐍𝐕𝐀𝐋𝐈𝐃𝐎 〕━━⬣\n' +
+      '╭━━〔 ⚠️ 𝐈𝐕𝐀𝐋𝐃𝐎 〕━━\n' +
       '┃\n' +
       '┃ ❌ Input no válido.\n' +
       '┃\n' +
       '┃ 💡 Envía un email o\n' +
       '┃    un link de verificación.\n' +
-      '┃\n' +
-      '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣'
+      '\n' +
+      '╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈  〕━━⬣'
     );
   }
 };
