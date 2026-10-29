@@ -15,12 +15,23 @@ const fmtDur = s => { s = Math.floor(+s||0); return `${Math.floor(s/60)}:${Strin
 const aSeg = s => { const p = String(s||'').split(':').map(Number); return p.length===2 ? p[0]*60+p[1] : (p[0]||0); };
 
 function tipoBuffer(buf, esAudio) {
-    if (!buf || buf.length < 1000) return null;
+    if (!buf || buf.length < 1000) {
+        console.log(`[VALIDAR] ❌ Buffer muy pequeño: ${buf ? buf.length : 0} bytes`);
+        return null;
+    }
     if (esAudio) {
         if (buf[0]===0x49 && buf[1]===0x44 && buf[2]===0x33) return 'audio/mpeg';
         if (buf[0]===0xFF && (buf[1]&0xE0)===0xE0) return 'audio/mpeg';
         if (buf.slice(4,8).toString()==='ftyp') return 'audio/mp4';
         if (buf.slice(0,3).toString()==='Ogg') return 'audio/ogg';
+        
+        // Depuración: si es HTML, lo mostramos
+        const inicio = buf.slice(0, 50).toString('utf8');
+        if (inicio.includes('<!') || inicio.includes('<html')) {
+            console.log(`[VALIDAR] ❌ El servidor devolvió HTML en lugar de audio: ${inicio.substring(0, 100)}`);
+        } else {
+            console.log(`[VALIDAR] ❌ Formato de audio desconocido. Hex: ${buf.slice(0, 16).toString('hex')}`);
+        }
         return null;
     }
     return buf.slice(4,8).toString()==='ftyp' ? 'video/mp4' : null;
@@ -76,7 +87,7 @@ async function enlace(url, tipo) {
         if (tipo === 'audio') {
             const res = await fetch(`${API_BASE}/ytdlv3?key=${API_KEY}&url=${encodeURIComponent(url)}&type=Audio`, { signal: AbortSignal.timeout(30000) });
             const data = await res.json();
-            console.log('[KYPO-AUDIO] Respuesta:', JSON.stringify(data).substring(0, 200));
+            console.log('[KYPO-AUDIO] Respuesta completa:', JSON.stringify(data));
             
             const dl = data?.result?.download_url || data?.download_url;
             if (dl) {
@@ -84,14 +95,13 @@ async function enlace(url, tipo) {
                 global.playCache.set(ck, { v, t: Date.now() });
                 return v;
             }
-            throw new Error('Sin enlace de audio');
+            throw new Error('Sin enlace de audio en la respuesta');
         } else {
             const res = await fetch(`${API_BASE}/ytdlv2?key=${API_KEY}&url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(30000) });
             const data = await res.json();
-            console.log('[KYPO-VIDEO] Respuesta:', JSON.stringify(data).substring(0, 200));
+            console.log('[KYPO-VIDEO] Respuesta:', JSON.stringify(data).substring(0, 300));
             
             if (data?.status && data?.video?.length) {
-                // Busca el formato que tenga audio integrado (360p usualmente)
                 const vFormat = data.video.find(v => v.is_audio === true || v.formatId === 18) || data.video[0];
                 if (vFormat?.url) {
                     const v = { dl: vFormat.url, titulo: data.title || '', autor: '', thumb: data.thumbnail || '', dur: '' };
@@ -99,7 +109,7 @@ async function enlace(url, tipo) {
                     return v;
                 }
             }
-            throw new Error('Sin enlace de video');
+            throw new Error('Sin enlace de video en la respuesta');
         }
     } catch (e) {
         console.log(`[KYPO] Error ${tipo}:`, e.message);
@@ -108,9 +118,18 @@ async function enlace(url, tipo) {
 }
 
 async function bajar(url, ms) {
-    const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
+    console.log(`[DESCARGA] Iniciando: ${url.substring(0, 80)}...`);
+    const res = await fetch(url, { 
+        headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://kyzorohan.web.id/',
+            'Accept': '*/*'
+        },
+        signal: AbortSignal.timeout(ms) 
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const buf = Buffer.from(await res.arrayBuffer());
+    console.log(`[DESCARGA] ✅ Completada. Tamaño: ${buf.length} bytes. Inicio Hex: ${buf.slice(0, 16).toString('hex')}`);
     if (!buf.length) throw new Error('Buffer vacío');
     return buf;
 }
@@ -122,7 +141,7 @@ async function enviar(sock, msg, video, tipo, responder) {
         const info = await enlace(video.url, tipo);
         const buf = await bajar(info.dl, tipo === 'audio' ? 60000 : 120000);
         const mime = tipoBuffer(buf, tipo === 'audio');
-        if (!mime) throw new Error('Archivo inválido');
+        if (!mime) throw new Error('El archivo descargado no es válido (posible bloqueo del servidor)');
         const titulo = info.titulo || video.titulo;
         const autor = info.autor || video.autor;
 
