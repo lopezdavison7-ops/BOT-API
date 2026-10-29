@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import yts from 'yt-search';
 import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
 const KYZO_KEY = 'rohan6476a72291d2043a';
@@ -32,12 +33,12 @@ async function buscar(query) {
     if (esURL(query)) {
         const id = query.match(ID_REGEX)?.[1];
         if (!id) throw new Error('URL inválida');
-        const res = await fetch(`${KYZO_BASE}/yts?query=${encodeURIComponent(query)}&key=${KYZO_KEY}`);
-        const data = await res.json();
-        if (data?.status && data?.videos?.length > 0) {
-            const v = data.videos[0];
-            return { id, url: v.url || `https://youtu.be/${id}`, titulo: v.title, thumb: v.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, seg: v.duration || 0, vistas: v.views || 0, autor: v.author || 'Desconocido' };
-        }
+        try {
+            const info = await yts({ videoId: id });
+            if (info?.title) {
+                return { id, url: info.url || `https://youtu.be/${id}`, titulo: info.title, thumb: info.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, seg: info.seconds || 0, vistas: info.views || 0, autor: info.author?.name || 'Desconocido' };
+            }
+        } catch {}
         return { id, url: `https://youtu.be/${id}`, titulo: 'Video de YouTube', thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, seg: 0, vistas: 0, autor: 'Desconocido' };
     }
     
@@ -45,13 +46,22 @@ async function buscar(query) {
     const cache = global.playCache.get('s_'+k);
     if (cache && Date.now()-cache.t < 300000) return cache.v;
     
-    const res = await fetch(`${KYZO_BASE}/yts?query=${encodeURIComponent(k)}&key=${KYZO_KEY}`);
-    const data = await res.json();
+    // Usamos yt-search local, es 100% fiable y no depende de APIs externas
+    const res = await yts(k);
+    const v = (res.videos || []).find(x => x.type === 'video' && !x.isLive) || res.videos?.[0];
     
-    if (!data?.status || !data?.videos?.length) throw new Error('Sin resultados');
+    if (!v) throw new Error('Sin resultados de búsqueda');
     
-    const v = data.videos[0];
-    const video = { id: v.url.match(ID_REGEX)?.[1] || '', url: v.url, titulo: v.title, thumb: v.thumbnail || '', seg: v.duration || 0, vistas: v.views || 0, autor: v.author || 'Desconocido' };
+    const video = { 
+        id: v.videoId, 
+        url: v.url, 
+        titulo: v.title, 
+        thumb: v.thumbnail || '', 
+        seg: v.seconds || 0, 
+        vistas: v.views || 0, 
+        autor: v.author?.name || 'Desconocido' 
+    };
+    
     global.playCache.set('s_'+k, { v: video, t: Date.now() });
     return video;
 }
@@ -116,7 +126,6 @@ async function probarDescarga(url, tipo) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const buf = Buffer.from(await res.arrayBuffer());
             
-            // Verificar que no sea una página de error HTML
             if (buf.length < 2000 && buf.slice(0, 4).toString('utf8').includes('<!')) {
                 console.log(`[DESCARGA] ❌ ${fuente.nombre} devolvió página de error (HTML)`);
                 continue;
