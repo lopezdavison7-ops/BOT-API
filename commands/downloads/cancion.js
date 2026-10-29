@@ -224,6 +224,8 @@ async function buscar(query) {
 }
 
 
+import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
+
 function buildPlayerHtml({ title, channel, totalSec, poster, audioDataUri, bitrate, isTrimmed, lyrics }) {
     let lines = parseLrc(lyrics?.lyrics);
     if (isTrimmed) lines = lines.filter((l) => l.t <= totalSec);
@@ -357,20 +359,10 @@ export default {
                 lyrics
             });
 
-            await sock.sendMessage(jid, {
-                text: html,
-                contextInfo: {
-                    externalAdReply: {
-                        title: video.titulo,
-                        body: video.autor,
-                        thumbnailUrl: video.thumb,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: msg });
+            // Usamos tu función personalizada para enviar HTML interactivo
+            await enviarHtmlInteractivo(sock, jid, html, '🎵 YTMUSIC', 'ytmusic_player');
             
-            console.log('[YTMUSIC] ✅ Reproductor HTML enviado exitosamente');
+            console.log('[YTMUSIC] ✅ Reproductor HTML interactivo enviado exitosamente');
             
         } catch (e) {
             console.error('[YTMUSIC] Error:', e.message);
