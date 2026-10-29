@@ -1,12 +1,10 @@
 import fetch from 'node-fetch';
 import yts from 'yt-search';
-import { randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import axios from 'axios';
-import { generateWAMessageFromContent } from 'baileys';
 
 const KYZO_KEY = 'rohan6476a72291d2043a';
 const KYZO_BASE = 'https://kyzorohan.web.id/api';
@@ -93,7 +91,10 @@ async function probarDescargaBuffer(url) {
         try {
             console.log(`[YTMUSIC] Probando fuente: ${fuente.nombre}...`);
             const dlUrl = await fuente.obtener();
-            if (!dlUrl || typeof dlUrl !== 'string' || !dlUrl.startsWith('http')) continue;
+            if (!dlUrl || typeof dlUrl !== 'string' || !dlUrl.startsWith('http')) {
+                console.log(`[YTMUSIC] ❌ ${fuente.nombre} no devolvió URL válida`);
+                continue;
+            }
             
             const res = await fetch(dlUrl, { 
                 headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36', 'Referer': 'https://www.youtube.com/' },
@@ -101,15 +102,39 @@ async function probarDescargaBuffer(url) {
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const buf = Buffer.from(await res.arrayBuffer());
-            if (buf.length < 2000 && buf.slice(0, 4).toString('utf8').includes('<!')) continue;
             
-            console.log(`[YTMUSIC] ✅ ${fuente.nombre} exitoso (${buf.length} bytes)`);
+            console.log(`[YTMUSIC] ${fuente.nombre}: ${buf.length} bytes, hex: ${buf.slice(0, 16).toString('hex')}`);
+            
+            if (buf.length < 10000) {
+                console.log(`[YTMUSIC] ❌ ${fuente.nombre} buffer muy pequeño (${buf.length} bytes)`);
+                continue;
+            }
+            
+            if (buf.slice(0, 4).toString('utf8').includes('<!') || buf.slice(0, 10).toString('utf8').includes('<html')) {
+                console.log(`[YTMUSIC] ❌ ${fuente.nombre} devolvió HTML en vez de audio`);
+                continue;
+            }
+            
+            const esAudio = (
+                (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) ||
+                (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) ||
+                (buf.slice(4, 8).toString('ascii') === 'ftyp') ||
+                (buf.slice(0, 4).toString('ascii') === 'OggS') ||
+                (buf.slice(0, 4).toString('ascii') === 'RIFF')
+            );
+            
+            if (!esAudio) {
+                console.log(`[YTMUSIC] ❌ ${fuente.nombre} no es formato de audio válido`);
+                continue;
+            }
+            
+            console.log(`[YTMUSIC] ✅ ${fuente.nombre} exitoso (${buf.length} bytes, audio válido)`);
             return buf;
         } catch (e) {
             console.log(`[YTMUSIC] ❌ ${fuente.nombre} falló:`, e.message);
         }
     }
-    throw new Error('Todas las fuentes de descarga fallaron');
+    throw new Error('Todas las fuentes devolvieron archivos inválidos o fallaron');
 }
 
 async function compressOpus(input, { bitrate, trimSec = 0 }) {
@@ -122,21 +147,41 @@ async function compressOpus(input, { bitrate, trimSec = 0 }) {
             try { await fs.unlink(outPath); } catch {}
         };
 
-        try { await fs.writeFile(inPath, input); } catch (e) { await cleanup(); return reject(e); }
+        try { 
+            await fs.writeFile(inPath, input);
+            console.log(`[YTMUSIC] Archivo temporal creado: ${inPath} (${input.length} bytes)`);
+        } catch (e) { 
+            await cleanup(); 
+            return reject(e); 
+        }
 
         const args = ['-y', '-i', inPath, ...(trimSec > 0 ? ['-t', String(trimSec)] : []), '-vn', '-ac', '1', '-ar', '48000', '-c:a', 'libopus', '-b:a', bitrate, '-vbr', 'on', '-application', 'audio', '-frame_duration', '40', '-compression_level', '10', outPath];
+        
+        console.log(`[YTMUSIC] Ejecutando ffmpeg: ${args.join(' ')}`);
+        
         const ff = spawn('ffmpeg', args);
         let stderr = '';
         ff.stderr.on('data', (d) => { stderr += d.toString(); });
-        ff.on('error', async (e) => { await cleanup(); reject(new Error('ffmpeg error: ' + e.message)); });
+        ff.on('error', async (e) => { 
+            await cleanup(); 
+            reject(new Error('ffmpeg error: ' + e.message)); 
+        });
         ff.on('close', async (code) => {
-            if (code !== 0) { await cleanup(); return reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`)); }
+            if (code !== 0) { 
+                await cleanup(); 
+                console.log(`[YTMUSIC] ffmpeg stderr: ${stderr.slice(-500)}`);
+                return reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-300)}`)); 
+            }
             try {
                 const out = await fs.readFile(outPath);
                 await cleanup();
                 if (!out.length) throw new Error('output vacío');
+                console.log(`[YTMUSIC] ✅ Compresión exitosa: ${out.length} bytes`);
                 resolve(out);
-            } catch (e) { await cleanup(); reject(e); }
+            } catch (e) { 
+                await cleanup(); 
+                reject(e); 
+            }
         });
     });
 }
@@ -177,6 +222,7 @@ async function buscar(query) {
     global.playCache.set('s_'+k, { v: video, t: Date.now() });
     return video;
 }
+
 
 function buildPlayerHtml({ title, channel, totalSec, poster, audioDataUri, bitrate, isTrimmed, lyrics }) {
     let lines = parseLrc(lyrics?.lyrics);
