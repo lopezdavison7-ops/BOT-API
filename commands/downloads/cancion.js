@@ -223,7 +223,6 @@ async function buscar(query) {
     return video;
 }
 
-
 import { enviarHtmlInteractivo } from '../../lib/htmlInteractivo.js';
 
 function buildPlayerHtml({ title, channel, totalSec, poster, audioDataUri, bitrate, isTrimmed, lyrics }) {
@@ -331,9 +330,11 @@ export default {
     categoria: 'Descargas',
     alias: ['cancion', 'musica', 'reproductor', 'song', 'audio'],
     descripcion: 'Reproductor HTML Premium con letras sincronizadas',
-    ejecutar: async ({ sock, msg, argumento, responder, jid }) => {
+    ejecutar: async ({ sock, msg, argumento, responder }) => {
         const q = String(argumento || '').trim();
-        if (!q) return responder.texto('╭━━〔 🎵 𝐘𝐓𝐌𝐔𝐒𝐈𝐂 〕━━⬣\n┃ ❌ Escribe el nombre o URL de la canción\n┃ 💡 Ejemplos:\n┃ ➪ .ytmusic peso pluma\n┃ ➪ .cancion https://youtu.be/...\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣');
+        const from = msg.key.remoteJid;
+        
+        if (!q) return responder.texto('╭━━〔 🎵 𝐘𝐌𝐔𝐒𝐈𝐂 〕━━⬣\n┃ ❌ Escribe el nombre o URL de la canción\n┃ 💡 Ejemplos:\n┃ ➪ .ytmusic peso pluma\n┃ ➪ .cancion https://youtu.be/...\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐏𝐈 ⚡ 〕━━⬣');
         
         await responder.texto('🎵 Buscando y procesando audio premium...');
         try {
@@ -359,14 +360,14 @@ export default {
                 lyrics
             });
 
-            // Usamos tu función personalizada para enviar HTML interactivo
-            await enviarHtmlInteractivo(sock, jid, html, '🎵 YTMUSIC', 'ytmusic_player');
+            // Mismo patrón que el comando dino
+            await enviarHtmlInteractivo(sock, from, html, '@YTMUSIC', 'ytmusic');
             
             console.log('[YTMUSIC] ✅ Reproductor HTML interactivo enviado exitosamente');
             
         } catch (e) {
             console.error('[YTMUSIC] Error:', e.message);
-            await responder.texto(`╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n┃ ⚠️ ${e.message}\n┃\n┃ 💡 Asegúrate de que ffmpeg esté instalado en el servidor.\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
+            await responder.texto(`━━〔 ❌ 𝐄𝐑𝐎𝐑 〕━━\n┃ ⚠️ ${e.message}\n┃\n┃ 💡 Asegúrate de que ffmpeg esté instalado en el servidor.\n╰━━〔 ⚡ 𝐁𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
         }
     }
 };
