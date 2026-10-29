@@ -1,8 +1,10 @@
 import fetch from 'node-fetch';
 import { generateWAMessageFromContent, prepareWAMessageMedia } from 'baileys';
 
-const API_KEY = 'rohan6476a72291d2043a';
-const API_BASE = 'https://kyzorohan.web.id/api';
+const KYZO_KEY = 'rohan6476a72291d2043a';
+const KYZO_BASE = 'https://kyzorohan.web.id/api';
+const ALYA_KEY = 'AURA-BOT-JERIELB';
+const ALYA_BASE = 'https://api.alyacore.xyz';
 
 if (!global.playCache) global.playCache = new Map();
 if (!global.playSessions) global.playSessions = {};
@@ -30,7 +32,7 @@ async function buscar(query) {
     if (esURL(query)) {
         const id = query.match(ID_REGEX)?.[1];
         if (!id) throw new Error('URL inválida');
-        const res = await fetch(`${API_BASE}/yts?query=${encodeURIComponent(query)}&key=${API_KEY}`);
+        const res = await fetch(`${KYZO_BASE}/yts?query=${encodeURIComponent(query)}&key=${KYZO_KEY}`);
         const data = await res.json();
         if (data?.status && data?.videos?.length > 0) {
             const v = data.videos[0];
@@ -43,163 +45,123 @@ async function buscar(query) {
     const cache = global.playCache.get('s_'+k);
     if (cache && Date.now()-cache.t < 300000) return cache.v;
     
-    const res = await fetch(`${API_BASE}/yts?query=${encodeURIComponent(k)}&key=${API_KEY}`);
+    const res = await fetch(`${KYZO_BASE}/yts?query=${encodeURIComponent(k)}&key=${KYZO_KEY}`);
     const data = await res.json();
     
     if (!data?.status || !data?.videos?.length) throw new Error('Sin resultados');
     
     const v = data.videos[0];
-    const video = { 
-        id: v.url.match(ID_REGEX)?.[1] || '', 
-        url: v.url, 
-        titulo: v.title, 
-        thumb: v.thumbnail || '', 
-        seg: v.duration || 0, 
-        vistas: v.views || 0, 
-        autor: v.author || 'Desconocido' 
-    };
-    
+    const video = { id: v.url.match(ID_REGEX)?.[1] || '', url: v.url, titulo: v.title, thumb: v.thumbnail || '', seg: v.duration || 0, vistas: v.views || 0, autor: v.author || 'Desconocido' };
     global.playCache.set('s_'+k, { v: video, t: Date.now() });
     return video;
 }
 
-async function obtenerEnlaceRespaldo(url, tipo) {
-    try {
-        console.log(`[RESPALDO] Intentando Cobalt para ${tipo}...`);
-        const res = await fetch('https://api.cobalt.tools/api/json', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            body: JSON.stringify({
-                url: url,
-                vCodec: 'h264',
-                vQuality: '720',
-                aFormat: 'mp3',
-                filenamePattern: 'basic',
-                isAudioOnly: tipo === 'audio'
-            }),
-            signal: AbortSignal.timeout(30000)
-        });
-        const data = await res.json();
-        if (data?.status === 'stream' || data?.status === 'redirect') {
-            console.log('[RESPALDO] ✅ Cobalt exitoso');
-            return data.url;
-        }
-        console.log('[RESPALDO] ❌ Cobalt falló:', data?.error || 'Sin URL');
-    } catch (e) {
-        console.log('[RESPALDO] ❌ Cobalt error:', e.message);
-    }
-    return null;
-}
-
-async function enlace(url, tipo) {
-    const id = url.match(ID_REGEX)?.[1] || url;
-    const ck = `${tipo}_${id}`;
-    const cache = global.playCache.get(ck);
-    if (cache && Date.now()-cache.t < 600000) {
-        console.log(`[ENLACE] ⚡ Caché: ${ck}`);
-        return cache.v;
-    }
-
-    try {
-        if (tipo === 'audio') {
-            const res = await fetch(`${API_BASE}/ytdlv3?key=${API_KEY}&url=${encodeURIComponent(url)}&type=Audio`, { signal: AbortSignal.timeout(30000) });
-            const data = await res.json();
-            const dl = data?.result?.download_url || data?.download_url;
-            if (dl) {
-                // Verificamos si el enlace es de un CDN conocido por bloquear
-                if (dl.includes('savenow.to') || dl.includes('nora')) {
-                    console.log('[KYPO] Detectado CDN propenso a bloqueo, probando respaldo preventivo...');
-                    const respaldo = await obtenerEnlaceRespaldo(url, 'audio');
-                    if (respaldo) {
-                        const v = { dl: respaldo, titulo: data?.result?.title || data?.title || '', autor: '', thumb: data?.result?.thumbnail_url || '', dur: '' };
-                        global.playCache.set(ck, { v, t: Date.now() });
-                        return v;
-                    }
-                }
-                const v = { dl, titulo: data?.result?.title || data?.title || '', autor: '', thumb: data?.result?.thumbnail_url || '', dur: '' };
-                global.playCache.set(ck, { v, t: Date.now() });
-                return v;
-            }
-            throw new Error('Sin enlace de audio');
-        } else {
-            const res = await fetch(`${API_BASE}/ytdlv2?key=${API_KEY}&url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(30000) });
-            const data = await res.json();
-            if (data?.status && data?.video?.length) {
-                const vFormat = data.video.find(v => v.is_audio === true || v.formatId === 18) || data.video[0];
-                if (vFormat?.url) {
-                    const v = { dl: vFormat.url, titulo: data.title || '', autor: '', thumb: data.thumbnail || '', dur: '' };
-                    global.playCache.set(ck, { v, t: Date.now() });
-                    return v;
+async function probarDescarga(url, tipo) {
+    const fuentes = [
+        {
+            nombre: 'Kyzorohan',
+            obtener: async () => {
+                if (tipo === 'audio') {
+                    const res = await fetch(`${KYZO_BASE}/ytdlv3?key=${KYZO_KEY}&url=${encodeURIComponent(url)}&type=Audio`, { signal: AbortSignal.timeout(25000) });
+                    const data = await res.json();
+                    return data?.result?.download_url || data?.download_url;
+                } else {
+                    const res = await fetch(`${KYZO_BASE}/ytdlv2?key=${KYZO_KEY}&url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(25000) });
+                    const data = await res.json();
+                    const vFormat = data?.video?.find(v => v.is_audio === true || v.formatId === 18) || data?.video?.[0];
+                    return vFormat?.url;
                 }
             }
-            throw new Error('Sin enlace de video');
-        }
-    } catch (e) {
-        console.log(`[KYPO] Error ${tipo}:`, e.message);
-        // Si falla Kyzorohan, intentamos respaldo
-        const respaldo = await obtenerEnlaceRespaldo(url, tipo);
-        if (respaldo) {
-            const v = { dl: respaldo, titulo: '', autor: '', thumb: '', dur: '' };
-            global.playCache.set(ck, { v, t: Date.now() });
-            return v;
-        }
-        throw new Error(`Fallo al obtener enlace: ${e.message}`);
-    }
-}
-
-async function bajar(url, ms) {
-    console.log(`[DESCARGA] Iniciando: ${url.substring(0, 80)}...`);
-    const res = await fetch(url, { 
-        headers: { 
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-            'Referer': 'https://www.youtube.com/',
-            'Accept': '*/*'
         },
-        signal: AbortSignal.timeout(ms) 
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) throw new Error('Buffer vacío');
-    
-    // Verificación anti-HTML
-    if (buf.length < 2000 && buf.slice(0, 4).toString('utf8').includes('<!')) {
-        throw new Error('El servidor devolvió una página de error (HTML) en lugar del archivo');
+        {
+            nombre: 'Cobalt',
+            obtener: async () => {
+                const res = await fetch('https://api.cobalt.tools/api/json', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                    body: JSON.stringify({ url, vCodec: 'h264', vQuality: '720', aFormat: 'mp3', filenamePattern: 'basic', isAudioOnly: tipo === 'audio' }),
+                    signal: AbortSignal.timeout(25000)
+                });
+                const data = await res.json();
+                return data?.url || (data?.status === 'stream' ? data?.url : null);
+            }
+        },
+        {
+            nombre: 'AlyaCore',
+            obtener: async () => {
+                const ep = tipo === 'audio' ? '/dl/ytmp3' : '/dl/ytmp4';
+                const res = await fetch(`${ALYA_BASE}${ep}?url=${encodeURIComponent(url)}&key=${ALYA_KEY}`, { signal: AbortSignal.timeout(25000) });
+                const data = await res.json();
+                const d = data?.data || data?.result || {};
+                return typeof d.dl === 'string' ? d.dl : (d.dl?.url || d.url || d.download);
+            }
+        }
+    ];
+
+    for (const fuente of fuentes) {
+        try {
+            console.log(`[DESCARGA] Probando fuente: ${fuente.nombre}...`);
+            const dlUrl = await fuente.obtener();
+            if (!dlUrl || typeof dlUrl !== 'string' || !dlUrl.startsWith('http')) {
+                console.log(`[DESCARGA] ❌ ${fuente.nombre} no devolvió URL válida`);
+                continue;
+            }
+            
+            console.log(`[DESCARGA] ⬇️ Descargando desde ${fuente.nombre}...`);
+            const res = await fetch(dlUrl, { 
+                headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36', 'Referer': 'https://www.youtube.com/' },
+                signal: AbortSignal.timeout(60000) 
+            });
+            
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const buf = Buffer.from(await res.arrayBuffer());
+            
+            // Verificar que no sea una página de error HTML
+            if (buf.length < 2000 && buf.slice(0, 4).toString('utf8').includes('<!')) {
+                console.log(`[DESCARGA] ❌ ${fuente.nombre} devolvió página de error (HTML)`);
+                continue;
+            }
+            
+            const mime = tipoBuffer(buf, tipo === 'audio');
+            if (!mime) {
+                console.log(`[DESCARGA] ❌ ${fuente.nombre} devolvió formato inválido (${buf.length} bytes)`);
+                continue;
+            }
+            
+            console.log(`[DESCARGA] ✅ ${fuente.nombre} exitoso (${buf.length} bytes, ${mime})`);
+            return { buf, mime, titulo: '', autor: '' };
+            
+        } catch (e) {
+            console.log(`[DESCARGA] ❌ ${fuente.nombre} falló:`, e.message);
+        }
     }
     
-    console.log(`[DESCARGA] ✅ Completada. Tamaño: ${buf.length} bytes`);
-    return buf;
+    throw new Error('Todas las fuentes de descarga fallaron o fueron bloqueadas');
 }
 
 async function enviar(sock, msg, video, tipo, responder) {
     const jid = msg.key.remoteJid;
     await responder.texto(tipo === 'audio' ? '🎵 Descargando audio...' : '🎬 Descargando video...');
     try {
-        const info = await enlace(video.url, tipo);
-        const buf = await bajar(info.dl, tipo === 'audio' ? 60000 : 120000);
-        const mime = tipoBuffer(buf, tipo === 'audio');
-        if (!mime) throw new Error('El archivo descargado no es válido');
-        const titulo = info.titulo || video.titulo;
-        const autor = info.autor || video.autor;
+        const resultado = await probarDescarga(video.url, tipo);
+        const titulo = video.titulo;
+        const autor = video.autor;
 
         if (tipo === 'audio') {
             await sock.sendMessage(jid, {
-                audio: buf, mimetype: mime,
-                fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.${mime==='audio/mp4'?'m4a':'mp3'}`,
-                ptt: false, seconds: video.seg || aSeg(info.dur),
-                contextInfo: { externalAdReply: { title: titulo, body: autor, thumbnailUrl: info.thumb||video.thumb, mediaType: 2, mediaUrl: video.url, sourceUrl: video.url } }
+                audio: resultado.buf, mimetype: resultado.mime,
+                fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.${resultado.mime==='audio/mp4'?'m4a':'mp3'}`,
+                ptt: false, seconds: video.seg,
+                contextInfo: { externalAdReply: { title: titulo, body: autor, thumbnailUrl: video.thumb, mediaType: 2, mediaUrl: video.url, sourceUrl: video.url } }
             }, { quoted: msg });
         } else {
-            const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
-            if (buf.length > 16*1048576) await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
-            else await sock.sendMessage(jid, { video: buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
+            const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(resultado.buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+            if (resultado.buf.length > 16*1048576) await sock.sendMessage(jid, { document: resultado.buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
+            else await sock.sendMessage(jid, { video: resultado.buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
         }
     } catch (e) {
         console.error(`[PLAY-${tipo}]`, e.message);
-        await responder.texto(`╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n┃ ⚠️ ${e.message}\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
+        await responder.texto(`╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n┃ ⚠️ ${e.message}\n┃\n┃ 💡 El hosting puede estar bloqueado por los servidores de descarga.\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
     }
 }
 
