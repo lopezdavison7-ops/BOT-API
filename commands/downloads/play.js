@@ -22,6 +22,17 @@ async function json(url, ms = 25000) {
     return res.json();
 }
 
+async function thumbB64(url) {
+    try {
+        if (!url) return undefined;
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return undefined;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (!buf.length || buf.length < 500) return undefined;
+        return buf;
+    } catch { return undefined; }
+}
+
 function validar(buf, tipo) {
     if (!buf || buf.length < 5000) return null;
     const head = buf.slice(0, 64).toString('utf8');
@@ -120,18 +131,34 @@ async function enviarAudio(sock, msg, video, responder) {
             console.log(`[AUDIO] ✅ ${fuente.nombre} OK (${buf.length} bytes, ${mime})`);
             const titulo = info.titulo || video.titulo;
             const autor = info.autor || video.autor;
-            const nombre = `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}`;
+            const nombre = `${titulo.slice(0,60).replace(/[^\w\s.\-]/g,'')}`;
+            const thumbImg = await thumbB64(info.thumb || video.thumb);
             
             if (buf.length > 16*1048576) {
                 const cap = `╭━━〔 🎵 𝐀𝐔𝐃𝐈𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB (Documento)\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
                 await sock.sendMessage(jid, { document: buf, mimetype: mime, fileName: `${nombre}.${mime==='audio/mp4'?'m4a':'mp3'}`, caption: cap }, { quoted: msg });
             } else {
-                await sock.sendMessage(jid, {
-                    audio: buf, mimetype: mime,
+                const audioMsg = {
+                    audio: buf,
+                    mimetype: mime,
                     fileName: `${nombre}.${mime==='audio/mp4'?'m4a':'mp3'}`,
-                    ptt: false, seconds: video.seg,
-                    contextInfo: { externalAdReply: { title: titulo, body: autor, thumbnailUrl: info.thumb||video.thumb, mediaType: 2, mediaUrl: video.url, sourceUrl: video.url } }
-                }, { quoted: msg });
+                    ptt: false,
+                    seconds: video.seg,
+                    contextInfo: {
+                        externalAdReply: {
+                            title: titulo,
+                            body: autor,
+                            mediaType: 2,
+                            mediaUrl: video.url,
+                            sourceUrl: video.url,
+                            renderLargerThumbnail: true
+                        }
+                    }
+                };
+                if (thumbImg) audioMsg.contextInfo.externalAdReply.thumbnail = thumbImg;
+                else audioMsg.contextInfo.externalAdReply.thumbnailUrl = info.thumb || video.thumb;
+                
+                await sock.sendMessage(jid, audioMsg, { quoted: msg });
             }
             return;
         } catch (e) {
@@ -182,7 +209,7 @@ async function enviarVideo(sock, msg, video, responder) {
             const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
             
             if (buf.length > 16*1048576) {
-                await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
+                await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.\-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
             } else {
                 await sock.sendMessage(jid, { video: buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
             }
