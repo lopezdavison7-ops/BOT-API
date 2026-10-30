@@ -13,12 +13,16 @@ const aSeg = s => { if (typeof s === 'number') return s; const p = String(s||'')
 
 function validar(buf, tipo) {
     if (!buf || buf.length < 5000) return null;
-    if (buf.slice(0,4).toString('utf8').includes('<!') || buf.slice(0,10).toString('utf8').includes('<html')) return null;
+    const head = buf.slice(0, 64).toString('utf8');
+    if (head.includes('<!') || head.includes('<html') || head.includes('<HTML')) return null;
     if (tipo === 'audio') {
         if (buf[0]===0x49 && buf[1]===0x44 && buf[2]===0x33) return 'audio/mpeg';
         if (buf[0]===0xFF && (buf[1]&0xE0)===0xE0) return 'audio/mpeg';
         if (buf.slice(4,8).toString()==='ftyp') return 'audio/mp4';
         if (buf.slice(0,4).toString()==='OggS') return 'audio/ogg';
+        if (buf.slice(0,4).toString()==='RIFF') return 'audio/wav';
+        if (buf[0]===0x1A && buf[1]===0x45) return 'audio/webm';
+        if (buf.length > 20000) return 'audio/mpeg';
         return null;
     }
     return buf.slice(4,8).toString()==='ftyp' ? 'video/mp4' : null;
@@ -60,8 +64,8 @@ async function obtenerEnlace(url, tipo) {
 }
 
 async function bajar(url, ms) {
-    const res = await fetch(url, { 
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.youtube.com/' },
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': '*/*' },
         signal: AbortSignal.timeout(ms)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -80,18 +84,32 @@ async function enviar(sock, msg, video, tipo, responder) {
         if (!mime) throw new Error('Archivo inválido (posible bloqueo del servidor)');
         const titulo = info.titulo || video.titulo;
         const autor = info.autor || video.autor;
+        const tamañoMB = (buf.length/1048576).toFixed(2);
+        const nombreArchivo = `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}`;
 
         if (tipo === 'audio') {
-            await sock.sendMessage(jid, {
-                audio: buf, mimetype: mime,
-                fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.${mime==='audio/mp4'?'m4a':'mp3'}`,
-                ptt: false, seconds: video.seg,
-                contextInfo: { externalAdReply: { title: titulo, body: autor, thumbnailUrl: info.thumb||video.thumb, mediaType: 2, mediaUrl: video.url, sourceUrl: video.url } }
-            }, { quoted: msg });
+            if (buf.length > 16*1048576) {
+                const cap = `╭━━〔 🎵 𝐀𝐔𝐃𝐈𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${tamañoMB} MB (Documento)\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+                await sock.sendMessage(jid, {
+                    document: buf, mimetype: mime,
+                    fileName: `${nombreArchivo}.${mime==='audio/mp4'?'m4a':'mp3'}`,
+                    caption: cap
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, {
+                    audio: buf, mimetype: mime,
+                    fileName: `${nombreArchivo}.${mime==='audio/mp4'?'m4a':'mp3'}`,
+                    ptt: false, seconds: video.seg,
+                    contextInfo: { externalAdReply: { title: titulo, body: autor, thumbnailUrl: info.thumb||video.thumb, mediaType: 2, mediaUrl: video.url, sourceUrl: video.url } }
+                }, { quoted: msg });
+            }
         } else {
-            const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
-            if (buf.length > 16*1048576) await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
-            else await sock.sendMessage(jid, { video: buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
+            const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${tamañoMB} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+            if (buf.length > 16*1048576) {
+                await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${nombreArchivo}.mp4`, caption: cap }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, { video: buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
+            }
         }
     } catch (e) {
         console.error(`[PLAY-${tipo}]`, e.message);
