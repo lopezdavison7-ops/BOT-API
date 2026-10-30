@@ -22,15 +22,14 @@ async function json(url, ms = 25000) {
     return res.json();
 }
 
-async function thumbB64(url) {
+async function descargarThumb(url) {
     try {
-        if (!url) return undefined;
+        if (!url) return null;
         const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, signal: AbortSignal.timeout(8000) });
-        if (!res.ok) return undefined;
+        if (!res.ok) return null;
         const buf = Buffer.from(await res.arrayBuffer());
-        if (!buf.length || buf.length < 500) return undefined;
-        return buf;
-    } catch { return undefined; }
+        return buf.length > 500 ? buf : null;
+    } catch { return null; }
 }
 
 function validar(buf, tipo) {
@@ -131,33 +130,36 @@ async function enviarAudio(sock, msg, video, responder) {
             console.log(`[AUDIO] ✅ ${fuente.nombre} OK (${buf.length} bytes, ${mime})`);
             const titulo = info.titulo || video.titulo;
             const autor = info.autor || video.autor;
-            const nombre = `${titulo.slice(0,60).replace(/[^\w\s.\-]/g,'')}`;
-            const thumbImg = await thumbB64(info.thumb || video.thumb);
+            const nombre = `${titulo.slice(0,60).replace(/[^\w\s]/g,'')}`;
             
             if (buf.length > 16*1048576) {
-                const cap = `╭━━〔 🎵 𝐀𝐔𝐃𝐈𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB (Documento)\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+                const cap = `╭━━〔 🎵 𝐀𝐔𝐃𝐈𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
                 await sock.sendMessage(jid, { document: buf, mimetype: mime, fileName: `${nombre}.${mime==='audio/mp4'?'m4a':'mp3'}`, caption: cap }, { quoted: msg });
             } else {
+                const thumbBuf = await descargarThumb(info.thumb || video.thumb);
+                
                 const audioMsg = {
                     audio: buf,
                     mimetype: mime,
                     fileName: `${nombre}.${mime==='audio/mp4'?'m4a':'mp3'}`,
                     ptt: false,
-                    seconds: video.seg,
-                    contextInfo: {
+                    seconds: video.seg
+                };
+                
+                if (thumbBuf) {
+                    audioMsg.contextInfo = {
                         externalAdReply: {
                             title: titulo,
                             body: autor,
                             mediaType: 2,
-                            mediaUrl: video.url,
+                            thumbnail: thumbBuf,
                             sourceUrl: video.url,
                             renderLargerThumbnail: true
                         }
-                    }
-                };
-                if (thumbImg) audioMsg.contextInfo.externalAdReply.thumbnail = thumbImg;
-                else audioMsg.contextInfo.externalAdReply.thumbnailUrl = info.thumb || video.thumb;
+                    };
+                }
                 
+                console.log(`[AUDIO] Enviando mensaje ${thumbBuf ? 'con portada' : 'sin portada'}...`);
                 await sock.sendMessage(jid, audioMsg, { quoted: msg });
             }
             return;
@@ -165,7 +167,7 @@ async function enviarAudio(sock, msg, video, responder) {
             console.log(`[AUDIO] ❌ ${fuente.nombre} falló: ${e.message}`);
         }
     }
-    throw new Error('Ningún CDN de audio respondió (bloqueo de IP del hosting)');
+    throw new Error('Ningún CDN de audio respondió');
 }
 
 async function enviarVideo(sock, msg, video, responder) {
@@ -209,7 +211,7 @@ async function enviarVideo(sock, msg, video, responder) {
             const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${(buf.length/1048576).toFixed(2)} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
             
             if (buf.length > 16*1048576) {
-                await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s.\-]/g,'')}.mp4`, caption: cap }, { quoted: msg });
+                await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${titulo.slice(0,60).replace(/[^\w\s]/g,'')}.mp4`, caption: cap }, { quoted: msg });
             } else {
                 await sock.sendMessage(jid, { video: buf, mimetype: 'video/mp4', caption: cap }, { quoted: msg });
             }
