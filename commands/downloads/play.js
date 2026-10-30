@@ -12,9 +12,19 @@ const fmtDur = s => { s = Math.floor(+s||0); return `${Math.floor(s/60)}:${Strin
 const aSeg = s => { if (typeof s === 'number') return s; const p = String(s||'').split(':').map(Number); return p.length===2 ? p[0]*60+p[1] : (p[0]||0); };
 
 function validar(buf, tipo) {
-    if (!buf || buf.length < 5000) return null;
+    console.log(`[VALIDAR-${tipo}] Tamaño: ${buf.length} bytes | Hex: ${buf.slice(0,16).toString('hex')} | Texto: ${buf.slice(0,40).toString('utf8').replace(/\n/g,' ')}`);
+    
+    if (!buf || buf.length < 5000) {
+        console.log(`[VALIDAR-${tipo}] ❌ Rechazado: muy pequeño (${buf?.length || 0} bytes)`);
+        return null;
+    }
+    
     const head = buf.slice(0, 64).toString('utf8');
-    if (head.includes('<!') || head.includes('<html') || head.includes('<HTML')) return null;
+    if (head.includes('<!') || head.includes('<html') || head.includes('<HTML')) {
+        console.log(`[VALIDAR-${tipo}] ❌ Rechazado: es HTML`);
+        return null;
+    }
+    
     if (tipo === 'audio') {
         if (buf[0]===0x49 && buf[1]===0x44 && buf[2]===0x33) return 'audio/mpeg';
         if (buf[0]===0xFF && (buf[1]&0xE0)===0xE0) return 'audio/mpeg';
@@ -22,10 +32,17 @@ function validar(buf, tipo) {
         if (buf.slice(0,4).toString()==='OggS') return 'audio/ogg';
         if (buf.slice(0,4).toString()==='RIFF') return 'audio/wav';
         if (buf[0]===0x1A && buf[1]===0x45) return 'audio/webm';
-        if (buf.length > 20000) return 'audio/mpeg';
+        if (buf.length > 20000) {
+            console.log(`[VALIDAR-${tipo}] ⚠️ Sin firma conocida pero tamaño OK, asumiendo mpeg`);
+            return 'audio/mpeg';
+        }
+        console.log(`[VALIDAR-${tipo}] ❌ Rechazado: sin firma y muy pequeño`);
         return null;
     }
-    return buf.slice(4,8).toString()==='ftyp' ? 'video/mp4' : null;
+    
+    if (buf.slice(4,8).toString()==='ftyp') return 'video/mp4';
+    console.log(`[VALIDAR-${tipo}] ❌ Rechazado: no es MP4`);
+    return null;
 }
 
 async function buscar(query) {
@@ -57,6 +74,7 @@ async function obtenerEnlace(url, tipo) {
     const ep = tipo === 'audio' ? '/download/ytmp3' : '/download/ytmp4';
     const res = await fetch(`${BASE}${ep}?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(30000) });
     const data = await res.json();
+    console.log(`[ENLACE-${tipo}] URL: ${data?.data?.download?.substring(0, 80) || 'SIN URL'}`);
     if (data?.status !== true || !data?.data?.download) throw new Error(data?.message || 'Sin enlace de descarga');
     const v = { dl: data.data.download, titulo: data.data.title||'', autor: data.data.author||'', thumb: data.data.image||'' };
     global.playCache.set(ck, { v, t: Date.now() });
@@ -64,12 +82,15 @@ async function obtenerEnlace(url, tipo) {
 }
 
 async function bajar(url, ms) {
+    console.log(`[BAJAR] Iniciando: ${url.substring(0, 100)}...`);
     const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': '*/*' },
         signal: AbortSignal.timeout(ms)
     });
+    console.log(`[BAJAR] Status: ${res.status} | Content-Type: ${res.headers.get('content-type')} | Content-Length: ${res.headers.get('content-length')}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const buf = Buffer.from(await res.arrayBuffer());
+    console.log(`[BAJAR] ✅ Recibido: ${buf.length} bytes`);
     if (!buf.length) throw new Error('Buffer vacío');
     return buf;
 }
@@ -104,7 +125,7 @@ async function enviar(sock, msg, video, tipo, responder) {
                 }, { quoted: msg });
             }
         } else {
-            const cap = `╭━━〔 🎬 𝐕𝐈𝐃𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${tamañoMB} MB\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+            const cap = `╭━━〔 🎬 𝐕𝐈𝐄𝐎 〕━━⬣\n┃ 🎧 *${titulo}*\n┃ 👤 ${autor}\n┃ 📦 ${tamañoMB} MB\n╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
             if (buf.length > 16*1048576) {
                 await sock.sendMessage(jid, { document: buf, mimetype: 'video/mp4', fileName: `${nombreArchivo}.mp4`, caption: cap }, { quoted: msg });
             } else {
@@ -113,7 +134,7 @@ async function enviar(sock, msg, video, tipo, responder) {
         }
     } catch (e) {
         console.error(`[PLAY-${tipo}]`, e.message);
-        await responder.texto(`╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n┃ ⚠️ ${e.message}\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
+        await responder.texto(`╭━━〔 ❌ 𝐄𝐑𝐑𝐎𝐑 〕━━⬣\n┃ ⚠️ ${e.message}\n╰━━〔  𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`);
     }
 }
 
@@ -121,7 +142,7 @@ export const procesarAudio = (sock, msg, video, responder) => enviar(sock, msg, 
 export const procesarVideo = (sock, msg, video, responder) => enviar(sock, msg, video, 'video', responder);
 
 async function botones(sock, msg, video, jid) {
-    const cap = `╭━━〔 🎵 𝐏𝐋𝐀𝐘 〕━━⬣\n┃ 🎧 *${video.titulo}*\n┃ 👤 ${video.autor}\n┃ ⏱️ ${fmtDur(video.seg)} | 👀 ${fmtVistas(video.vistas)}\n┃\n┃ 🎯 Elige con botones o responde *1* o *2*\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
+    const cap = `╭━━〔 🎵 𝐏𝐋𝐘 〕━━\n┃  *${video.titulo}*\n┃ 👤 ${video.autor}\n┃ ⏱️ ${fmtDur(video.seg)} | 👀 ${fmtVistas(video.vistas)}\n┃\n┃ 🎯 Elige con botones o responde *1* o *2*\n╰━━〔 ⚡ 𝐁𝐎𝐓-𝐀𝐏𝐈 ⚡ 〕━━⬣`;
     const now = Date.now();
     for (const k of Object.keys(global.playSessions)) if (now - global.playSessions[k].timestamp > 600000) delete global.playSessions[k];
     for (const k of new Set([msg.key.participant, msg.key.senderPn, msg.key.participantAlt, msg.key.remoteJidAlt, jid].filter(Boolean))) {
